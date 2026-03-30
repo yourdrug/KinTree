@@ -1,0 +1,182 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    hostname: kintree-server
+    container_name: kintree-server
+    user: root
+    entrypoint: ["./entrypoint.sh"]
+    command: [
+      "uvicorn",
+      "main:create_app",
+      "--factory",
+      "--host",
+      "0.0.0.0",
+      "--port",
+      "8000",
+      "--reload"
+    ]
+    ports:
+      - name: kintree-port
+        target: 8000
+        published: 6661
+        host_ip: 0.0.0.0
+        protocol: tcp
+        mode: host
+    env_file:
+      - path: server/.env
+        required: true
+    volumes:
+      - type: bind
+        source: server/app
+        target: /code/project/app
+        read_only: false
+        bind:
+          propagation: rprivate
+          create_host_path: false
+          selinux: Z
+      - type: bind
+        source: server/entrypoint.sh
+        target: /code/project/entrypoint.sh
+        read_only: true
+        bind:
+          propagation: rprivate
+          create_host_path: false
+          selinux: Z
+#      - type: bind
+#        source: server/alembic.ini
+#        target: /code/project/alembic.ini
+#        read_only: true
+#        bind:
+#          propagation: rprivate
+#          create_host_path: false
+#          selinux: Z
+      - type: bind
+        source: VERSION
+        target: /code/project/VERSION
+        read_only: true
+        bind:
+          propagation: rprivate
+          create_host_path: false
+          selinux: Z
+    healthcheck:
+      test: ["CMD", "curl", "--silent", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 30s
+      start_interval: 10s
+    logging:
+      driver: json-file
+      options:
+        labels-regex: "^.+"
+    deploy:
+      resources:
+        limits:
+          cpus: 0.75
+          memory: 4G
+        reservations:
+          cpus: 0.5
+          memory: 500M
+    networks:
+      kintree-network:
+        ipv4_address: 192.168.55.1
+    depends_on:
+      postgres:
+        restart: true
+        condition: service_healthy
+        required: true
+    pull_policy: missing
+    restart: always
+
+  postgres:
+    image: postgres:16.3-alpine3.20
+    hostname: postgres
+    container_name: postgres-kintree
+    user: root
+    entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
+    command: ["postgres", "-c", "config_file=/etc/postgres/postgresql.conf"]
+    expose: ["5432/tcp"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - type: bind
+        source: db/postgres/postgresql.conf
+        target: /etc/postgres/postgresql.conf
+        read_only: true
+        bind:
+          propagation: rprivate
+          create_host_path: false
+          selinux: Z
+      - type: bind
+        source: .data/postgres
+        target: /var/lib/postgresql/data
+        read_only: false
+        bind:
+          propagation: rprivate
+          create_host_path: true
+          selinux: Z
+      - type: bind
+        source: db/postgres/init.sql
+        target: /docker-entrypoint-initdb.d/init.sql
+        read_only: true
+        bind:
+          propagation: rprivate
+          create_host_path: false
+          selinux: Z
+    healthcheck:
+      test: [
+          "CMD",
+          "psql",
+          "
+          host=postgres
+          port=5432
+          user=postgres
+          password=password
+          dbname=postgres
+          ",
+          "-c",
+          "SELECT 'OK'",
+        ]
+      interval: 30s
+      timeout: 30s
+      retries: 10
+      start_period: 30s
+      start_interval: 10s
+    logging:
+      driver: json-file
+      options:
+        labels-regex: "^.+"
+    deploy:
+      resources:
+        limits:
+          cpus: 0.75
+          memory: 4G
+        reservations:
+          cpus: 0.5
+          memory: 500M
+    networks:
+      kintree-network:
+        ipv4_address: 192.168.55.2
+    pull_policy: missing
+    restart: always
+
+networks:
+  kintree-network:
+    name: kintree-network
+    driver: bridge
+    internal: false
+    external: false
+    attachable: false
+    enable_ipv6: false
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.55.0/24
+          ip_range: 192.168.55.0/24
+          gateway: 192.168.55.254

@@ -1,0 +1,6 @@
+server/.env
+server/.python-version
+client/.env
+client/node_modules
+.idea
+.data
