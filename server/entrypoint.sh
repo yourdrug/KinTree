@@ -21,11 +21,11 @@ main() {
 
 	if [[ "$ENVIRONMENT" = "DEV" ]] ; then
 		log_info "Running in DEVELOPMENT mode."
-		# alembic upgrade head
+		alembic upgrade head
 		cd app
 	elif [[ "$ENVIRONMENT" = "TEST" ]] ; then
 		log_info "Running in TESTING mode."
-		# alembic upgrade head
+		alembic upgrade head
 		cd app
 	elif [[ "$ENVIRONMENT" = "PROD" ]] ; then
 		log_info "Running in PRODUCTION mode."

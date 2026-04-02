@@ -5,9 +5,8 @@ import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-
-
-API_PREFIX = "/file-converter"
+from api.users import routes as users_routes
+from infrastructure.common.database import database
 
 
 @asynccontextmanager
@@ -16,7 +15,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     Lifespan для FastAPI: выполняется при старте и завершении приложения.
     """
 
+    await database.connect()
+
     yield  # Точка, где приложение работает
+
+    await database.disconnect()
 
 
 
@@ -42,6 +45,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    app.include_router(users_routes.router)
 
     # Основные endpoints
     @app.get("/")

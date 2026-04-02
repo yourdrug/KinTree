@@ -45,14 +45,14 @@ services:
           propagation: rprivate
           create_host_path: false
           selinux: Z
-#      - type: bind
-#        source: server/alembic.ini
-#        target: /code/project/alembic.ini
-#        read_only: true
-#        bind:
-#          propagation: rprivate
-#          create_host_path: false
-#          selinux: Z
+      - type: bind
+        source: server/alembic.ini
+        target: /code/project/alembic.ini
+        read_only: true
+        bind:
+          propagation: rprivate
+          create_host_path: false
+          selinux: Z
       - type: bind
         source: VERSION
         target: /code/project/VERSION

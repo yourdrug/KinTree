@@ -6,5 +6,16 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi==0.135.2",
-    "uvicorn==0.42.0"
+    "uvicorn==0.42.0",
+    "fastapi-filter==2.0.1",
+    "pydantic==2.12.5",
+    "pydantic-settings==2.13.1",
+    "uvloop==0.22.1",
+
+    "alembic==1.18.4",
+    "alembic_postgresql_enum==1.10.0",
+    "psycopg[binary]==3.3.3",
+    "sqlalchemy==2.0.48",
+    "pyjwt==2.12.1",
+    "pytz==2026.1"
 ]

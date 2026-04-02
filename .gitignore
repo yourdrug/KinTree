@@ -4,3 +4,4 @@ client/.env
 client/node_modules
 .idea
 .data
+server/.venv
