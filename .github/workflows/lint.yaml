@@ -1,0 +1,33 @@
+name: Linting
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint source code
+
+    runs-on: ubuntu-22.04
+
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Clone Repository
+        id: clone-repository
+        uses: https://github.bmf/actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+
+      - name: Install pre-commit
+        id: install-pre-commit
+        run: pip install pre-commit
+
+      - name: Run Linters
+        run: python -m pre_commit run --config .pre-commit-config.yaml --all-files
