@@ -1,5 +1,4 @@
-from typing import Optional
-
+from domain.models.basemodel import BaseModel
 from fastapi_filter.contrib.sqlalchemy import Filter
 from sqlalchemy import (
     exists,
@@ -9,8 +8,6 @@ from sqlalchemy import (
 from sqlalchemy.engine.result import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
-
-from domain.models.basemodel import BaseModel
 
 
 class BaseRepository:
@@ -36,7 +33,7 @@ class BaseRepository:
         model: type[BaseModel],
         field_name: str,
         field_value: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         get_object_id_by_field: Return object id by any field. Value must be unique and not null.
 
@@ -53,7 +50,7 @@ class BaseRepository:
 
         statement: Select = select(model.id).where(getattr(model, field_name) == field_value)
         result: Result = await self.session.execute(statement)
-        object_id: Optional[str] = result.scalar()
+        object_id: str | None = result.scalar()
 
         return object_id
 
@@ -62,7 +59,7 @@ class BaseRepository:
         model: type[BaseModel],
         field_name: str,
         field_value: str,
-    ) -> Optional[BaseModel]:
+    ) -> BaseModel | None:
         """
         get_object_by_field: Return object by any field. Value must be unique and not null.
 
@@ -79,7 +76,7 @@ class BaseRepository:
 
         statement: Select = select(model).where(getattr(model, field_name) == field_value)
         result: Result = await self.session.execute(statement)
-        object: Optional[BaseModel] = result.scalar()
+        object: BaseModel | None = result.scalar()
 
         return object
 
@@ -107,8 +104,8 @@ class BaseRepository:
     async def get_object_count(
         self,
         model: type[BaseModel],
-        filter: Optional[Filter],
-        authenticated_account: Optional[dict],
+        filter: Filter | None,
+        authenticated_account: dict | None,
         distinct: bool = False,
     ) -> int:
         """
@@ -138,11 +135,10 @@ class BaseRepository:
 
         return total
 
-
     async def _apply_filter(
         self,
         statement: Select,
-        filter: Optional[Filter],
+        filter: Filter | None,
     ) -> Select:
         """
         _apply_filter: Abstract method for applying filter to the statement.
@@ -153,7 +149,7 @@ class BaseRepository:
     async def _apply_sort(
         self,
         statement: Select,
-        filter: Optional[Filter],
+        filter: Filter | None,
     ) -> Select:
         """
         _apply_sort: Abstract method for applying sort to the statement.

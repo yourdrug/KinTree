@@ -2,12 +2,10 @@
 database.py: File containing async connection to PostgreSQL database using SQLAlchemy.
 """
 
-
 from logging import (
     Logger,
     getLogger,
 )
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -22,7 +20,8 @@ from infrastructure.common.exceptions import DatabaseInteractionError
 from infrastructure.common.handlers import handle_exceptions
 from infrastructure.common.settings import settings
 
-logger: Logger = getLogger('default')
+
+logger: Logger = getLogger("default")
 
 
 class DatabaseNode:
@@ -48,8 +47,8 @@ class DatabaseNode:
         self.node_role: DatabaseNodeRole = node_role
         self.node_url: DatabaseURL = node_url
         self.node_number: int = node_number
-        self.async_engine: Optional[AsyncEngine] = None
-        self.async_session_factory: Optional[async_sessionmaker] = None
+        self.async_engine: AsyncEngine | None = None
+        self.async_session_factory: async_sessionmaker | None = None
 
     async def _create_engine(
         self,
@@ -70,7 +69,7 @@ class DatabaseNode:
             future=True,
             pool_size=100,
             max_overflow=20,
-            connect_args={'options': '-c timezone=Europe/Minsk'},
+            connect_args={"options": "-c timezone=Europe/Minsk"},
         )
 
     async def _create_async_session_factory(
@@ -97,7 +96,7 @@ class DatabaseNode:
         """
 
         if not self.async_engine:
-            raise DatabaseInteractionError('Async engine is not created')
+            raise DatabaseInteractionError("Async engine is not created")
 
         await self.async_engine.dispose()
 
@@ -153,7 +152,7 @@ class DatabaseNode:
         """
 
         if not self.async_session_factory:
-            raise DatabaseInteractionError('Async session factory is not created')
+            raise DatabaseInteractionError("Async session factory is not created")
 
         return self.async_session_factory()
 
@@ -195,7 +194,7 @@ class DatabaseManager:
         """
 
         self.is_cluster: bool = False
-        self.master_node: Optional[DatabaseNode] = None
+        self.master_node: DatabaseNode | None = None
         self.slave_nodes: list[DatabaseNode] = []
         self.current_slave_index: int = 0
 
@@ -222,8 +221,9 @@ class DatabaseManager:
 
         for node_number, (host, port) in enumerate(
             zip(
-                getattr(settings, 'DB_SLAVE_HOSTS', []),
-                getattr(settings, 'DB_SLAVE_PORTS', []),
+                getattr(settings, "DB_SLAVE_HOSTS", []),
+                getattr(settings, "DB_SLAVE_PORTS", []),
+                strict=True,
             )
         ):
             if host and port:
@@ -291,7 +291,7 @@ class DatabaseManager:
         """
 
         if not self.slave_nodes:
-            raise DatabaseInteractionError('No slave nodes available')
+            raise DatabaseInteractionError("No slave nodes available")
 
         slave: DatabaseNode = self.slave_nodes[self.current_slave_index]
 
@@ -312,21 +312,17 @@ class DatabaseManager:
         if self.master_node:
             await self.master_node.connect()
             logger.info(
-                'Connected to master database. '
-                f'Role: {self.master_node.get_role()}; '
-                f'Number: {self.master_node.get_number()};'
+                "Connected to master database. "
+                f"Role: {self.master_node.get_role()}; "
+                f"Number: {self.master_node.get_number()};"
             )
 
-        slaves_to_connect: list[DatabaseNode] = [
-            slave for slave in self.slave_nodes if slave != self.master_node
-        ]
+        slaves_to_connect: list[DatabaseNode] = [slave for slave in self.slave_nodes if slave != self.master_node]
 
         for slave_node in slaves_to_connect:
             await slave_node.connect()
             logger.info(
-                'Connected to slave database. '
-                f'Role: {slave_node.get_role()}; '
-                f'Number: {slave_node.get_number()};'
+                f"Connected to slave database. Role: {slave_node.get_role()}; Number: {slave_node.get_number()};"
             )
 
         logger.info(f"Database environment: {'CLUSTER' if self.is_cluster else 'SINGLE NODE'}")
@@ -339,24 +335,20 @@ class DatabaseManager:
         disconnect: Disconnect from all database nodes.
         """
 
-        slaves_to_disconnect: list[DatabaseNode] = [
-            slave for slave in self.slave_nodes if slave != self.master_node
-        ]
+        slaves_to_disconnect: list[DatabaseNode] = [slave for slave in self.slave_nodes if slave != self.master_node]
 
         for slave_node in slaves_to_disconnect:
             await slave_node.disconnect()
             logger.info(
-                'Disconnected from slave database. '
-                f'Role: {slave_node.get_role()}; '
-                f'Number: {slave_node.get_number()};'
+                f"Disconnected from slave database. Role: {slave_node.get_role()}; Number: {slave_node.get_number()};"
             )
 
         if self.master_node:
             await self.master_node.disconnect()
             logger.info(
-                'Disconnected from master database. '
-                f'Role: {self.master_node.get_role()}; '
-                f'Number: {self.master_node.get_number()};'
+                "Disconnected from master database. "
+                f"Role: {self.master_node.get_role()}; "
+                f"Number: {self.master_node.get_number()};"
             )
 
     def get_write_session(
@@ -370,7 +362,7 @@ class DatabaseManager:
         """
 
         if not self.master_node:
-            raise DatabaseInteractionError('Master database node is not available')
+            raise DatabaseInteractionError("Master database node is not available")
 
         return self.master_node.new_session()
 

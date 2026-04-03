@@ -6,9 +6,9 @@ class Environment(Enum):
     Environment: Enum, containing environments.
     """
 
-    PRODUCTION = 'PROD'
-    TESTING = 'TEST'
-    DEVELOPMENT = 'DEV'
+    PRODUCTION = "PROD"
+    TESTING = "TEST"
+    DEVELOPMENT = "DEV"
 
 
 class DatabaseNodeRole(Enum):
@@ -16,5 +16,5 @@ class DatabaseNodeRole(Enum):
     DatabaseNodeRole: Enum, containing database node roles.
     """
 
-    MASTER = 'MASTER'
-    SLAVE = 'SLAVE'
+    MASTER = "MASTER"
+    SLAVE = "SLAVE"

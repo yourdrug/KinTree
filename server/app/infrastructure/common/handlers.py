@@ -1,7 +1,7 @@
+from collections.abc import Callable
 from functools import wraps
 from typing import (
     Any,
-    Callable,
 )
 
 from infrastructure.common.exceptions import ServerException
@@ -46,13 +46,13 @@ def handle_exceptions(
         #
         #     logger.error(message)
         except ServerException as exception:
-            message = f'Expected Server Exception in function <{func.__name__}> {exception.message}'
+            message = f"Expected Server Exception in function <{func.__name__}> {exception.message}"
 
             if exception.errors:
-                message += f' with: {exception.errors}'
+                message += f" with: {exception.errors}"
 
             # logger.error(message)
-        except Exception as exception:
+        except Exception:
             pass
             # logger.error(f'Unexpected Exception in function <{func.__name__}> {exception}')
 

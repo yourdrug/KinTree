@@ -3,12 +3,12 @@ import importlib
 from logging.config import fileConfig
 
 from alembic import context
+from domain.models.basemodel import BaseModel
+from infrastructure.common.settings import settings
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from domain.models.basemodel import BaseModel
-from infrastructure.common.settings import settings
 
 config = context.config
 section = config.config_ini_section
@@ -22,15 +22,15 @@ def load_model_modules() -> None:
     """
 
     model_modules: tuple = (
-        'domain.models.basemodel',
-        'domain.models.account',
+        "domain.models.basemodel",
+        "domain.models.account",
     )
 
     for model_module in model_modules:
         try:
-            loaded_module = importlib.import_module(model_module)
+            importlib.import_module(model_module)
         except ModuleNotFoundError:
-            print(f'Module {model_module} not found')
+            print(f"Module {model_module} not found")
 
 
 def init_alembic_config() -> None:
@@ -105,6 +105,7 @@ def run_migrations_online() -> None:
     """
 
     asyncio.run(run_async_migrations())
+
 
 load_model_modules()
 init_alembic_config()

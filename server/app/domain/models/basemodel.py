@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from infrastructure.common.settings import TIMEZONE
+from infrastructure.common.utils import generate_uuid
 from sqlalchemy import DateTime
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import (
@@ -7,9 +9,6 @@ from sqlalchemy.orm import (
     Mapped,
     mapped_column,
 )
-
-from infrastructure.common.settings import TIMEZONE
-from infrastructure.common.utils import generate_uuid
 
 
 class BaseModel(AsyncAttrs, DeclarativeBase):
@@ -23,11 +22,11 @@ class BaseModel(AsyncAttrs, DeclarativeBase):
     id: Mapped[str] = mapped_column(
         primary_key=True,
         default=generate_uuid,
-        comment='Identifier of the entity',
+        comment="Identifier of the entity",
     )
 
     creation_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(tz=TIMEZONE),
-        comment='Entity creation date',
+        comment="Entity creation date",
     )

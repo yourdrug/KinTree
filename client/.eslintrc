@@ -1,0 +1,111 @@
+/* ESLint configuration for pre-commit */
+
+{
+  "root": true,
+  "ignorePatterns": ["dist", ".vite", "node_modules"],
+
+  "parser": "@typescript-eslint/parser",
+
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+
+  "env": {
+    "browser": true,
+    "es2020": true
+  },
+
+  "settings": {
+    "react": {
+      "version": "19.2.0"
+    }
+  },
+
+  "plugins": [
+    "@typescript-eslint",
+    "react",
+    "react-hooks",
+    "react-refresh",
+    "jsx-a11y",
+    "import"
+  ],
+
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:react/recommended",
+    "plugin:jsx-a11y/recommended",
+    "plugin:react-hooks/recommended",
+    "plugin:import/recommended"
+  ],
+
+  "rules": {
+    "no-console": ["warn", { "allow": ["info", "warn", "error"] }],
+    "jsx-a11y/no-autofocus": "off",
+    "react/react-in-jsx-scope": "off",
+    "import/no-unresolved": "off",
+    "no-unused-expressions": "off",
+    "@typescript-eslint/no-unused-expressions": [
+      "error",
+      {
+        "allowShortCircuit": true,
+        "allowTernary": true
+      }
+    ]
+  },
+
+  "overrides": [
+    {
+      "files": ["**/*.{ts,tsx}"],
+      "parserOptions": {
+        "sourceType": "module"
+      },
+      "rules": {
+        "react/jsx-key": "error",
+
+        "react-refresh/only-export-components": [
+          "warn",
+          { "allowConstantExport": true }
+        ],
+
+        "react-hooks/incompatible-library": "off",
+
+        "import/order": [
+          "error",
+          {
+            "groups": [
+              "builtin",
+              "external",
+              "internal",
+              "parent",
+              "sibling",
+              "index"
+            ],
+            "pathGroups": [
+              {
+                "pattern": "{../**/*.module.scss,./**/*.module.scss,../**/*.scss,./**/*.scss}",
+                "group": "index",
+                "position": "after"
+              }
+            ],
+            "pathGroupsExcludedImportTypes": [
+              "{../**/*.module.scss,./**/*.module.scss,../**/*.scss,./**/*.scss}"
+            ],
+            "newlines-between": "always"
+          }
+        ],
+
+        "@typescript-eslint/no-explicit-any": [
+          "error",
+          {
+            "ignoreRestArgs": true
+          }
+        ]
+      }
+    }
+  ]
+}

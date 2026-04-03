@@ -1,5 +1,5 @@
 from typing import (
-    ClassVar, Optional,
+    ClassVar,
 )
 
 from pydantic import Field
@@ -10,7 +10,7 @@ from pydantic_settings import (
 from pytz import timezone
 
 
-TIMEZONE = timezone('Europe/Minsk')
+TIMEZONE = timezone("Europe/Minsk")
 
 
 class Settings(BaseSettings):
@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     DB_HOST: str
     DB_PORT: str
     DB_NAME: str
-    DB_SLAVE_HOSTS: Optional[list[str]] = Field(default=None)
-    DB_SLAVE_PORTS: Optional[list[str]] = Field(default=None)
+    DB_SLAVE_HOSTS: list[str] | None = Field(default=None)
+    DB_SLAVE_PORTS: list[str] | None = Field(default=None)
 
     SECRET_KEY: str
     JWT_TOKEN_ACCESS_LIFETIME_MINUTES: int = Field(default=15)

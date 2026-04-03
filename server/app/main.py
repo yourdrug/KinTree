@@ -2,10 +2,9 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 import time
 
+from api.accounts import routes as users_routes
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
-from api.users import routes as users_routes
 from infrastructure.common.database import database
 
 
@@ -20,7 +19,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     yield  # Точка, где приложение работает
 
     await database.disconnect()
-
 
 
 def create_app() -> FastAPI:
@@ -53,7 +51,7 @@ def create_app() -> FastAPI:
     async def root() -> dict:
         return {"message": "service KinTree", "docs": "/docs", "redoc": "/redoc"}
 
-    @app.get(f"/health")
+    @app.get("/health")
     async def health_check() -> int:
         return round((time.time() - app.state.server_start_time) * 100)
 

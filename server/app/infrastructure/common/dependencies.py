@@ -1,8 +1,5 @@
+from collections.abc import AsyncGenerator, Callable
 from functools import lru_cache
-from typing import (
-    AsyncGenerator,
-    Callable,
-)
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +11,9 @@ from infrastructure.common.uow import UnitOfWork
 
 
 @lru_cache
-def get_asession(master: bool = False) -> Callable[..., AsyncGenerator[AsyncSession, None]]:
+def get_asession(
+    master: bool = False,
+) -> Callable[..., AsyncGenerator[AsyncSession, None]]:
     """
     get_asession: Decorator for creating async database session dependency providers.
     """

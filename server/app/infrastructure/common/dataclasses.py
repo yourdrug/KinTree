@@ -2,7 +2,6 @@
 dataclasses.py: File, containing dataclasses for common app.
 """
 
-
 from dataclasses import dataclass
 
 
@@ -28,10 +27,7 @@ class DatabaseURL:
             str: Database URL
         """
 
-        return (
-            f'postgresql+psycopg://{self.user}:{self.password}'
-            f'@{self.host}:{self.port}/{self.db_name}'
-        )
+        return f"postgresql+psycopg://{self.user}:{self.password}@{self.host}:{self.port}/{self.db_name}"
 
     @property
     def url(

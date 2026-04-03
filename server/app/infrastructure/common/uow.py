@@ -2,12 +2,10 @@
 uow.py: File, containing common uow.
 """
 
-
 from __future__ import annotations
 
 from contextlib import suppress
 from types import TracebackType
-from typing import Optional
 
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,9 +46,9 @@ class UnitOfWork:
 
     async def __aexit__(
         self,
-        exc_type: Optional[type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """
         __aexit__: Exit method (context manager) for unit of work.
@@ -75,8 +73,8 @@ class UnitOfWork:
 
         if exc_type and issubclass(exc_type, DBAPIError):
             raise DatabaseInteractionError(
-                message='Ошибка взаимодействия с БД',
-                errors={'details': f'{exc_val}'},
+                message="Ошибка взаимодействия с БД",
+                errors={"details": f"{exc_val}"},
             )
 
         return None

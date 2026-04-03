@@ -1,9 +1,10 @@
 [project]
 name = "server"
 version = "0.1.0"
-description = "Add your description here"
+description = ""
 readme = "README.md"
 requires-python = ">=3.12"
+
 dependencies = [
     "fastapi==0.135.2",
     "uvicorn==0.42.0",
@@ -16,6 +17,70 @@ dependencies = [
     "alembic_postgresql_enum==1.10.0",
     "psycopg[binary]==3.3.3",
     "sqlalchemy==2.0.48",
+
     "pyjwt==2.12.1",
     "pytz==2026.1"
 ]
+
+# ========================
+# RUFF (lint + format + isort)
+# ========================
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+exclude = [
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    "build",
+    "dist",
+    "migrations",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle
+    "W",
+    "F",  # pyflakes
+    "I",  # isort
+    "UP", # pyupgrade
+    "C4", # comprehensions
+    "B",  # bugbear
+]
+
+ignore = [
+    "E501", # handled by formatter
+    "B008", # FastAPI Depends
+]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+lines-after-imports = 2
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "auto"
+
+# ========================
+# MYPY
+# ========================
+[tool.mypy]
+python_version = "3.12"
+
+check_untyped_defs = true
+disallow_untyped_defs = true
+
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+exclude = ["migrations"]
+
+warn_redundant_casts = true
+strict_optional = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+check_untyped_defs = false

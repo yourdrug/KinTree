@@ -1,9 +1,9 @@
-from domain.models.basemodel import BaseModel
-
 from sqlalchemy.orm import (
     Mapped,
     mapped_column,
 )
+
+from domain.models.basemodel import BaseModel
 
 
 class Account(BaseModel):
@@ -13,15 +13,14 @@ class Account(BaseModel):
     Index created automatically on id, email fields and on (role_id, person_id, provider_id).
     """
 
-    __tablename__: str = 'Account'
-
+    __tablename__: str = "Account"
 
     email: Mapped[str] = mapped_column(
         index=True,
-        comment='Persons email address',
+        comment="Persons email address",
     )
 
     is_acc_blocked: Mapped[bool] = mapped_column(
         default=False,
-        comment='Flag for account blocking',
+        comment="Flag for account blocking",
     )

@@ -1,6 +1,5 @@
 from typing import (
     Any,
-    Optional,
 )
 
 
@@ -12,7 +11,7 @@ class BaseExc(Exception):
     def __init__(
         self,
         message: str,
-        errors: Optional[dict] = None,
+        errors: dict | None = None,
     ) -> None:
         """
         __init__.py: Initializes the base exception.
@@ -23,7 +22,7 @@ class BaseExc(Exception):
         """
 
         self.message: str = message
-        self.errors: Optional[dict] = errors
+        self.errors: dict | None = errors
 
     def __str__(
         self,
@@ -70,11 +69,11 @@ class BaseExc(Exception):
         """
 
         result: dict[str, Any] = {
-            'message': self.message,
+            "message": self.message,
         }
 
         if self.errors:
-            result['errors'] = self.errors
+            result["errors"] = self.errors
 
         return result
 
@@ -93,7 +92,6 @@ class ServerException(BaseExc):
     """
 
     pass
-
 
 
 class DatabaseInteractionError(ServerException):
