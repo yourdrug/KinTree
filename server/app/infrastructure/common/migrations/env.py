@@ -24,6 +24,10 @@ def load_model_modules() -> None:
     model_modules: tuple = (
         "domain.models.basemodel",
         "domain.models.account",
+        "domain.models.family",
+        "domain.models.parent_child",
+        "domain.models.person",
+        "domain.models.spouse",
     )
 
     for model_module in model_modules:
