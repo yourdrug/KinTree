@@ -82,6 +82,5 @@ class Person(BaseModel):
 
     family_id: Mapped[int] = mapped_column(
         ForeignKey("Family.id", ondelete="CASCADE"),
-        primary_key=True,
         comment="Person family ID",
     )

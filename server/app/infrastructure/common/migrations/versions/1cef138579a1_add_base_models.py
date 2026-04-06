@@ -1,8 +1,8 @@
-"""add needed models
+"""add base models
 
-Revision ID: 2def2e3b42e3
-Revises: 7c9163df4a10
-Create Date: 2026-04-06 13:08:26.492943
+Revision ID: 1cef138579a1
+Revises: dded7f72bf75
+Create Date: 2026-04-06 13:20:23.814098
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '2def2e3b42e3'
-down_revision: Union[str, Sequence[str], None] = '7c9163df4a10'
+revision: str = '1cef138579a1'
+down_revision: Union[str, Sequence[str], None] = 'dded7f72bf75'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -54,7 +54,7 @@ def upgrade() -> None:
     sa.CheckConstraint('death_day BETWEEN 1 AND 31 OR death_day IS NULL'),
     sa.CheckConstraint('death_month BETWEEN 1 AND 12 OR death_month IS NULL'),
     sa.ForeignKeyConstraint(['family_id'], ['Family.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('family_id', 'id')
+    sa.PrimaryKeyConstraint('id')
     )
     op.create_index('idx_birth_full', 'Person', ['birth_year', 'birth_month', 'birth_day'], unique=False)
     op.create_index('idx_person_name', 'Person', ['last_name', 'first_name'], unique=False)
