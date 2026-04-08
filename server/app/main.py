@@ -3,9 +3,12 @@ from contextlib import asynccontextmanager
 import time
 
 from api.accounts import routes as users_routes
+from api.persons import routes as person_routes
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from infrastructure.common.database import database
+from infrastructure.common.handlers import handle_fastapi_validation_exceptions
 
 
 @asynccontextmanager
@@ -45,6 +48,9 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(users_routes.router)
+    app.include_router(person_routes.router)
+
+    app.add_exception_handler(RequestValidationError, handle_fastapi_validation_exceptions)
 
     # Основные endpoints
     @app.get("/")
