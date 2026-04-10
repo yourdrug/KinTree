@@ -1,7 +1,7 @@
 from sqlalchemy import Index, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from domain.models.basemodel import BaseModel
+from infrastructure.db.models.basemodel import BaseModel
 
 
 class Family(BaseModel):

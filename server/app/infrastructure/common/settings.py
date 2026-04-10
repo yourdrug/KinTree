@@ -35,6 +35,8 @@ class Settings(BaseSettings):
 
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         case_sensitive=True,
+        env_file=".env",
+        extra="ignore",
     )
 
 

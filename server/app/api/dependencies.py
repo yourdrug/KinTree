@@ -2,12 +2,11 @@ from collections.abc import AsyncGenerator, Callable
 from functools import lru_cache
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from infrastructure.common.database import database
 from infrastructure.common.facades import RepositoryFacade
 from infrastructure.common.services import BaseService
 from infrastructure.common.uow import UnitOfWork
+from infrastructure.db.database import database
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @lru_cache

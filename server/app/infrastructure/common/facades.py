@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from infrastructure.accounts.repositories import AccountRepository
-from infrastructure.persons.repositories import PersonRepository
+from infrastructure.account.repositories import AccountRepository
+from infrastructure.person.repositories import PersonRepository
 
 
 class BaseFacade:

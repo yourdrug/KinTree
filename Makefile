@@ -53,6 +53,21 @@ types:
 lint:
     pre-commit run --config .pre-commit-config.yaml --all-files
 
+
+# ---------------------------- MIGRATIONS --------------------------------
+
+migrate:
+    @cd server && alembic upgrade head
+
+migration:
+    @cd server && alembic revision --autogenerate -m "$(msg)"
+
+migrate-downgrade:
+    @cd server && alembic downgrade -1
+
+migrate-history:
+    @cd server && alembic history
+
 # ------------------------------ TESTS ------------------------------------
 
 test:

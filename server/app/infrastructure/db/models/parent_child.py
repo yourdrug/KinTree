@@ -1,9 +1,9 @@
+from domain.enums import RelationType
 from sqlalchemy import CheckConstraint, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import Mapped, mapped_column
 
-from domain.enums import RelationType
-from domain.models.basemodel import BaseModel
+from infrastructure.db.models.basemodel import BaseModel
 
 
 class ParentChild(BaseModel):

@@ -1,14 +1,15 @@
-from application.services.account_service import AccountService
+from application.account.service import AccountService
 from fastapi import (
     APIRouter,
     Depends,
     Path,
     status,
 )
-from infrastructure.common.dependencies import get_service
+
+from api.dependencies import get_service
 
 
-router: APIRouter = APIRouter(prefix="/accounts", tags=["Accounts"])
+router: APIRouter = APIRouter(prefix="/account", tags=["Accounts"])
 
 
 @router.get(path="/{account_id:str}", status_code=status.HTTP_200_OK)

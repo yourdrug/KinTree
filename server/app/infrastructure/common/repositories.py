@@ -1,4 +1,3 @@
-from domain.models.basemodel import BaseModel
 from fastapi_filter.contrib.sqlalchemy import Filter
 from sqlalchemy import (
     exists,
@@ -8,6 +7,8 @@ from sqlalchemy import (
 from sqlalchemy.engine.result import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
+
+from infrastructure.db.models.basemodel import BaseModel
 
 
 class BaseRepository:
@@ -27,58 +28,6 @@ class BaseRepository:
         """
 
         self.session: AsyncSession = session
-
-    async def get_object_id_by_field(
-        self,
-        model: type[BaseModel],
-        field_name: str,
-        field_value: str,
-    ) -> str | None:
-        """
-        get_object_id_by_field: Return object id by any field. Value must be unique and not null.
-
-        Args:
-            field_name (str): Name of the field to filter by.
-            field_value (str): Value of the field to match.
-
-        Returns:
-            Optional[str]: Target object id or None.
-        """
-
-        if field_value is None:
-            return None
-
-        statement: Select = select(model.id).where(getattr(model, field_name) == field_value)
-        result: Result = await self.session.execute(statement)
-        object_id: str | None = result.scalar()
-
-        return object_id
-
-    async def get_object_by_field(
-        self,
-        model: type[BaseModel],
-        field_name: str,
-        field_value: str,
-    ) -> BaseModel | None:
-        """
-        get_object_by_field: Return object by any field. Value must be unique and not null.
-
-        Args:
-            field_name (str): Name of the field to filter by.
-            field_value (str): Value of the field to match.
-
-        Returns:
-            Optional[BaseModel]: Target object or None.
-        """
-
-        if field_value is None:
-            return None
-
-        statement: Select = select(model).where(getattr(model, field_name) == field_value)
-        result: Result = await self.session.execute(statement)
-        object: BaseModel | None = result.scalar()
-
-        return object
 
     async def check_object_exists(
         self,

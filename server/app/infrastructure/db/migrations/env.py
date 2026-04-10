@@ -3,12 +3,12 @@ import importlib
 from logging.config import fileConfig
 
 from alembic import context
-from domain.models.basemodel import BaseModel
 from infrastructure.common.settings import settings
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from infrastructure.db.models.basemodel import BaseModel
 
 config = context.config
 section = config.config_ini_section
@@ -22,12 +22,12 @@ def load_model_modules() -> None:
     """
 
     model_modules: tuple = (
-        "domain.models.basemodel",
-        "domain.models.account",
-        "domain.models.family",
-        "domain.models.parent_child",
-        "domain.models.person",
-        "domain.models.spouse",
+        "infrastructure.db.models.basemodel",
+        "infrastructure.db.models.account",
+        "infrastructure.db.models.family",
+        "infrastructure.db.models.parent_child",
+        "infrastructure.db.models.person",
+        "infrastructure.db.models.spouse",
     )
 
     for model_module in model_modules:

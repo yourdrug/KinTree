@@ -9,9 +9,9 @@ from fastapi.exceptions import (
 )
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse
-
 from infrastructure.common.exceptions import ClientException, ServerException
-from infrastructure.common.schemas import HTTPExceptionSchema
+
+from api.schemas.base import HTTPExceptionSchema
 
 
 logger: Logger = getLogger("default")

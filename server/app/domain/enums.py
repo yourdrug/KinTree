@@ -3,7 +3,7 @@ from enum import Enum
 
 class PersonGender(Enum):
     """
-    PersonGender: Enum, containing genders of persons.
+    PersonGender: Enum, containing genders of person.
     """
 
     MALE = "MALE"

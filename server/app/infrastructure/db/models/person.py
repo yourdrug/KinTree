@@ -1,9 +1,9 @@
+from domain.enums import PersonGender
 from sqlalchemy import CheckConstraint, ForeignKey, Index, SmallInteger, String
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import Mapped, mapped_column
 
-from domain.enums import PersonGender
-from domain.models.basemodel import BaseModel
+from infrastructure.db.models.basemodel import BaseModel
 
 
 class Person(BaseModel):
@@ -80,7 +80,7 @@ class Person(BaseModel):
         String, nullable=True, comment="Original text-date (for example: 'April 1970')"
     )
 
-    family_id: Mapped[int] = mapped_column(
+    family_id: Mapped[str] = mapped_column(
         ForeignKey("Family.id", ondelete="CASCADE"),
         comment="Person family ID",
     )

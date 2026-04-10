@@ -2,13 +2,12 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 import time
 
-from api.accounts import routes as users_routes
-from api.persons import routes as person_routes
+from api.exception_handlers import handle_fastapi_validation_exceptions
+from api.routes import account_routes, person_routes
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from infrastructure.common.database import database
-from infrastructure.common.handlers import handle_fastapi_validation_exceptions
+from infrastructure.db.database import database
 
 
 @asynccontextmanager
@@ -47,7 +46,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(users_routes.router)
+    app.include_router(account_routes.router)
     app.include_router(person_routes.router)
 
     app.add_exception_handler(RequestValidationError, handle_fastapi_validation_exceptions)

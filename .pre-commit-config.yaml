@@ -18,10 +18,10 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
-        exclude: ^server/app/infrastructure/common/migrations/
+        exclude: ^server/app/infrastructure/db/migrations/
 
       - id: ruff-format
-        exclude: ^server/app/infrastructure/common/migrations/
+        exclude: ^server/app/infrastructure/db/migrations/
 
   # MYPY
   - repo: https://github.com/pre-commit/mirrors-mypy

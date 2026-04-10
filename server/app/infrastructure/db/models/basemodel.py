@@ -1,7 +1,6 @@
 from datetime import datetime
 
-from infrastructure.common.settings import TIMEZONE
-from infrastructure.common.utils import generate_uuid
+from domain.utils import generate_uuid
 from sqlalchemy import DateTime
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import (
@@ -9,6 +8,8 @@ from sqlalchemy.orm import (
     Mapped,
     mapped_column,
 )
+
+from infrastructure.common.settings import TIMEZONE
 
 
 class BaseModel(AsyncAttrs, DeclarativeBase):

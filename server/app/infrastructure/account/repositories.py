@@ -1,9 +1,9 @@
-from domain.models.account import Account
 from sqlalchemy import select
 from sqlalchemy.engine.result import Result
 from sqlalchemy.sql import Select
 
 from infrastructure.common.repositories import BaseRepository
+from infrastructure.db.models.account import Account
 
 
 class AccountRepository(BaseRepository):

@@ -3,7 +3,7 @@ from sqlalchemy.orm import (
     mapped_column,
 )
 
-from domain.models.basemodel import BaseModel
+from infrastructure.db.models.basemodel import BaseModel
 
 
 class Account(BaseModel):
