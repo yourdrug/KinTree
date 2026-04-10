@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, ClassVar
+from typing import Optional
 
-from pydantic import Field, ConfigDict
+from pydantic import Field
 
 from domain.enums import PersonGender
 from domain.schemas.base import Schema
@@ -118,6 +118,37 @@ class CreatePersonSchema(PersonBaseSchema):
     """
 
     pass
+
+
+class UpdatePersonSchema(PersonBaseSchema):
+    """
+    UpdatePersonSchema: Person schema that used in request when updating person.
+    """
+
+    pass
+
+
+class PatchUpdatePersonSchema(PersonBaseSchema):
+    """
+    PatchUpdatePersonSchema: Person schema that used in patch update request.
+    """
+
+    first_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    last_name: Optional[str] = Field(None, min_length=1, max_length=255)
+    gender: Optional[PersonGender] = None
+
+    birth_year: Optional[int] = Field(None, ge=0, le=9999)
+    birth_month: Optional[int] = Field(None, ge=1, le=12)
+    birth_day: Optional[int] = Field(None, ge=1, le=31)
+
+    death_year: Optional[int] = Field(None, ge=0, le=9999)
+    death_month: Optional[int] = Field(None, ge=1, le=12)
+    death_day: Optional[int] = Field(None, ge=1, le=31)
+
+    birth_date_raw: Optional[str] = Field(None, max_length=255)
+    death_date_raw: Optional[str] = Field(None, max_length=255)
+
+    family_id: Optional[str] = Field(None, min_length=32, max_length=32)
 
 
 class PersonIdSchema(Schema):

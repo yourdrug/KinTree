@@ -101,3 +101,11 @@ class DatabaseInteractionError(ServerException):
     """
 
     pass
+
+class NotFoundValidationError(ClientException):
+    """
+    NotFoundValidationError: Exception raised when a requested resource is not found.
+    This typically indicates a 404 Not Found error scenario.
+    """
+
+    pass

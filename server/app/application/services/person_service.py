@@ -19,3 +19,24 @@ class PersonService(BaseService):
             )
 
             return person_id
+
+    async def update_person(self, person_id: str, person_data: dict) -> Person:
+        async with self.uow:
+            await self.repository_facade.person_repository.update_person(
+                person_id=person_id,
+                person_data=person_data,
+            )
+
+            person: Person = await self.repository_facade.person_repository.get_person(
+                person_id=person_id,
+            )
+
+            return person
+
+    async def delete_person(self, person_id: str) -> None:
+        async with self.uow:
+            await self.repository_facade.person_repository.delete_person(
+                person_id=person_id,
+            )
+
+            return None
