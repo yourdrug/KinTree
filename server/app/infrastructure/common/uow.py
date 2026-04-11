@@ -7,10 +7,9 @@ from __future__ import annotations
 from contextlib import suppress
 from types import TracebackType
 
+from domain.exceptions import DatabaseInteractionError
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from infrastructure.common.exceptions import DatabaseInteractionError
 
 
 class UnitOfWork:

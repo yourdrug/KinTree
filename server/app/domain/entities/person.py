@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from domain.enums import PersonGender
+from domain.exceptions import DomainPersonError
 from domain.utils import generate_uuid
 from domain.value_objects.partial_date import PartialDate
 
@@ -36,14 +37,23 @@ class Person:
         self.death_date = date
 
     def _validate(self) -> None:
-        if not self.id:
-            raise ValueError("ID cannot be empty")
-
         if not self.first_name and not self.last_name:
-            raise ValueError("At least one of first_name or last_name must be provided")
+            raise DomainPersonError(
+                message="Ошибка валидации",
+                errors={"first_name": "Как минимум одно из двух полей (фамилия или имя) должно быть заполнено."},
+            )
 
         if self.family_id is None:
-            raise ValueError("family_id is required")
+            raise DomainPersonError(
+                message="Ошибка валидации", errors={"family_id": "Человек обязательно должен принадлежать семье."}
+            )
+
+        if self.birth_date and self.death_date:
+            if self.birth_date.year and self.death_date.year and self.death_date.year < self.birth_date.year:
+                raise DomainPersonError(
+                    message="Ошибка валидации",
+                    errors={"birth_date": "Дата смерти не может предшествовать дате рождения."},
+                )
 
 
 def create_person(

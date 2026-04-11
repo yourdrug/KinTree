@@ -8,6 +8,7 @@ from logging import (
 )
 
 from api.exception_handlers import handle_exceptions
+from domain.exceptions import DatabaseInteractionError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -17,7 +18,6 @@ from sqlalchemy.ext.asyncio import (
 
 from infrastructure.common.dataclasses import DatabaseURL
 from infrastructure.common.enums import DatabaseNodeRole
-from infrastructure.common.exceptions import DatabaseInteractionError
 from infrastructure.common.settings import settings
 
 

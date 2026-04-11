@@ -110,3 +110,10 @@ class NotFoundValidationError(ClientException):
     """
 
     pass
+
+
+class DomainPersonError(ClientException):
+    """
+    DomainPersonError: Exception raised when a domain validating person error occurs.
+    This typically indicates a 400 Bad Request error scenario.
+    """

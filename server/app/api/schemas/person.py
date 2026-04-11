@@ -17,9 +17,10 @@ from typing import Any
 from application.person.dto import PatchPersonCommand, PutPersonCommand
 from domain.entities.person import Person, create_person
 from domain.enums import PersonGender
+from domain.exceptions import DomainPersonError
 from domain.value_objects.partial_date import PartialDate
 from domain.value_objects.unset import UNSET
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, model_validator
 
 
 class PartialDateSchema(BaseModel):
@@ -110,12 +111,24 @@ class PatchPersonRequest(BaseModel):
     birth_date_raw: str | None = None
     death_date_raw: str | None = None
 
-    @field_validator("gender", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def validate_gender_not_null(cls, v: Any) -> Any:
-        if v is None:
-            raise ValueError("gender cannot be null")
-        return v
+    def validate_non_nullable_fields(cls, data: Any) -> Any:
+        """
+        Проверяет поля которые необязательны, но не могут быть null если переданы.
+        Один валидатор на все такие поля — никаких дублей.
+        """
+        non_nullable = ["gender"]
+
+        errors = {}
+        for field in non_nullable:
+            if field in data and data[field] is None:
+                errors[field] = "Не может быть null"
+
+        if errors:
+            raise DomainPersonError(message="Ошибка валидации", errors=errors)
+
+        return data
 
     def to_command(self, person_id: str) -> PatchPersonCommand:
         """
@@ -128,7 +141,7 @@ class PatchPersonRequest(BaseModel):
             person_id=person_id,
             first_name=self.first_name if "first_name" in sent else UNSET,
             last_name=self.last_name if "last_name" in sent else UNSET,
-            gender=self.gender if "gender" in sent and self.gender is not None else UNSET,
+            gender=self.gender if "gender" in sent else UNSET,  # type: ignore
             birth_date=(self.birth_date.to_domain() if self.birth_date else None) if "birth_date" in sent else UNSET,
             death_date=(self.death_date.to_domain() if self.death_date else None) if "death_date" in sent else UNSET,
             birth_date_raw=self.birth_date_raw if "birth_date_raw" in sent else UNSET,
