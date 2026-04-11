@@ -6,6 +6,7 @@ from typing import Any
 from domain.exceptions import (
     ClientException,
     DatabaseInteractionError,
+    DomainFamilyError,
     DomainPersonError,
     NotFoundValidationError,
     ServerException,
@@ -159,6 +160,7 @@ async def handle_fastapi_expected_client_exceptions(
     exception_mapping: dict[type[ClientException], int] = {
         ClientException: status.HTTP_400_BAD_REQUEST,
         DomainPersonError: status.HTTP_400_BAD_REQUEST,
+        DomainFamilyError: status.HTTP_400_BAD_REQUEST,
         NotFoundValidationError: status.HTTP_404_NOT_FOUND,
     }
 

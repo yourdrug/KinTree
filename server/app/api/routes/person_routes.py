@@ -12,12 +12,23 @@ from api.dependencies import get_service
 from api.schemas.person import (
     CreatePersonRequest,
     PatchPersonRequest,
+    PersonListRequest,
+    PersonPageResponse,
     PersonResponse,
     PutPersonRequest,
 )
 
 
 router: APIRouter = APIRouter(prefix="/person", tags=["Persons"])
+
+
+@router.get(path="/", status_code=status.HTTP_200_OK)
+async def get_persons_list(
+    query: PersonListRequest = Depends(),  # Depends() для query-параметров
+    service: PersonService = Depends(get_service(PersonService, master=False)),
+) -> PersonPageResponse:
+    page = await service.get_persons_list(query=query.to_query())
+    return PersonPageResponse.from_domain(page)
 
 
 @router.get(path="/{person_id:str}", status_code=status.HTTP_200_OK)

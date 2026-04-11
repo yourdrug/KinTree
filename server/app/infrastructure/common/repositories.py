@@ -1,11 +1,11 @@
-from fastapi_filter.contrib.sqlalchemy import Filter
 from sqlalchemy import (
+    Result,
     exists,
     func,
     select,
 )
-from sqlalchemy.engine.result import Result
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 from sqlalchemy.sql import Select
 
 from infrastructure.db.models.basemodel import BaseModel
@@ -29,7 +29,7 @@ class BaseRepository:
 
         self.session: AsyncSession = session
 
-    async def check_object_exists(
+    async def _check_exists(
         self,
         object_id: str,
         model: type[BaseModel],
@@ -50,58 +50,16 @@ class BaseRepository:
 
         return result.scalar() or False
 
-    async def get_object_count(
+    async def _get_count(
         self,
-        model: type[BaseModel],
-        filter: Filter | None,
-        authenticated_account: dict | None,
-        distinct: bool = False,
+        statement: Select,
+        distinct_column: InstrumentedAttribute | None = None,
     ) -> int:
-        """
-        get_object_count: Generic method to get object count.
-
-        Args:
-            model (type[BaseModel]): SQLAlchemy model class.
-            filter (Optional[Filter]): SQLAlchemy filter.
-            scope (Optional[ScopeName]): Scope of the object.
-            authenticated_account (Optional[dict]): Authenticated account data.
-
-        Returns:
-            int: Number of entities.
-        """
-
-        statement: Select
-
-        if distinct:
-            statement = select(func.count(func.distinct(model.id))).select_from(model)
+        if distinct_column is not None:
+            count_expr = func.count(func.distinct(distinct_column))
         else:
-            statement = select(func.count(model.id)).select_from(model)
+            count_expr = func.count()
 
-        statement = await self._apply_filter(statement, filter)
-
-        result: Result = await self.session.execute(statement)
-        total: int = result.scalar_one()
-
-        return total
-
-    async def _apply_filter(
-        self,
-        statement: Select,
-        filter: Filter | None,
-    ) -> Select:
-        """
-        _apply_filter: Abstract method for applying filter to the statement.
-        """
-
-        raise NotImplementedError
-
-    async def _apply_sort(
-        self,
-        statement: Select,
-        filter: Filter | None,
-    ) -> Select:
-        """
-        _apply_sort: Abstract method for applying sort to the statement.
-        """
-
-        raise NotImplementedError
+        count_stmt: Select = select(count_expr).select_from(statement.subquery())
+        result: Result = await self.session.execute(count_stmt)
+        return result.scalar_one()

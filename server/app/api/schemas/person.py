@@ -14,13 +14,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from application.person.dto import PatchPersonCommand, PutPersonCommand
+from application.person.dto import PatchPersonCommand, PersonListQuery, PutPersonCommand
 from domain.entities.person import Person, create_person
 from domain.enums import PersonGender
 from domain.exceptions import DomainPersonError
+from domain.repositories.person import PersonPage, PersonSort, PersonSortField
 from domain.value_objects.partial_date import PartialDate
 from domain.value_objects.unset import UNSET
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class PartialDateSchema(BaseModel):
@@ -183,4 +184,56 @@ class PersonResponse(BaseModel):
             death_date=(PartialDateSchema.from_domain(person.death_date) if person.death_date else None),
             birth_date_raw=person.birth_date_raw,
             death_date_raw=person.death_date_raw,
+        )
+
+
+class PersonListRequest(BaseModel):
+    family_id: str | None = None
+    gender: PersonGender | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    sort_by: str = "last_name"
+    limit: int = Field(default=20, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+    @field_validator("sort_by")
+    @classmethod
+    def validate_sort_by(cls, v: str) -> str:
+        raw = v.lstrip("-")
+        allowed = {f.value for f in PersonSortField}
+        if raw not in allowed:
+            raise ValueError(
+                f"Недопустимое поле сортировки: '{raw}'. Допустимые значения: {', '.join(sorted(allowed))}"
+            )
+        return v
+
+    def to_query(self) -> PersonListQuery:
+        return PersonListQuery(
+            family_id=self.family_id,
+            gender=self.gender,
+            first_name=self.first_name,
+            last_name=self.last_name,
+            sort=PersonSort.from_string(self.sort_by),
+            limit=self.limit,
+            offset=self.offset,
+        )
+
+
+class PersonPageResponse(BaseModel):
+    result: list[PersonResponse]
+    total: int
+    limit: int
+    offset: int
+    has_next: bool
+    has_prev: bool
+
+    @classmethod
+    def from_domain(cls, page: PersonPage) -> PersonPageResponse:
+        return cls(
+            result=[PersonResponse.from_domain(p) for p in page.result],
+            total=page.total,
+            limit=page.limit,
+            offset=page.offset,
+            has_next=page.has_next,
+            has_prev=page.has_prev,
         )

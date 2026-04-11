@@ -1,6 +1,10 @@
+from domain.repositories.account import AbstractAccountRepository
+from domain.repositories.family import AbstractFamilyRepository
+from domain.repositories.person import AbstractPersonRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infrastructure.account.repositories import AccountRepository
+from infrastructure.family.repositories import FamilyRepository
 from infrastructure.person.repositories import PersonRepository
 
 
@@ -28,6 +32,8 @@ class RepositoryFacade(BaseFacade):
             asession (AsyncSession): Asynchronous database session.
         """
 
-        self.account_repository: AccountRepository = AccountRepository(asession)
+        self.account_repository: AbstractAccountRepository = AccountRepository(asession)
 
-        self.person_repository: PersonRepository = PersonRepository(asession)
+        self.person_repository: AbstractPersonRepository = PersonRepository(asession)
+
+        self.family_repository: AbstractFamilyRepository = FamilyRepository(asession)
