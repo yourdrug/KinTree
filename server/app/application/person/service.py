@@ -1,4 +1,7 @@
+from typing import Any
+
 from domain.entities.person import Person
+from domain.value_objects.unset import UnsetType
 from infrastructure.common.services import BaseService
 
 from application.person.dto import PatchPersonCommand, PutPersonCommand
@@ -59,25 +62,30 @@ class PersonService(BaseService):
             return None
 
     async def _apply_patch_update(self, command: PatchPersonCommand, existing: Person) -> Person:
-        data = existing.__dict__.copy()
+        def resolve(command_value: object, existing_value: object) -> Any:
+            if isinstance(command_value, UnsetType):
+                return existing_value  # не трогаем
+            return command_value  # берём из команды (даже если None)
 
-        for field in command.update_fields:
-            if field == "person_id":
-                continue
-
-            data[field] = getattr(command, field)
-
-        data["id"] = command.person_id
-
-        return Person(**data)
+        return Person(
+            id=existing.id,
+            family_id=existing.family_id,
+            first_name=resolve(command.first_name, existing.first_name),
+            last_name=resolve(command.last_name, existing.last_name),
+            gender=resolve(command.gender, existing.gender),
+            birth_date=resolve(command.birth_date, existing.birth_date),
+            death_date=resolve(command.death_date, existing.death_date),
+            birth_date_raw=resolve(command.birth_date_raw, existing.birth_date_raw),
+            death_date_raw=resolve(command.death_date_raw, existing.death_date_raw),
+        )
 
     async def _apply_put_person(self, command: PutPersonCommand, existing: Person) -> Person:
         return Person(
             id=existing.id,
+            family_id=existing.family_id,
             first_name=command.first_name,
             last_name=command.last_name,
             gender=command.gender,
-            family_id=existing.family_id,
             birth_date=command.birth_date,
             death_date=command.death_date,
             birth_date_raw=command.birth_date_raw,

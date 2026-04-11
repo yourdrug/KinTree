@@ -1,17 +1,18 @@
 from dataclasses import dataclass
-from uuid import uuid4
 
 from domain.enums import PersonGender
+from domain.utils import generate_uuid
 from domain.value_objects.partial_date import PartialDate
 
 
 @dataclass
 class Person:
     id: str
-    first_name: str
-    last_name: str
     gender: PersonGender
     family_id: str
+
+    first_name: str | None = None
+    last_name: str | None = None
 
     birth_date: PartialDate | None = None
     death_date: PartialDate | None = None
@@ -23,7 +24,7 @@ class Person:
         self._validate()
 
     def full_name(self) -> str:
-        return f"{self.first_name} {self.last_name}"
+        return " ".join(filter(None, [self.first_name, self.last_name]))
 
     def is_alive(self) -> bool:
         return self.death_date is None or self.death_date.year is None
@@ -38,21 +39,18 @@ class Person:
         if not self.id:
             raise ValueError("ID cannot be empty")
 
-        if not self.first_name:
-            raise ValueError("First name cannot be empty")
-
-        if not self.last_name:
-            raise ValueError("Last name cannot be empty")
+        if not self.first_name and not self.last_name:
+            raise ValueError("At least one of first_name or last_name must be provided")
 
         if self.family_id is None:
             raise ValueError("family_id is required")
 
 
 def create_person(
-    first_name: str,
-    last_name: str,
     gender: PersonGender,
     family_id: str,
+    first_name: str | None = None,
+    last_name: str | None = None,
     birth_date: PartialDate | None = None,
     death_date: PartialDate | None = None,
     birth_date_raw: str | None = None,
@@ -63,7 +61,7 @@ def create_person(
     Сама доменная модель всегда требует id, но снаружи мы не передаём его при создании.
     """
     return Person(
-        id=uuid4().hex,
+        id=generate_uuid(),
         first_name=first_name,
         last_name=last_name,
         gender=gender,

@@ -1,4 +1,3 @@
-from application.person.dto import PatchPersonCommand, PutPersonCommand
 from application.person.service import PersonService
 from domain.entities.person import Person
 from fastapi import (
@@ -26,9 +25,7 @@ async def get_person(
     person_id: str = Path(..., min_length=32, max_length=32),
     service: PersonService = Depends(get_service(PersonService, master=False)),
 ) -> PersonResponse:
-    person: Person = await service.get_person(
-        person_id=person_id,
-    )
+    person: Person = await service.get_person(person_id=person_id)
 
     return PersonResponse.from_domain(person=person)
 
@@ -40,9 +37,7 @@ async def create_person(
 ) -> PersonResponse:
     person: Person = payload.to_domain()
 
-    created_person: Person = await service.create_person(
-        person=person,
-    )
+    created_person: Person = await service.create_person(person=person)
 
     return PersonResponse.from_domain(person=created_person)
 
@@ -53,20 +48,9 @@ async def update_person(
     payload: PutPersonRequest = Body(...),
     service: PersonService = Depends(get_service(PersonService, master=True)),
 ) -> PersonResponse:
-    command = PutPersonCommand(
-        person_id=person_id,
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        gender=payload.gender,
-        birth_date=payload.birth_date.to_domain() if payload.birth_date else None,
-        death_date=payload.death_date.to_domain() if payload.death_date else None,
-        birth_date_raw=payload.birth_date_raw,
-        death_date_raw=payload.death_date_raw,
-    )
+    command = payload.to_command(person_id=person_id)
 
-    updated_person: Person = await service.update_person(
-        command=command,
-    )
+    updated_person: Person = await service.update_person(command=command)
 
     return PersonResponse.from_domain(person=updated_person)
 
@@ -77,18 +61,7 @@ async def patch_update_person(
     payload: PatchPersonRequest = Body(...),
     service: PersonService = Depends(get_service(PersonService, master=True)),
 ) -> PersonResponse:
-    command = PatchPersonCommand(
-        person_id=person_id,
-        update_fields=payload.model_fields_set,
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        gender=payload.gender,
-        birth_date=payload.birth_date.to_domain() if payload.birth_date else None,
-        death_date=payload.death_date.to_domain() if payload.death_date else None,
-        birth_date_raw=payload.birth_date_raw,
-        death_date_raw=payload.death_date_raw,
-    )
-
+    command = payload.to_command(person_id)
     updated_person = await service.patch_update_person(command)
 
     return PersonResponse.from_domain(person=updated_person)
@@ -100,4 +73,5 @@ async def delete_person(
     service: PersonService = Depends(get_service(PersonService, master=True)),
 ) -> None:
     await service.delete_person(person_id=person_id)
+
     return None

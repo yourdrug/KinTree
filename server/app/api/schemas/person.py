@@ -12,10 +12,14 @@ API Schemas — Pydantic-модели для HTTP-слоя.
 
 from __future__ import annotations
 
+from typing import Any
+
+from application.person.dto import PatchPersonCommand, PutPersonCommand
 from domain.entities.person import Person, create_person
 from domain.enums import PersonGender
 from domain.value_objects.partial_date import PartialDate
-from pydantic import BaseModel, Field
+from domain.value_objects.unset import UNSET
+from pydantic import BaseModel, Field, field_validator
 
 
 class PartialDateSchema(BaseModel):
@@ -34,10 +38,11 @@ class PartialDateSchema(BaseModel):
 class CreatePersonRequest(BaseModel):
     """Запрос на создание Person. ID генерируется сервером."""
 
-    first_name: str = Field(..., min_length=1, max_length=100, examples=["Иван"])
-    last_name: str = Field(..., min_length=1, max_length=100, examples=["Иванов"])
     gender: PersonGender = Field(..., examples=[PersonGender.MALE])
-    family_id: str = Field(..., min_length=1, examples=["family-123"])
+    family_id: str = Field(..., min_length=1, examples=["98ce28f633d7546b51c8c2cff566d342"])
+
+    first_name: str | None = Field(..., min_length=1, max_length=100, examples=["Иван"])
+    last_name: str | None = Field(..., min_length=1, max_length=100, examples=["Иванов"])
 
     birth_date: PartialDateSchema | None = None
     death_date: PartialDateSchema | None = None
@@ -64,14 +69,31 @@ class PutPersonRequest(BaseModel):
     Все поля обязательны — отсутствующее поле означает сброс в None.
     """
 
-    first_name: str = Field(..., min_length=1, max_length=100)
-    last_name: str = Field(..., min_length=1, max_length=100)
     gender: PersonGender
+
+    first_name: str | None = Field(..., min_length=1, max_length=100)
+    last_name: str | None = Field(..., min_length=1, max_length=100)
 
     birth_date: PartialDateSchema | None = None
     death_date: PartialDateSchema | None = None
     birth_date_raw: str | None = None
     death_date_raw: str | None = None
+
+    def to_command(self, person_id: str) -> PutPersonCommand:
+        """
+        Конвертирует схему в команду PutPersonCommand
+        """
+
+        return PutPersonCommand(
+            person_id=person_id,
+            first_name=self.first_name,
+            last_name=self.last_name,
+            gender=self.gender,
+            birth_date=self.birth_date.to_domain() if self.birth_date else None,
+            death_date=self.death_date.to_domain() if self.death_date else None,
+            birth_date_raw=self.birth_date_raw,
+            death_date_raw=self.death_date_raw,
+        )
 
 
 class PatchPersonRequest(BaseModel):
@@ -88,17 +110,43 @@ class PatchPersonRequest(BaseModel):
     birth_date_raw: str | None = None
     death_date_raw: str | None = None
 
+    @field_validator("gender", mode="before")
+    @classmethod
+    def validate_gender_not_null(cls, v: Any) -> Any:
+        if v is None:
+            raise ValueError("gender cannot be null")
+        return v
+
+    def to_command(self, person_id: str) -> PatchPersonCommand:
+        """
+        Конвертирует запрос в команду, подставляя UNSET для непереданных полей.
+        model_fields_set содержит только те поля, которые клиент передал явно.
+        """
+        sent = self.model_fields_set
+
+        return PatchPersonCommand(
+            person_id=person_id,
+            first_name=self.first_name if "first_name" in sent else UNSET,
+            last_name=self.last_name if "last_name" in sent else UNSET,
+            gender=self.gender if "gender" in sent and self.gender is not None else UNSET,
+            birth_date=(self.birth_date.to_domain() if self.birth_date else None) if "birth_date" in sent else UNSET,
+            death_date=(self.death_date.to_domain() if self.death_date else None) if "death_date" in sent else UNSET,
+            birth_date_raw=self.birth_date_raw if "birth_date_raw" in sent else UNSET,
+            death_date_raw=self.death_date_raw if "death_date_raw" in sent else UNSET,
+        )
+
 
 class PersonResponse(BaseModel):
     """Полное представление Person для клиента. Всегда содержит id."""
 
     id: str
-    first_name: str
-    last_name: str
     full_name: str
     gender: PersonGender
     family_id: str
     is_alive: bool
+
+    first_name: str | None
+    last_name: str | None
 
     birth_date: PartialDateSchema | None = None
     death_date: PartialDateSchema | None = None

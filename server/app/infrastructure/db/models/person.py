@@ -19,10 +19,12 @@ class Person(BaseModel):
     )
 
     first_name: Mapped[str] = mapped_column(
+        nullable=True,
         index=True,
     )
 
     last_name: Mapped[str] = mapped_column(
+        nullable=True,
         index=True,
     )
 
