@@ -54,7 +54,7 @@ class PersonService(BaseService):
                 person_id=command.person_id,
             )
 
-            person: Person = await self._apply_put_person(command=command, existing=existing)
+            person: Person = self._apply_put_person(command=command, existing=existing)
 
             family = await self._load_family_aggregate(
                 family_id=existing.family_id,
@@ -74,7 +74,7 @@ class PersonService(BaseService):
                 person_id=command.person_id,
             )
 
-            updated_person: Person = await self._apply_patch_update(
+            updated_person: Person = self._apply_patch_update(
                 command=command,
                 existing=existing,
             )
@@ -129,15 +129,16 @@ class PersonService(BaseService):
 
     @staticmethod
     def _patch_affects_identity(command: PatchPersonCommand) -> bool:
-        """Возвращает True, если PATCH затрагивает поля идентичности."""
         identity_fields = {"first_name", "last_name", "birth_date"}
-        return bool(
-            identity_fields
-            & command.__dataclass_fields__.keys()
-            - {f for f in command.__dataclass_fields__ if isinstance(getattr(command, f), UnsetType)}
-        )
 
-    async def _apply_patch_update(self, command: PatchPersonCommand, existing: Person) -> Person:
+        # Поля, которые реально переданы в команде (не UNSET)
+        provided_fields = {
+            field for field in command.__dataclass_fields__ if not isinstance(getattr(command, field), UnsetType)
+        }
+
+        return bool(identity_fields & provided_fields)
+
+    def _apply_patch_update(self, command: PatchPersonCommand, existing: Person) -> Person:
         def resolve(command_value: object, existing_value: object) -> Any:
             if isinstance(command_value, UnsetType):
                 return existing_value  # не трогаем
@@ -155,7 +156,7 @@ class PersonService(BaseService):
             death_date_raw=resolve(command.death_date_raw, existing.death_date_raw),
         )
 
-    async def _apply_put_person(self, command: PutPersonCommand, existing: Person) -> Person:
+    def _apply_put_person(self, command: PutPersonCommand, existing: Person) -> Person:
         return Person(
             id=existing.id,
             family_id=existing.family_id,
