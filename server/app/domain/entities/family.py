@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from domain.entities.person import Person
 from domain.exceptions import DomainFamilyError
+from domain.utils import generate_uuid
 
 
 MAX_FAMILY_SIZE = 2  # пример ограничения для демонстрации
@@ -26,6 +27,12 @@ class Family:
     origin_place: str | None = None
     founded_year: int | None = None
     ended_year: int | None = None
+
+    def __post_init__(self) -> None:
+        self._validate()
+
+    def _validate(self) -> None:
+        self._validate_years()
 
     def assert_can_add_member(self, candidate: Person) -> None:
         """
@@ -86,3 +93,30 @@ class Family:
             and existing.birth_date == candidate.birth_date
         )
         return names_match and dates_match
+
+    def _validate_years(self) -> None:
+        if self.founded_year and self.ended_year:
+            if self.founded_year > self.ended_year:
+                raise DomainFamilyError(
+                    message="Ошибка валидации",
+                    errors={"years": "Год основания не может быть больше года окончания"},
+                )
+
+    @staticmethod
+    def create_family(
+        name: str,
+        owner_id: str,
+        description: str | None = None,
+        origin_place: str | None = None,
+        founded_year: int | None = None,
+        ended_year: int | None = None,
+    ) -> Family:
+        return Family(
+            id=generate_uuid(),
+            name=name,
+            owner_id=owner_id,
+            description=description,
+            origin_place=origin_place,
+            founded_year=founded_year,
+            ended_year=ended_year,
+        )

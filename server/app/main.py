@@ -9,7 +9,7 @@ from api.exception_handlers import (
     handle_fastapi_unexpected_exceptions,
     handle_fastapi_validation_exceptions,
 )
-from api.routes import account_routes, person_routes
+from api.routes import account_routes, family_routes, person_routes
 from domain.exceptions import ClientException, ServerException
 from fastapi import FastAPI
 from fastapi.exceptions import HTTPException, RequestValidationError
@@ -55,6 +55,7 @@ def create_app() -> FastAPI:
 
     app.include_router(account_routes.router)
     app.include_router(person_routes.router)
+    app.include_router(family_routes.router)
 
     app.add_exception_handler(ServerException, handle_fastapi_expected_server_exceptions)
     app.add_exception_handler(ClientException, handle_fastapi_expected_client_exceptions)
