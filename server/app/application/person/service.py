@@ -120,12 +120,16 @@ class PersonService(BaseService):
         members = await self.repository_facade.person_repository.get_persons_by_family(
             family_id=family_id,
         )
+
         if exclude_person_id:
             members = [m for m in members if m.id != exclude_person_id]
 
-        # Family.name здесь не важно для инвариантов — передаём заглушку.
-        # Если нужно имя, добавьте get_family в FamilyRepository.
-        return Family(id=family_id, name="", members=members)
+        family: Family = await self.repository_facade.family_repository.get_by_id(
+            family_id=family_id,
+        )
+
+        family.members = members
+        return family
 
     @staticmethod
     def _patch_affects_identity(command: PatchPersonCommand) -> bool:

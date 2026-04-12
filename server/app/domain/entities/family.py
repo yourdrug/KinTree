@@ -19,7 +19,13 @@ class Family:
 
     id: str
     name: str
+    owner_id: str
     members: list[Person] = field(default_factory=list)
+
+    description: str | None = None
+    origin_place: str | None = None
+    founded_year: int | None = None
+    ended_year: int | None = None
 
     def assert_can_add_member(self, candidate: Person) -> None:
         """

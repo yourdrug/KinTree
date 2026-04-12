@@ -1,4 +1,4 @@
-from sqlalchemy import Index, Text
+from sqlalchemy import ForeignKey, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from infrastructure.db.models.basemodel import BaseModel
@@ -13,6 +13,11 @@ class Family(BaseModel):
         nullable=False,
         index=True,
         comment="Family name or branch name",
+    )
+
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("Account.id", ondelete="CASCADE"),
+        comment="Family owner account",
     )
 
     description: Mapped[str] = mapped_column(

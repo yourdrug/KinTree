@@ -56,11 +56,11 @@ class PersonRepository(BaseRepository, AbstractPersonRepository):
     async def create(self, person: DomainPerson) -> DomainPerson:
         data = PersonORMMapper.to_persistence(person)
 
-        statement: Insert = insert(ORMPerson).values(**data).returning(ORMPerson.id)
+        statement: Insert = insert(ORMPerson).values(**data).returning(ORMPerson)
         result: Result = await self.session.execute(statement)
-        person_id: str = result.scalar_one()
+        orm_person: ORMPerson = result.scalar_one()
 
-        return await self.get_by_id(person_id)
+        return PersonORMMapper.to_domain(orm_person)
 
     async def update(self, person: DomainPerson) -> DomainPerson:
         data = PersonORMMapper.to_persistence(person)

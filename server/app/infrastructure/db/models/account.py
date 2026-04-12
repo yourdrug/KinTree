@@ -9,8 +9,7 @@ from infrastructure.db.models.basemodel import BaseModel
 class Account(BaseModel):
     """
     Account: SQLAlchemy model class. Represents an account.
-    UniqueConstraint ensures that there is only one account with role, person and provider.
-    Index created automatically on id, email fields and on (role_id, person_id, provider_id).
+    Index created automatically on id, email fields.
     """
 
     __tablename__: str = "Account"
