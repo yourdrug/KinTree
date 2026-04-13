@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from api.schemas.base import BasePatchSchema, BaseListRequest
 from application.person.dto import PatchPersonCommand, PersonListQuery, PutPersonCommand
 from domain.entities.person import Person, create_person
 from domain.enums import PersonGender
@@ -23,18 +24,6 @@ from domain.value_objects.partial_date import PartialDate
 from domain.value_objects.unset import UNSET
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-
-class PartialDateSchema(BaseModel):
-    year: int | None = Field(None, ge=1, le=9999, examples=[1990])
-    month: int | None = Field(None, ge=1, le=12, examples=[6])
-    day: int | None = Field(None, ge=1, le=31, examples=[15])
-
-    def to_domain(self) -> PartialDate:
-        return PartialDate(year=self.year, month=self.month, day=self.day)
-
-    @classmethod
-    def from_domain(cls, date: PartialDate) -> PartialDateSchema:
-        return cls(year=date.year, month=date.month, day=date.day)
 
 
 class CreatePersonRequest(BaseModel):
@@ -98,10 +87,11 @@ class PutPersonRequest(BaseModel):
         )
 
 
-class PatchPersonRequest(BaseModel):
+class PatchPersonRequest(BasePatchSchema):
     """
     PATCH-семантика: клиент передаёт только изменяемые поля.
     """
+    non_nullable = ["gender"]
 
     first_name: str | None = Field(None, min_length=1, max_length=100)
     last_name: str | None = Field(None, min_length=1, max_length=100)
@@ -111,25 +101,6 @@ class PatchPersonRequest(BaseModel):
     death_date: PartialDateSchema | None = None
     birth_date_raw: str | None = None
     death_date_raw: str | None = None
-
-    @model_validator(mode="before")
-    @classmethod
-    def validate_non_nullable_fields(cls, data: Any) -> Any:
-        """
-        Проверяет поля которые необязательны, но не могут быть null если переданы.
-        Один валидатор на все такие поля — никаких дублей.
-        """
-        non_nullable = ["gender"]
-
-        errors = {}
-        for field in non_nullable:
-            if field in data and data[field] is None:
-                errors[field] = "Не может быть null"
-
-        if errors:
-            raise DomainPersonError(message="Ошибка валидации", errors=errors)
-
-        return data
 
     def to_command(self, person_id: str) -> PatchPersonCommand:
         """
@@ -187,38 +158,6 @@ class PersonResponse(BaseModel):
         )
 
 
-class PersonListRequest(BaseModel):
-    family_id: str | None = None
-    gender: PersonGender | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-    sort_by: str = "last_name"
-    limit: int = Field(default=20, ge=1, le=100)
-    offset: int = Field(default=0, ge=0)
-
-    @field_validator("sort_by")
-    @classmethod
-    def validate_sort_by(cls, v: str) -> str:
-        raw = v.lstrip("-")
-        allowed = {f.value for f in PersonSortField}
-        if raw not in allowed:
-            raise ValueError(
-                f"Недопустимое поле сортировки: '{raw}'. Допустимые значения: {', '.join(sorted(allowed))}"
-            )
-        return v
-
-    def to_query(self) -> PersonListQuery:
-        return PersonListQuery(
-            family_id=self.family_id,
-            gender=self.gender,
-            first_name=self.first_name,
-            last_name=self.last_name,
-            sort=PersonSort.from_string(self.sort_by),
-            limit=self.limit,
-            offset=self.offset,
-        )
-
-
 class PersonPageResponse(BaseModel):
     result: list[PersonResponse]
     total: int
@@ -237,3 +176,37 @@ class PersonPageResponse(BaseModel):
             has_next=page.has_next,
             has_prev=page.has_prev,
         )
+
+
+class PersonListRequest(BaseListRequest[PersonSortField]):
+    family_id: str | None = None
+    gender: PersonGender | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+
+    @classmethod
+    def get_sort_enum(cls):
+        return PersonSortField
+
+    def to_query(self) -> PersonListQuery:
+        return PersonListQuery(
+            family_id=self.family_id,
+            gender=self.gender,
+            first_name=self.first_name,
+            last_name=self.last_name,
+            sort=self.build_sort(),
+            limit=self.limit,
+            offset=self.offset,
+        )
+
+class PartialDateSchema(BaseModel):
+    year: int | None = Field(None, ge=1, le=9999, examples=[1990])
+    month: int | None = Field(None, ge=1, le=12, examples=[6])
+    day: int | None = Field(None, ge=1, le=31, examples=[15])
+
+    def to_domain(self) -> PartialDate:
+        return PartialDate(year=self.year, month=self.month, day=self.day)
+
+    @classmethod
+    def from_domain(cls, date: PartialDate) -> PartialDateSchema:
+        return cls(year=date.year, month=date.month, day=date.day)

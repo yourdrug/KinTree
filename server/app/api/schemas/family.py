@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from api.schemas.base import BasePatchSchema
 from application.family.dto import PatchFamilyCommand, PutFamilyCommand
 from domain.entities.family import Family
 from domain.exceptions import DomainFamilyError
@@ -60,28 +61,15 @@ class PutFamilyRequest(BaseModel):
         )
 
 
-class PatchFamilyRequest(BaseModel):
+class PatchFamilyRequest(BasePatchSchema):
+    non_nullable = ["owner_id", "name"]
+
     name: str | None = Field(None, min_length=1, max_length=255)
 
     description: str | None = None
     origin_place: str | None = None
     founded_year: int | None = Field(None, ge=1, le=9999)
     ended_year: int | None = Field(None, ge=1, le=9999)
-
-    @model_validator(mode="before")
-    @classmethod
-    def validate_non_nullable_fields(cls, data: Any) -> Any:
-        non_nullable = ["owner_id"]
-
-        errors = {}
-        for field in non_nullable:
-            if field in data and data[field] is None:
-                errors[field] = "Не может быть null"
-
-        if errors:
-            raise DomainFamilyError(message="Ошибка валидации", errors=errors)
-
-        return data
 
     def to_command(self, family_id: str) -> PatchFamilyCommand:
         sent = self.model_fields_set

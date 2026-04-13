@@ -112,6 +112,10 @@ class NotFoundValidationError(ClientException):
     pass
 
 
+class BaseDomainError(ClientException):
+    pass
+
+
 class DomainPersonError(ClientException):
     """
     DomainPersonError: Exception raised when a domain validating person error occurs.

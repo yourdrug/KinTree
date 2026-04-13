@@ -1,6 +1,10 @@
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Generic, Type
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
+
+from domain.common.filters import SortFieldT, BaseFilters
+from domain.common.sort import BaseSort
+from domain.exceptions import BaseDomainError
 
 
 class Schema(BaseModel):
@@ -34,3 +38,49 @@ class HTTPExceptionSchema(Schema):
         description="Field-specific error messages (key=field name, value=error message)",
         examples=[{"email": "Must be unique"}],
     )
+
+
+class BasePatchSchema(BaseModel):
+    non_nullable: ClassVar[list[str]] = []
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_non_nullable_fields(cls, data: Any) -> Any:
+        errors = {}
+        for field in cls.non_nullable:
+            if field in data and data[field] is None:
+                errors[field] = "Не может быть null"
+
+        if errors:
+            raise BaseDomainError(message="Ошибка валидации", errors=errors)
+
+        return data
+
+
+class BaseListRequest(BaseModel, Generic[SortFieldT]):
+    sort_by: str | None = None
+    limit: int = Field(default=20, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+    @classmethod
+    def get_sort_enum(cls) -> Type[SortFieldT]:
+        raise NotImplementedError
+
+    @field_validator("sort_by")
+    @classmethod
+    def validate_sort_by(cls, v: str | None) -> str | None:
+        if not v:
+            return v
+
+        raw = v.lstrip("-")
+        allowed = {f.value for f in cls.get_sort_enum()}
+
+        if raw not in allowed:
+            raise ValueError(
+                f"Недопустимое поле сортировки: '{raw}'. "
+                f"Допустимые значения: {', '.join(sorted(allowed))}"
+            )
+        return v
+
+    def build_sort(self) -> BaseSort[SortFieldT] | None:
+        return BaseFilters.build_sort(self.sort_by, self.get_sort_enum())

@@ -4,61 +4,27 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
 
+from domain.common.filters import BaseFilters
+from domain.common.page import Page
+from domain.common.sort import BaseSort
 from domain.entities.person import Person
 from domain.enums import PersonGender
 from domain.repositories.base import AbstractRepository
-
-
-@dataclass
-class PersonFilters:
-    """
-    Фильтры для выборки персон — доменный объект
-    """
-
-    family_id: str | None = None
-    gender: PersonGender | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-    sort: PersonSort | None = None
 
 
 class PersonSortField(StrEnum):
     FIRST_NAME = "first_name"
     LAST_NAME = "last_name"
 
-
-@dataclass(frozen=True)
-class PersonSort:
-    field: PersonSortField
-    desc: bool = False
-
-    @classmethod
-    def from_string(cls, value: str) -> PersonSort:
-        """
-        Парсит строку вида '-first_name' или 'last_name'.
-        Минус в начале означает DESC, без минуса — ASC.
-        """
-        if value.startswith("-"):
-            return cls(field=PersonSortField(value[1:]), desc=True)
-        return cls(field=PersonSortField(value), desc=False)
-
-
 @dataclass
-class PersonPage:
-    """Результат пагинации."""
+class PersonFilters(BaseFilters[PersonSortField]):
+    family_id: str | None = None
+    gender: PersonGender | None = None
+    first_name: str | None = None
+    last_name: str | None = None
 
-    result: list[Person]
-    total: int
-    limit: int
-    offset: int
-
-    @property
-    def has_next(self) -> bool:
-        return self.offset + self.limit < self.total
-
-    @property
-    def has_prev(self) -> bool:
-        return self.offset > 0
+PersonSort = BaseSort[PersonSortField]
+PersonPage = Page[Person]
 
 
 class AbstractPersonRepository(AbstractRepository):
@@ -85,7 +51,7 @@ class AbstractPersonRepository(AbstractRepository):
     @abstractmethod
     async def get_list(
         self,
-        filters: PersonFilters | None = None,
+        filters: BaseFilters  | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> PersonPage:
