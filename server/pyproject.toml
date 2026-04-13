@@ -53,6 +53,7 @@ select = [
 ignore = [
     "E501", # handled by formatter
     "B008", # FastAPI Depends
+    "UP046", # Generics
 ]
 
 [tool.ruff.lint.isort]

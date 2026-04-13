@@ -1,12 +1,12 @@
 from domain.entities.person import Person as DomainPerson
-from domain.repositories.person import AbstractPersonRepository, PersonFilters, PersonPage, PersonSort
-from sqlalchemy import Delete, Insert, Sequence, Update, asc, delete, desc, insert, select, update
+from domain.repositories.person import AbstractPersonRepository, PersonPage
+from sqlalchemy import Delete, Insert, Sequence, Update, delete, insert, select, update
 from sqlalchemy.engine.result import Result
 from sqlalchemy.sql import Select
 
 from infrastructure.common.repositories import BaseRepository
 from infrastructure.db.models.person import Person as ORMPerson
-from infrastructure.person.person_mapper import SORT_COLUMNS, PersonORMMapper
+from infrastructure.person.person_mapper import PersonORMMapper
 
 
 class PersonRepository(BaseRepository, AbstractPersonRepository):
@@ -22,15 +22,15 @@ class PersonRepository(BaseRepository, AbstractPersonRepository):
 
     async def get_list(
         self,
-        filters: PersonFilters | None = None,
+        filters: object | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> PersonPage:
         statement: Select = select(ORMPerson)
 
         if filters:
-            statement = self._apply_person_filters(statement, filters)
-            statement = self._apply_sort(statement, filters.sort)
+            statement = filters.filter(statement)  # type: ignore
+            statement = filters.sort(statement)  # type: ignore
 
         total = await self._get_count(statement=statement)
 
@@ -76,26 +76,3 @@ class PersonRepository(BaseRepository, AbstractPersonRepository):
         await self.session.execute(statement)
 
         return None
-
-    @staticmethod
-    def _apply_person_filters(statement: Select, filters: PersonFilters) -> Select:
-        """Приватный метод — детали фильтрации не видны снаружи."""
-        if filters.family_id:
-            statement = statement.where(ORMPerson.family_id == filters.family_id)
-        if filters.gender:
-            statement = statement.where(ORMPerson.gender == filters.gender)
-        if filters.first_name:
-            statement = statement.where(ORMPerson.first_name.ilike(f"%{filters.first_name}%"))
-        if filters.last_name:
-            statement = statement.where(ORMPerson.last_name.ilike(f"%{filters.last_name}%"))
-
-        return statement
-
-    @staticmethod
-    def _apply_sort(statement: Select, sort: PersonSort | None) -> Select:
-        if sort is None:
-            return statement
-
-        column = SORT_COLUMNS[sort.field]
-        order_fn = desc if sort.desc else asc
-        return statement.order_by(order_fn(column))

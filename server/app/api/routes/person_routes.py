@@ -5,14 +5,18 @@ from fastapi import (
     Body,
     Depends,
     Path,
+    Query,
+    Request,
     status,
 )
+from fastapi_filter import FilterDepends
+from infrastructure.person.filters import PersonFilter
 
 from api.dependencies import get_service
+from api.schemas.base import BasePageResponse
 from api.schemas.person import (
     CreatePersonRequest,
     PatchPersonRequest,
-    PersonListRequest,
     PersonPageResponse,
     PersonResponse,
     PutPersonRequest,
@@ -24,11 +28,14 @@ router: APIRouter = APIRouter(prefix="/person", tags=["Persons"])
 
 @router.get(path="/", status_code=status.HTTP_200_OK)
 async def get_persons_list(
-    query: PersonListRequest = Depends(),  # Depends() для query-параметров
+    request: Request,
+    person_filter: PersonFilter = FilterDepends(PersonFilter),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     service: PersonService = Depends(get_service(PersonService, master=False)),
-) -> PersonPageResponse:
-    page = await service.get_persons_list(query=query.to_query())
-    return PersonPageResponse.from_domain(page)
+) -> BasePageResponse[PersonResponse]:
+    page = await service.get_persons_list(filters=person_filter, limit=limit, offset=offset)
+    return PersonPageResponse.from_domain(page=page, request=request)
 
 
 @router.get(path="/{person_id:str}", status_code=status.HTTP_200_OK)

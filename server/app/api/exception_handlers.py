@@ -4,12 +4,13 @@ from logging import Logger, getLogger
 from typing import Any
 
 from domain.exceptions import (
+    BaseDomainError,
     ClientException,
     DatabaseInteractionError,
     DomainFamilyError,
     DomainPersonError,
     NotFoundValidationError,
-    ServerException, BaseDomainError,
+    ServerException,
 )
 from fastapi import status
 from fastapi.exceptions import (

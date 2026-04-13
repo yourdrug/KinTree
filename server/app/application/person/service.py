@@ -1,14 +1,13 @@
 from typing import Any
 
-from domain.common.filters import BaseFilters
 from domain.entities.family import Family
 from domain.entities.person import Person
 from domain.exceptions import NotFoundValidationError
-from domain.repositories.person import PersonFilters, PersonPage
+from domain.repositories.person import PersonPage
 from domain.value_objects.unset import UnsetType
 from infrastructure.common.services import BaseService
 
-from application.person.dto import PatchPersonCommand, PersonListQuery, PutPersonCommand
+from application.person.dto import PatchPersonCommand, PutPersonCommand
 
 
 class PersonService(BaseService):
@@ -20,14 +19,17 @@ class PersonService(BaseService):
 
             return person
 
-    async def get_persons_list(self, query: PersonListQuery) -> PersonPage:
+    async def get_persons_list(
+        self,
+        filters: object | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> PersonPage:
         async with self.uow:
-            filters = self.build_filters_from_query(query, PersonFilters)
-
             return await self.repository_facade.person_repository.get_list(
                 filters=filters,
-                limit=query.limit,
-                offset=query.offset,
+                limit=limit,
+                offset=offset,
             )
 
     async def create_person(self, person: Person) -> Person:
@@ -167,15 +169,3 @@ class PersonService(BaseService):
             birth_date_raw=command.birth_date_raw,
             death_date_raw=command.death_date_raw,
         )
-
-
-    def build_filters_from_query(
-            self,
-            query: object,
-            filters_cls: type[BaseFilters],
-    ) -> BaseFilters:
-        data = {
-            k: v for k, v in vars(query).items()
-            if k not in {"limit", "offset"} and v is not None
-        }
-        return filters_cls(**data)

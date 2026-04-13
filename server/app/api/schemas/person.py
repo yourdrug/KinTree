@@ -12,18 +12,16 @@ API Schemas — Pydantic-модели для HTTP-слоя.
 
 from __future__ import annotations
 
-from typing import Any
-
-from api.schemas.base import BasePatchSchema, BaseListRequest
-from application.person.dto import PatchPersonCommand, PersonListQuery, PutPersonCommand
+from application.person.dto import PatchPersonCommand, PutPersonCommand
 from domain.entities.person import Person, create_person
 from domain.enums import PersonGender
-from domain.exceptions import DomainPersonError
-from domain.repositories.person import PersonPage, PersonSort, PersonSortField
+from domain.repositories.person import PersonPage
 from domain.value_objects.partial_date import PartialDate
 from domain.value_objects.unset import UNSET
-from pydantic import BaseModel, Field, field_validator, model_validator
+from fastapi import Request
+from pydantic import BaseModel, Field
 
+from api.schemas.base import BasePageResponse, BasePatchSchema
 
 
 class CreatePersonRequest(BaseModel):
@@ -91,6 +89,7 @@ class PatchPersonRequest(BasePatchSchema):
     """
     PATCH-семантика: клиент передаёт только изменяемые поля.
     """
+
     non_nullable = ["gender"]
 
     first_name: str | None = Field(None, min_length=1, max_length=100)
@@ -158,46 +157,18 @@ class PersonResponse(BaseModel):
         )
 
 
-class PersonPageResponse(BaseModel):
-    result: list[PersonResponse]
-    total: int
-    limit: int
-    offset: int
-    has_next: bool
-    has_prev: bool
-
+class PersonPageResponse(BasePageResponse):
     @classmethod
-    def from_domain(cls, page: PersonPage) -> PersonPageResponse:
-        return cls(
-            result=[PersonResponse.from_domain(p) for p in page.result],
+    def from_domain(cls, page: PersonPage, request: Request) -> BasePageResponse[PersonResponse]:
+        return cls.build(
+            items=[PersonResponse.from_domain(p) for p in page.result],
             total=page.total,
             limit=page.limit,
             offset=page.offset,
-            has_next=page.has_next,
-            has_prev=page.has_prev,
+            base_url=str(request.url.replace(query="")),
+            query_params=request.query_params,
         )
 
-
-class PersonListRequest(BaseListRequest[PersonSortField]):
-    family_id: str | None = None
-    gender: PersonGender | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-
-    @classmethod
-    def get_sort_enum(cls):
-        return PersonSortField
-
-    def to_query(self) -> PersonListQuery:
-        return PersonListQuery(
-            family_id=self.family_id,
-            gender=self.gender,
-            first_name=self.first_name,
-            last_name=self.last_name,
-            sort=self.build_sort(),
-            limit=self.limit,
-            offset=self.offset,
-        )
 
 class PartialDateSchema(BaseModel):
     year: int | None = Field(None, ge=1, le=9999, examples=[1990])

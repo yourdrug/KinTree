@@ -1,30 +1,10 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from dataclasses import dataclass
-from enum import StrEnum
 
-from domain.common.filters import BaseFilters
-from domain.common.page import Page
-from domain.common.sort import BaseSort
+from domain.common.page import PersonPage
 from domain.entities.person import Person
-from domain.enums import PersonGender
 from domain.repositories.base import AbstractRepository
-
-
-class PersonSortField(StrEnum):
-    FIRST_NAME = "first_name"
-    LAST_NAME = "last_name"
-
-@dataclass
-class PersonFilters(BaseFilters[PersonSortField]):
-    family_id: str | None = None
-    gender: PersonGender | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-
-PersonSort = BaseSort[PersonSortField]
-PersonPage = Page[Person]
 
 
 class AbstractPersonRepository(AbstractRepository):
@@ -51,7 +31,7 @@ class AbstractPersonRepository(AbstractRepository):
     @abstractmethod
     async def get_list(
         self,
-        filters: BaseFilters  | None = None,
+        filters: object | None = None,
         limit: int = 20,
         offset: int = 0,
     ) -> PersonPage:

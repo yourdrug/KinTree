@@ -12,14 +12,12 @@ API Schemas — Family.
 
 from __future__ import annotations
 
-from typing import Any
-
-from api.schemas.base import BasePatchSchema
 from application.family.dto import PatchFamilyCommand, PutFamilyCommand
 from domain.entities.family import Family
-from domain.exceptions import DomainFamilyError
 from domain.value_objects.unset import UNSET
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
+
+from api.schemas.base import BasePatchSchema
 
 
 class CreateFamilyRequest(BaseModel):

@@ -1,7 +1,5 @@
 from domain.entities.person import Person as DomainPerson
-from domain.repositories.person import PersonSortField
 from domain.value_objects.partial_date import PartialDate
-from sqlalchemy.orm import InstrumentedAttribute
 
 from infrastructure.db.models.person import Person as ORMPerson
 
@@ -61,9 +59,3 @@ class PersonORMMapper:
             month=month,
             day=day,
         )
-
-
-SORT_COLUMNS: dict[PersonSortField, InstrumentedAttribute] = {
-    PersonSortField.FIRST_NAME: ORMPerson.first_name,
-    PersonSortField.LAST_NAME: ORMPerson.last_name,
-}

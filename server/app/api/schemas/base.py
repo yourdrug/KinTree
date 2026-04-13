@@ -1,10 +1,8 @@
-from typing import Any, ClassVar, Generic, Type
+from typing import Any, ClassVar, Generic, TypeVar
+from urllib.parse import urlencode
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
-
-from domain.common.filters import SortFieldT, BaseFilters
-from domain.common.sort import BaseSort
 from domain.exceptions import BaseDomainError
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Schema(BaseModel):
@@ -57,30 +55,62 @@ class BasePatchSchema(BaseModel):
         return data
 
 
-class BaseListRequest(BaseModel, Generic[SortFieldT]):
-    sort_by: str | None = None
-    limit: int = Field(default=20, ge=1, le=100)
-    offset: int = Field(default=0, ge=0)
+T = TypeVar("T")
+
+
+class BasePageResponse(BaseModel, Generic[T]):
+    result: list[T]
+    total: int
+    limit: int
+    offset: int
+
+    next_url: str | None
+    prev_url: str | None
+    total_pages: int
 
     @classmethod
-    def get_sort_enum(cls) -> Type[SortFieldT]:
-        raise NotImplementedError
+    def build(
+        cls,
+        *,
+        items: list[T],
+        total: int,
+        limit: int,
+        offset: int,
+        base_url: str,
+        query_params: dict,
+    ) -> "BasePageResponse[T]":
+        total_pages = (total + limit - 1) // limit
 
-    @field_validator("sort_by")
-    @classmethod
-    def validate_sort_by(cls, v: str | None) -> str | None:
-        if not v:
-            return v
-
-        raw = v.lstrip("-")
-        allowed = {f.value for f in cls.get_sort_enum()}
-
-        if raw not in allowed:
-            raise ValueError(
-                f"Недопустимое поле сортировки: '{raw}'. "
-                f"Допустимые значения: {', '.join(sorted(allowed))}"
+        next_url = None
+        if offset + limit < total:
+            next_url = cls._make_url(
+                new_offset=offset + limit,
+                base_url=base_url,
+                query_params=query_params,
+                limit=limit,
             )
-        return v
 
-    def build_sort(self) -> BaseSort[SortFieldT] | None:
-        return BaseFilters.build_sort(self.sort_by, self.get_sort_enum())
+        prev_url = None
+        if offset > 0:
+            prev_offset = max(0, offset - limit)
+            prev_url = cls._make_url(
+                new_offset=prev_offset,
+                base_url=base_url,
+                query_params=query_params,
+                limit=limit,
+            )
+
+        return cls(
+            result=items,
+            total=total,
+            limit=limit,
+            offset=offset,
+            total_pages=total_pages,
+            next_url=next_url,
+            prev_url=prev_url,
+        )
+
+    @classmethod
+    def _make_url(cls, new_offset: int, query_params: dict[str, Any], limit: int, base_url: str) -> str:
+        params = {**query_params, "limit": limit, "offset": new_offset}
+        return f"{base_url}?{urlencode(params)}"

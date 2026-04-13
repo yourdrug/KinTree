@@ -1,7 +1,6 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from domain.enums import PersonGender
-from domain.repositories.person import PersonSort, PersonSortField
 from domain.value_objects.partial_date import PartialDate
 from domain.value_objects.unset import UNSET, UnsetType
 
@@ -34,14 +33,3 @@ class PutPersonCommand:
     death_date: PartialDate | None = None
     birth_date_raw: str | None = None
     death_date_raw: str | None = None
-
-
-@dataclass(frozen=True)
-class PersonListQuery:
-    family_id: str | None = None
-    gender: PersonGender | None = None
-    first_name: str | None = None
-    last_name: str | None = None
-    sort: PersonSort = field(default_factory=lambda: PersonSort(PersonSortField.LAST_NAME))
-    limit: int = 20
-    offset: int = 0
