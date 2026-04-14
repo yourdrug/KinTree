@@ -1,5 +1,5 @@
 """
-api/auth/dependencies.py
+api/auth/auth_dependencies.py
 
 FastAPI dependencies for authentication.
 Import get_current_account wherever a route needs an authenticated user.
@@ -13,7 +13,7 @@ from infrastructure.account.repositories import AccountRepository
 from infrastructure.auth.jwt_service import decode_access_token
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from application.dependencies import get_asession
+from api.dependencies.base_dependencies import get_asession
 
 
 # HTTPBearer extracts the token from the Authorization: Bearer <token> header.

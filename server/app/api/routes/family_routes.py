@@ -1,10 +1,10 @@
-from application.dependencies import get_service
 from application.family.services import FamilyService
 from domain.entities.family import Family
 from domain.filters.base import BaseFilterSpec
 from domain.filters.page import FamilyPage
 from fastapi import APIRouter, Body, Depends, Path, Request, status
 
+from api.dependencies.base_dependencies import get_service
 from api.schemas.family import (
     CreateFamilyRequest,
     FamilyFilterSchema,

@@ -1,4 +1,3 @@
-from application.dependencies import get_service
 from application.person.service import PersonService
 from domain.entities.person import Person
 from domain.filters.base import BaseFilterSpec
@@ -12,6 +11,7 @@ from fastapi import (
     status,
 )
 
+from api.dependencies.base_dependencies import get_service
 from api.schemas.person import (
     CreatePersonRequest,
     PatchPersonRequest,
