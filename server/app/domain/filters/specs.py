@@ -12,8 +12,7 @@ domain/filters/specs.py
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from domain.enums import PersonGender
 from domain.filters.base import (
@@ -79,7 +78,6 @@ class PersonFilterSpec(BaseFilterSpec):
     def is_alive() -> FilterField:
         """Фильтр: только живые (death_year IS NULL)."""
         return FilterField("death_year", FilterOperator.IS_NULL, True)
-
 
     # Сортировка
 

@@ -1,12 +1,11 @@
 from application.account.service import AccountService
+from application.dependencies import get_service
 from fastapi import (
     APIRouter,
     Depends,
     Path,
     status,
 )
-
-from application.dependencies import get_service
 
 
 router: APIRouter = APIRouter(prefix="/account", tags=["Accounts"])

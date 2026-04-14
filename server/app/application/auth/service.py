@@ -14,11 +14,11 @@ from domain.exceptions import (
 from infrastructure.auth.jwt_service import (
     create_access_token,
     create_refresh_token,
+    decode_refresh_token,
     hash_password,
     hash_token,
     verify_password,
     verify_token_hash,
-    decode_refresh_token,
 )
 from infrastructure.common.services import BaseService
 
@@ -123,4 +123,3 @@ class AuthService(BaseService):
                 account_id=account_id,
                 hashed_refresh_token=None,
             )
-            

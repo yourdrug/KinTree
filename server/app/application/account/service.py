@@ -1,5 +1,5 @@
+from domain.entities.account import Account
 from infrastructure.common.services import BaseService
-from infrastructure.db.models.account import Account
 
 
 class AccountService(BaseService):

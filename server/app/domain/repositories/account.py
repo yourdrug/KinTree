@@ -5,7 +5,6 @@ from domain.repositories.base import AbstractRepository
 
 
 class AbstractAccountRepository(AbstractRepository):
-
     @abstractmethod
     async def exists(self, object_id: str) -> bool:
         raise NotImplementedError

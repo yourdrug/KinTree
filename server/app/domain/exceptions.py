@@ -151,6 +151,7 @@ class AuthenticationError(ClientException):
     AuthenticationError: Raised on invalid credentials or token issues.
     Typically a 401 Unauthorized.
     """
+
     pass
 
 
@@ -159,6 +160,7 @@ class AccountAlreadyExistsError(ClientException):
     AccountAlreadyExistsError: Raised when registering with an existing email.
     Typically a 409 Conflict.
     """
+
     pass
 
 
@@ -167,4 +169,5 @@ class AccountBlockedError(ClientException):
     AccountBlockedError: Raised when a blocked account tries to authenticate.
     Typically a 403 Forbidden.
     """
+
     pass

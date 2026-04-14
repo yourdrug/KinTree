@@ -5,15 +5,16 @@ FastAPI dependencies for authentication.
 Import get_current_account wherever a route needs an authenticated user.
 """
 
-from fastapi import Depends
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
 from domain.entities.account import Account
 from domain.exceptions import AuthenticationError
-from infrastructure.auth.jwt_service import decode_access_token
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from infrastructure.account.repositories import AccountRepository
+from infrastructure.auth.jwt_service import decode_access_token
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from application.dependencies import get_asession
+
 
 # HTTPBearer extracts the token from the Authorization: Bearer <token> header.
 # auto_error=False lets us raise a custom 401 instead of FastAPI's default.
@@ -49,7 +50,7 @@ async def get_current_account_id(
 
 async def get_current_account(
     account_id: str = Depends(get_current_account_id),
-    asession=Depends(get_asession(master=False)),
+    asession: AsyncSession = Depends(get_asession(master=False)),
 ) -> Account:
     """
     Resolves the full Account domain entity from the token's sub claim.

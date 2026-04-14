@@ -27,15 +27,15 @@ class FilterOperator(str, Enum):
     чтобы инфраструктурный слой мог транслировать их без доп. маппинга.
     """
 
-    EXACT = "exact"          # field = value
-    GT = "gt"                # field > value
-    GTE = "gte"              # field >= value
-    LT = "lt"                # field < value
-    LTE = "lte"              # field <= value
+    EXACT = "exact"  # field = value
+    GT = "gt"  # field > value
+    GTE = "gte"  # field >= value
+    LT = "lt"  # field < value
+    LTE = "lte"  # field <= value
     ICONTAINS = "icontains"  # ILIKE '%value%'
-    IN = "in"                # field IN (v1, v2, ...)
-    SEARCH = "search"        # full-text / multi-column ILIKE (настраивается в инфраструктуре)
-    IS_NULL = "is_null"      # field IS NULL / IS NOT NULL
+    IN = "in"  # field IN (v1, v2, ...)
+    SEARCH = "search"  # full-text / multi-column ILIKE (настраивается в инфраструктуре)
+    IS_NULL = "is_null"  # field IS NULL / IS NOT NULL
 
 
 class SortDirection(str, Enum):
@@ -70,8 +70,7 @@ class FilterField:
 
         if self.operator == FilterOperator.IN and not isinstance(self.value, (list, tuple, set, frozenset)):
             raise ValueError(
-                f"FilterField '{self.field_name}': оператор IN требует коллекцию, "
-                f"получен {type(self.value).__name__}."
+                f"FilterField '{self.field_name}': оператор IN требует коллекцию, получен {type(self.value).__name__}."
             )
 
 

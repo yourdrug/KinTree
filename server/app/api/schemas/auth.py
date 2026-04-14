@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
-
 from application.auth.dto import LoginCommand, RegisterCommand
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class RegisterRequest(BaseModel):

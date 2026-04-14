@@ -1,4 +1,5 @@
 from domain.entities.account import Account as DomainAccount
+
 from infrastructure.db.models.account import Account as ORMAccount
 
 

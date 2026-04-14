@@ -7,15 +7,15 @@ Keeps cryptographic concerns out of the application layer.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
 
 import bcrypt
+from domain.exceptions import AuthenticationError
 import jwt
 from jwt import DecodeError, ExpiredSignatureError, InvalidTokenError
 
-from domain.exceptions import AuthenticationError
 from infrastructure.common.settings import settings
 
 
@@ -26,6 +26,7 @@ REFRESH_TOKEN_TYPE = "refresh"
 
 
 # ── Password helpers ───────────────────────────────────────────────────────────
+
 
 def hash_password(plain: str) -> str:
     """Returns a bcrypt hash of the plain-text password."""
@@ -39,8 +40,9 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 # ── Token helpers ──────────────────────────────────────────────────────────────
 
+
 def _now_utc() -> datetime:
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def _encode(payload: dict) -> str:
@@ -50,19 +52,20 @@ def _encode(payload: dict) -> str:
 def _decode(token: str) -> dict:
     try:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-    except ExpiredSignatureError:
+    except ExpiredSignatureError as exc:
         raise AuthenticationError(
             message="Токен истёк",
             errors={"token": "expired"},
-        )
-    except (DecodeError, InvalidTokenError):
+        ) from exc
+    except (DecodeError, InvalidTokenError) as exc:
         raise AuthenticationError(
             message="Недействительный токен",
             errors={"token": "invalid"},
-        )
+        ) from exc
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
+
 
 def create_access_token(account_id: str, email: str) -> str:
     now = _now_utc()

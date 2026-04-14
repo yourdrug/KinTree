@@ -15,9 +15,7 @@ class Account(BaseModel):
 
     __tablename__: str = "Account"
 
-    __table_args__: tuple = (
-        Index("idx_account_email", "email", unique=True),
-    )
+    __table_args__: tuple = (Index("idx_account_email", "email", unique=True),)
 
     email: Mapped[str] = mapped_column(
         unique=True,

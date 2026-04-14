@@ -4,6 +4,9 @@ from logging import Logger, getLogger
 from typing import Any
 
 from domain.exceptions import (
+    AccountAlreadyExistsError,
+    AccountBlockedError,
+    AuthenticationError,
     BaseDomainError,
     ClientException,
     DatabaseInteractionError,
@@ -11,7 +14,7 @@ from domain.exceptions import (
     DomainPersonError,
     FilterError,
     NotFoundValidationError,
-    ServerException, AuthenticationError, AccountAlreadyExistsError, AccountBlockedError,
+    ServerException,
 )
 from fastapi import status
 from fastapi.exceptions import (

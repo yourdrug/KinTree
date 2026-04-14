@@ -14,9 +14,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Select, asc, desc, or_
-from sqlalchemy.orm import InstrumentedAttribute
-
 from domain.filters.base import (
     BaseFilterSpec,
     FilterField,
@@ -24,6 +21,8 @@ from domain.filters.base import (
     SortDirection,
     SortField,
 )
+from sqlalchemy import Select, asc, desc, or_
+from sqlalchemy.orm import InstrumentedAttribute
 
 
 # Маппинг: имя поля агрегата → атрибут ORM-модели
@@ -62,7 +61,6 @@ class FilterTranslator:
         """
         self._field_map = field_map
         self._search_fields = search_fields
-
 
     def apply(self, stmt: Select, spec: BaseFilterSpec) -> Select:
         """

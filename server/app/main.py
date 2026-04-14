@@ -9,7 +9,7 @@ from api.exception_handlers import (
     handle_fastapi_unexpected_exceptions,
     handle_fastapi_validation_exceptions,
 )
-from api.routes import account_routes, family_routes, person_routes, auth_routes
+from api.routes import account_routes, auth_routes, family_routes, person_routes
 from domain.exceptions import ClientException, ServerException
 from fastapi import FastAPI
 from fastapi.exceptions import HTTPException, RequestValidationError

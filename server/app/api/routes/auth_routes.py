@@ -4,12 +4,12 @@ api/routes/auth_routes.py
 Public auth endpoints and one protected /me endpoint as usage example.
 """
 
+from application.auth.dependencies import get_current_account, get_current_account_id
 from application.auth.service import AuthService
+from application.dependencies import get_service
 from domain.entities.account import Account
 from fastapi import APIRouter, Body, Depends, status
 
-from application.auth.dependencies import get_current_account, get_current_account_id
-from application.dependencies import get_service
 from api.schemas.auth import (
     AccountResponse,
     LoginRequest,
@@ -17,6 +17,7 @@ from api.schemas.auth import (
     RegisterRequest,
     TokenResponse,
 )
+
 
 router: APIRouter = APIRouter(prefix="/auth", tags=["Auth"])
 
