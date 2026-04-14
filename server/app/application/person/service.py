@@ -2,7 +2,7 @@ from typing import Any
 
 from domain.entities.family import Family
 from domain.entities.person import Person
-from domain.exceptions import NotFoundValidationError
+from domain.filters.base import BaseFilterSpec
 from domain.repositories.person import PersonPage
 from domain.value_objects.unset import UnsetType
 from infrastructure.common.services import BaseService
@@ -21,21 +21,15 @@ class PersonService(BaseService):
 
     async def get_persons_list(
         self,
-        filters: object | None = None,
-        limit: int = 20,
-        offset: int = 0,
+        filters: BaseFilterSpec,
     ) -> PersonPage:
         async with self.uow:
             return await self.repository_facade.person_repository.get_list(
                 filters=filters,
-                limit=limit,
-                offset=offset,
             )
 
     async def create_person(self, person: Person) -> Person:
         async with self.uow:
-            await self._assert_family_exists(person.family_id)
-
             family = await self._load_family_aggregate(person.family_id)
             family.assert_can_add_member(person)
 
@@ -94,15 +88,6 @@ class PersonService(BaseService):
             )
 
             return None
-
-    async def _assert_family_exists(self, family_id: str) -> None:
-        """Проверка существования семьи — задача application-слоя."""
-        exists = await self.repository_facade.family_repository.exists(family_id)
-        if not exists:
-            raise NotFoundValidationError(
-                message="Семья не найдена",
-                errors={"family_id": f"Семья с ID «{family_id}» не существует."},
-            )
 
     async def _load_family_aggregate(
         self,

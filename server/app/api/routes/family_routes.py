@@ -1,21 +1,45 @@
 from application.family.services import FamilyService
 from domain.entities.family import Family
-from fastapi import APIRouter, Body, Depends, Path, status
+from domain.filters.base import BaseFilterSpec
+from domain.filters.page import FamilyPage
+from fastapi import APIRouter, Body, Depends, Path, Request, status
 
 from api.dependencies import get_service
-from api.schemas.family import CreateFamilyRequest, FamilyResponse, PatchFamilyRequest, PutFamilyRequest
+from api.schemas.family import (
+    CreateFamilyRequest,
+    FamilyFilterSchema,
+    FamilyPageResponse,
+    FamilyResponse,
+    PatchFamilyRequest,
+    PutFamilyRequest,
+)
 
 
 router: APIRouter = APIRouter(prefix="/families", tags=["Families"])
 
 
-# @router.get(path="/", status_code=status.HTTP_200_OK)
-# async def get_persons_list(
-#     query: PersonListRequest = Depends(),  # Depends() для query-параметров
-#     service: PersonService = Depends(get_service(PersonService, master=False)),
-# ) -> PersonPageResponse:
-#     page = await service.get_persons_list(query=query.to_query())
-#     return PersonPageResponse.from_domain(page)
+@router.get(path="/", status_code=status.HTTP_200_OK)
+async def get_families_list(
+    request: Request,
+    filters: FamilyFilterSchema = Depends(),
+    service: FamilyService = Depends(get_service(FamilyService, master=False)),
+) -> FamilyPageResponse:
+    """
+    Получить список семей с фильтрацией, сортировкой и пагинацией.
+
+     Query-параметры фильтрации:
+    - `name__icontains` — поиск по названию
+    - `owner_id` — поиск по точному ID владельца
+    - `founded_year__gte` / `founded_year__lte` — диапазон года основания
+    - `search` — поиск по имени + описанию
+    - `order_by` — сортировка (name | founded_year | creation_date)
+    - `order_dir` — направление (asc | desc)
+    - `limit` / `offset` — пагинация
+    """
+
+    spec: BaseFilterSpec = filters.to_spec()
+    page: FamilyPage = await service.get_families_list(filters=spec)
+    return FamilyPageResponse.from_domain(page=page, request=request)
 
 
 @router.get(path="/{family_id:str}", status_code=status.HTTP_200_OK)
@@ -23,8 +47,11 @@ async def get_family(
     family_id: str = Path(..., min_length=32, max_length=32),
     service: FamilyService = Depends(get_service(FamilyService, master=False)),
 ) -> FamilyResponse:
-    family: Family = await service.get_family(family_id=family_id)
+    """
+    Получить семью по ID
+    """
 
+    family: Family = await service.get_family(family_id=family_id)
     return FamilyResponse.from_domain(family=family)
 
 
@@ -33,10 +60,12 @@ async def create_family(
     payload: CreateFamilyRequest = Body(...),
     service: FamilyService = Depends(get_service(FamilyService, master=True)),
 ) -> FamilyResponse:
+    """
+    Создание семьи по введенным данным.
+    """
+
     family: Family = payload.to_domain()
-
     created_family: Family = await service.create_family(family=family)
-
     return FamilyResponse.from_domain(family=created_family)
 
 
@@ -46,10 +75,13 @@ async def update_family(
     payload: PutFamilyRequest = Body(...),
     service: FamilyService = Depends(get_service(FamilyService, master=True)),
 ) -> FamilyResponse:
+    """
+    Перезаписать объект семьи для обновления.
+    Если необязательный атрибут не передан, он устанавливается как None
+    """
+
     command = payload.to_command(family_id=family_id)
-
     updated_family: Family = await service.update_family(command=command)
-
     return FamilyResponse.from_domain(family=updated_family)
 
 
@@ -59,17 +91,24 @@ async def patch_update_family(
     payload: PatchFamilyRequest = Body(...),
     service: FamilyService = Depends(get_service(FamilyService, master=True)),
 ) -> FamilyResponse:
+    """
+    Частично обновить объект семьи.
+    Если атрибут не передан, он не изменяется.
+    """
+
     command = payload.to_command(family_id)
     updated_family = await service.patch_update_family(command)
-
     return FamilyResponse.from_domain(family=updated_family)
 
 
 @router.delete(path="/{family_id:str}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_person(
+async def delete_family(
     family_id: str = Path(..., min_length=32, max_length=32),
     service: FamilyService = Depends(get_service(FamilyService, master=True)),
 ) -> None:
-    await service.delete_family(family_id=family_id)
+    """
+    Удалить объект семьи
+    """
 
+    await service.delete_family(family_id=family_id)
     return None

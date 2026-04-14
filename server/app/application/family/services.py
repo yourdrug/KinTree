@@ -1,7 +1,8 @@
 from typing import Any
 
 from domain.entities.family import Family
-from domain.exceptions import NotFoundValidationError
+from domain.filters.base import BaseFilterSpec
+from domain.filters.page import FamilyPage
 from domain.value_objects.unset import UnsetType
 from infrastructure.common.services import BaseService
 
@@ -12,6 +13,8 @@ from application.family.dto import (
 
 
 class FamilyService(BaseService):
+    # TODO ref get_by_id_or_None
+
     async def get_family(self, family_id: str) -> Family:
         async with self.uow:
             family = await self.repository_facade.family_repository.get_by_id(
@@ -19,12 +22,14 @@ class FamilyService(BaseService):
             )
             return family
 
-    # async def get_families_list(self, query: FamilyListQuery):
-    #     async with self.uow:
-    #         return await self.repository_facade.family_repository.get_list(
-    #             limit=query.limit,
-    #             offset=query.offset,
-    #         )
+    async def get_families_list(
+        self,
+        filters: BaseFilterSpec,
+    ) -> FamilyPage:
+        async with self.uow:
+            return await self.repository_facade.family_repository.get_list(
+                filters=filters,
+            )
 
     async def create_family(self, family: Family) -> Family:
         async with self.uow:
@@ -59,35 +64,8 @@ class FamilyService(BaseService):
 
     async def delete_family(self, family_id: str) -> None:
         async with self.uow:
-            await self._assert_family_exists(family_id)
-
             await self.repository_facade.family_repository.delete(
                 family_id=family_id,
-            )
-
-    async def get_family_with_members(self, family_id: str) -> Family:
-        """
-        Полезный метод: собрать агрегат Family с members
-        (как ты делаешь в PersonService)
-        """
-        async with self.uow:
-            family = await self.repository_facade.family_repository.get_by_id(
-                family_id=family_id,
-            )
-
-            members = await self.repository_facade.person_repository.get_persons_by_family(
-                family_id=family_id,
-            )
-
-            family.members = members
-            return family
-
-    async def _assert_family_exists(self, family_id: str) -> None:
-        exists = await self.repository_facade.family_repository.exists(family_id)
-        if not exists:
-            raise NotFoundValidationError(
-                message="Семья не найдена",
-                errors={"family_id": f"Семья с ID «{family_id}» не существует."},
             )
 
     def _apply_put(self, command: PutFamilyCommand, existing: Family) -> Family:
@@ -99,7 +77,7 @@ class FamilyService(BaseService):
             origin_place=command.origin_place,
             founded_year=command.founded_year,
             ended_year=command.ended_year,
-            members=existing.members,  # агрегат сохраняем
+            members=existing.members,
         )
 
     def _apply_patch(self, command: PatchFamilyCommand, existing: Family) -> Family:

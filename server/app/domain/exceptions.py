@@ -1,6 +1,4 @@
-from typing import (
-    Any,
-)
+from typing import Any
 
 
 class BaseExc(Exception):
@@ -113,10 +111,15 @@ class NotFoundValidationError(ClientException):
 
 
 class BaseDomainError(ClientException):
+    """
+    BaseDomainError: Exception raised when a base domain error occurs.
+    Basic error for abstractions
+    """
+
     pass
 
 
-class DomainPersonError(ClientException):
+class DomainPersonError(BaseDomainError):
     """
     DomainPersonError: Exception raised when a domain validating person error occurs.
     This typically indicates a 400 Bad Request error scenario.
@@ -125,9 +128,19 @@ class DomainPersonError(ClientException):
     pass
 
 
-class DomainFamilyError(ClientException):
+class DomainFamilyError(BaseDomainError):
     """
-    DomainFamilyError: Нарушение бизнес-правил внутри семьи.
+    DomainFamilyError: Exception raised when a domain validating family error occurs.
+    This typically indicates a 400 Bad Request error scenario.
+    """
+
+    pass
+
+
+class FilterError(ClientException):
+    """
+    FilterError: Exception raised when a filter error occurs.
+    This typically indicates a 422 Unprocessable Content error scenario.
     """
 
     pass

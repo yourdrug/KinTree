@@ -1,4 +1,5 @@
 from domain.entities.person import Person as DomainPerson
+from domain.filters.base import BaseFilterSpec
 from domain.repositories.person import AbstractPersonRepository, PersonPage
 from sqlalchemy import Delete, Insert, Sequence, Update, delete, insert, select, update
 from sqlalchemy.engine.result import Result
@@ -6,6 +7,7 @@ from sqlalchemy.sql import Select
 
 from infrastructure.common.repositories import BaseRepository
 from infrastructure.db.models.person import Person as ORMPerson
+from infrastructure.person.filters import person_filter_translator
 from infrastructure.person.person_mapper import PersonORMMapper
 
 
@@ -22,27 +24,22 @@ class PersonRepository(BaseRepository, AbstractPersonRepository):
 
     async def get_list(
         self,
-        filters: object | None = None,
-        limit: int = 20,
-        offset: int = 0,
+        filters: BaseFilterSpec,
     ) -> PersonPage:
         statement: Select = select(ORMPerson)
 
-        if filters:
-            statement = filters.filter(statement)  # type: ignore
-            statement = filters.sort(statement)  # type: ignore
+        statement = person_filter_translator.apply(statement, filters)
+        total = await self._get_count(statement)
+        statement = person_filter_translator.apply_pagination(statement, filters)
 
-        total = await self._get_count(statement=statement)
-
-        statement = statement.limit(limit).offset(offset)
         result: Result = await self.session.execute(statement)
         persons = [PersonORMMapper.to_domain(p) for p in result.scalars().all()]
 
         return PersonPage(
             result=persons,
             total=total,
-            limit=limit,
-            offset=offset,
+            limit=filters.limit,
+            offset=filters.offset,
         )
 
     async def get_persons_by_family(self, family_id: str) -> list[DomainPerson]:

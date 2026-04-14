@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from abc import abstractmethod
 
-from domain.common.page import PersonPage
 from domain.entities.person import Person
+from domain.filters.base import BaseFilterSpec
+from domain.filters.page import PersonPage
 from domain.repositories.base import AbstractRepository
 
 
@@ -28,12 +29,12 @@ class AbstractPersonRepository(AbstractRepository):
         """
         raise NotImplementedError
 
+    # TODO get_by_id_or_None
+
     @abstractmethod
     async def get_list(
         self,
-        filters: object | None = None,
-        limit: int = 20,
-        offset: int = 0,
+        filters: BaseFilterSpec,
     ) -> PersonPage:
         """Возвращает список персон с фильтрацией и пагинацией."""
         raise NotImplementedError

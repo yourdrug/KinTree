@@ -1,7 +1,9 @@
-from typing import Any, ClassVar, Generic, TypeVar
+from dataclasses import dataclass
+from typing import Annotated, Any, ClassVar
 from urllib.parse import urlencode
 
 from domain.exceptions import BaseDomainError
+from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
@@ -55,62 +57,89 @@ class BasePatchSchema(BaseModel):
         return data
 
 
-T = TypeVar("T")
+@dataclass
+class BasePaginationParams:
+    """
+    Базовые параметры пагинации.
+
+    Наследуется всеми фильтр-схемами.
+    dataclass + Annotated[T, Query(...)] — FastAPI читает поля
+    как query-параметры, не как request body.
+    """
+
+    limit: Annotated[int, Query(ge=1, le=100, description="Количество записей на странице")] = 20
+    offset: Annotated[int, Query(ge=0, description="Смещение")] = 0
 
 
-class BasePageResponse(BaseModel, Generic[T]):
-    result: list[T]
-    total: int
-    limit: int
-    offset: int
+class BasePageMeta(BaseModel):
+    """
+    Мета-информация о странице.
+    Выносим отдельно, чтобы конкретные Page-схемы
+    могли наследовать только мету без поля result.
+    """
 
-    next_url: str | None
-    prev_url: str | None
-    total_pages: int
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)
+    total_pages: int = Field(ge=0)
+    has_next: bool
+    has_prev: bool
+    next_url: str | None = None
+    prev_url: str | None = None
 
     @classmethod
-    def build(
+    def _build_meta(
         cls,
         *,
-        items: list[T],
         total: int,
         limit: int,
         offset: int,
         base_url: str,
-        query_params: dict,
-    ) -> "BasePageResponse[T]":
-        total_pages = (total + limit - 1) // limit
+        query_params: Any,
+    ) -> dict[str, Any]:
+        """
+        Вычисляет мета-поля страницы.
+        Используется наследниками в их методе from_domain().
+        """
+        total_pages = max(1, (total + limit - 1) // limit) if limit > 0 else 0
+        has_next = offset + limit < total
+        has_prev = offset > 0
 
         next_url = None
-        if offset + limit < total:
+        if has_next:
             next_url = cls._make_url(
-                new_offset=offset + limit,
                 base_url=base_url,
                 query_params=query_params,
                 limit=limit,
+                new_offset=offset + limit,
             )
 
         prev_url = None
-        if offset > 0:
-            prev_offset = max(0, offset - limit)
+        if has_prev:
             prev_url = cls._make_url(
-                new_offset=prev_offset,
                 base_url=base_url,
                 query_params=query_params,
                 limit=limit,
+                new_offset=max(0, offset - limit),
             )
 
-        return cls(
-            result=items,
-            total=total,
-            limit=limit,
-            offset=offset,
-            total_pages=total_pages,
-            next_url=next_url,
-            prev_url=prev_url,
-        )
+        return {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "total_pages": total_pages,
+            "has_next": has_next,
+            "has_prev": has_prev,
+            "next_url": next_url,
+            "prev_url": prev_url,
+        }
 
-    @classmethod
-    def _make_url(cls, new_offset: int, query_params: dict[str, Any], limit: int, base_url: str) -> str:
-        params = {**query_params, "limit": limit, "offset": new_offset}
+    @staticmethod
+    def _make_url(
+        base_url: str,
+        query_params: Any,
+        limit: int,
+        new_offset: int,
+    ) -> str:
+        params = {**dict(query_params), "limit": limit, "offset": new_offset}
         return f"{base_url}?{urlencode(params)}"

@@ -9,6 +9,7 @@ from domain.exceptions import (
     DatabaseInteractionError,
     DomainFamilyError,
     DomainPersonError,
+    FilterError,
     NotFoundValidationError,
     ServerException,
 )
@@ -164,6 +165,7 @@ async def handle_fastapi_expected_client_exceptions(
         DomainPersonError: status.HTTP_400_BAD_REQUEST,
         DomainFamilyError: status.HTTP_400_BAD_REQUEST,
         NotFoundValidationError: status.HTTP_404_NOT_FOUND,
+        FilterError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     }
 
     status_code: int | None = exception_mapping.get(type(exception))

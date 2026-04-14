@@ -1,22 +1,21 @@
 from application.person.service import PersonService
 from domain.entities.person import Person
+from domain.filters.base import BaseFilterSpec
+from domain.filters.page import PersonPage
 from fastapi import (
     APIRouter,
     Body,
     Depends,
     Path,
-    Query,
     Request,
     status,
 )
-from fastapi_filter import FilterDepends
-from infrastructure.person.filters import PersonFilter
 
 from api.dependencies import get_service
-from api.schemas.base import BasePageResponse
 from api.schemas.person import (
     CreatePersonRequest,
     PatchPersonRequest,
+    PersonFilterSchema,
     PersonPageResponse,
     PersonResponse,
     PutPersonRequest,
@@ -29,12 +28,29 @@ router: APIRouter = APIRouter(prefix="/person", tags=["Persons"])
 @router.get(path="/", status_code=status.HTTP_200_OK)
 async def get_persons_list(
     request: Request,
-    person_filter: PersonFilter = FilterDepends(PersonFilter),
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    filters: PersonFilterSchema = Depends(),
     service: PersonService = Depends(get_service(PersonService, master=False)),
-) -> BasePageResponse[PersonResponse]:
-    page = await service.get_persons_list(filters=person_filter, limit=limit, offset=offset)
+) -> PersonPageResponse:
+    """
+    Получить список персон с фильтрацией, сортировкой и пагинацией.
+
+    Query-параметры фильтрации:
+    - `first_name__icontains` — поиск по имени
+    - `last_name__icontains` — поиск по фамилии
+    - `gender` — точное совпадение (MALE | FEMALE | UNKNOWN)
+    - `gender__in` — несколько значений гендера через запятую
+    - `family_id` — фильтр по семье
+    - `birth_year__gte` / `birth_year__lte` — диапазон года рождения
+    - `death_year__gte` / `death_year__lte` — диапазон года смерти
+    - `is_alive` — только живые
+    - `search` — поиск по имени + фамилии
+    - `order_by` — сортировка (last_name | birth_year | creation_date)
+    - `order_dir` — направление (asc | desc)
+    - `limit` / `offset` — пагинация
+    """
+
+    spec: BaseFilterSpec = filters.to_spec()
+    page: PersonPage = await service.get_persons_list(filters=spec)
     return PersonPageResponse.from_domain(page=page, request=request)
 
 
@@ -43,8 +59,11 @@ async def get_person(
     person_id: str = Path(..., min_length=32, max_length=32),
     service: PersonService = Depends(get_service(PersonService, master=False)),
 ) -> PersonResponse:
-    person: Person = await service.get_person(person_id=person_id)
+    """
+    Получить члена семьи по ID
+    """
 
+    person: Person = await service.get_person(person_id=person_id)
     return PersonResponse.from_domain(person=person)
 
 
@@ -53,10 +72,12 @@ async def create_person(
     payload: CreatePersonRequest = Body(...),
     service: PersonService = Depends(get_service(PersonService, master=True)),
 ) -> PersonResponse:
+    """
+    Создать члена семьи по введенным данным
+    """
+
     person: Person = payload.to_domain()
-
     created_person: Person = await service.create_person(person=person)
-
     return PersonResponse.from_domain(person=created_person)
 
 
@@ -66,10 +87,13 @@ async def update_person(
     payload: PutPersonRequest = Body(...),
     service: PersonService = Depends(get_service(PersonService, master=True)),
 ) -> PersonResponse:
+    """
+    Перезаписать объект члена семьи для обновления.
+    Если необязательный атрибут не передан, он устанавливается как None
+    """
+
     command = payload.to_command(person_id=person_id)
-
     updated_person: Person = await service.update_person(command=command)
-
     return PersonResponse.from_domain(person=updated_person)
 
 
@@ -79,9 +103,13 @@ async def patch_update_person(
     payload: PatchPersonRequest = Body(...),
     service: PersonService = Depends(get_service(PersonService, master=True)),
 ) -> PersonResponse:
+    """
+    Частично обновить объект члена семьи.
+    Если атрибут не передан, он не изменяется.
+    """
+
     command = payload.to_command(person_id)
     updated_person = await service.patch_update_person(command)
-
     return PersonResponse.from_domain(person=updated_person)
 
 
@@ -90,6 +118,9 @@ async def delete_person(
     person_id: str = Path(..., min_length=32, max_length=32),
     service: PersonService = Depends(get_service(PersonService, master=True)),
 ) -> None:
-    await service.delete_person(person_id=person_id)
+    """
+    Удалить члена семьи по ID
+    """
 
+    await service.delete_person(person_id=person_id)
     return None

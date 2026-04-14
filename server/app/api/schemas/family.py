@@ -1,23 +1,19 @@
-"""
-API Schemas — Family.
-
-Принципы те же:
-  - CreateFamilyRequest  — без id
-  - PutFamilyRequest     — полный объект (PUT)
-  - PatchFamilyRequest   — частичное обновление (PATCH)
-  - FamilyResponse       — всегда с id
-
-Маппинг domain <-> schema живёт здесь же.
-"""
-
 from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Annotated
 
 from application.family.dto import PatchFamilyCommand, PutFamilyCommand
 from domain.entities.family import Family
+from domain.exceptions import FilterError
+from domain.filters.base import SortDirection, SortField
+from domain.filters.page import FamilyPage
+from domain.filters.specs import FamilyFilterSpec
 from domain.value_objects.unset import UNSET
+from fastapi import Query, Request
 from pydantic import BaseModel, Field
 
-from api.schemas.base import BasePatchSchema
+from api.schemas.base import BasePageMeta, BasePaginationParams, BasePatchSchema
 
 
 class CreateFamilyRequest(BaseModel):
@@ -110,37 +106,94 @@ class FamilyResponse(BaseModel):
         )
 
 
-# class FamilyListRequest(BaseModel):
-#     name: str | None = None
-#     owner_id: str | None = None
-#
-#     limit: int = Field(default=20, ge=1, le=100)
-#     offset: int = Field(default=0, ge=0)
-#
-#     def to_query(self) -> FamilyListQuery:
-#         return FamilyListQuery(
-#             name=self.name,
-#             owner_id=self.owner_id,
-#             limit=self.limit,
-#             offset=self.offset,
-#         )
-#
-#
-# class FamilyPageResponse(BaseModel):
-#     result: list[FamilyResponse]
-#     total: int
-#     limit: int
-#     offset: int
-#     has_next: bool
-#     has_prev: bool
-#
-#     @classmethod
-#     def from_domain(cls, page: FamilyPage) -> FamilyPageResponse:
-#         return cls(
-#             result=[FamilyResponse.from_domain(f) for f in page.result],
-#             total=page.total,
-#             limit=page.limit,
-#             offset=page.offset,
-#             has_next=page.has_next,
-#             has_prev=page.has_prev,
-#         )
+class FamilyPageResponse(BasePageMeta):
+    result: list[FamilyResponse]
+
+    @classmethod
+    def from_domain(cls, page: FamilyPage, request: Request) -> FamilyPageResponse:
+        meta = cls._build_meta(
+            total=page.total,
+            limit=page.limit,
+            offset=page.offset,
+            base_url=str(request.url.replace(query="")),
+            query_params=request.query_params,
+        )
+
+        return cls(
+            result=[FamilyResponse.from_domain(f) for f in page.result],
+            **meta,
+        )
+
+
+@dataclass
+class FamilyFilterSchema(BasePaginationParams):
+    """
+    Query-параметры фильтрации для Family.
+
+    Доступные параметры:
+        name__icontains      — ILIKE '%value%' по названию
+        owner_id             — точный ID владельца
+        founded_year__gte    — год основания >=
+        founded_year__lte    — год основания <=
+        search               — ILIKE по name + description
+        order_by             — name | founded_year | creation_date
+        order_dir            — asc | desc
+    """
+
+    name__icontains: Annotated[
+        str | None,
+        Query(alias="name__icontains", min_length=1, max_length=255),
+    ] = None
+
+    owner_id: Annotated[str | None, Query(min_length=32, max_length=32)] = None
+
+    founded_year__gte: Annotated[int | None, Query(alias="founded_year__gte", ge=1, le=9999)] = None
+    founded_year__lte: Annotated[int | None, Query(alias="founded_year__lte", ge=1, le=9999)] = None
+
+    search: Annotated[str | None, Query(min_length=1, max_length=255)] = None
+
+    order_by: Annotated[
+        str | None,
+        Query(pattern=r"^(name|founded_year|creation_date)$"),
+    ] = None
+    order_dir: Annotated[SortDirection, Query()] = SortDirection.ASC
+
+    def __post_init__(self) -> None:
+        if (
+            self.founded_year__gte is not None
+            and self.founded_year__lte is not None
+            and self.founded_year__gte > self.founded_year__lte
+        ):
+            raise FilterError(
+                message="Ошибка валидации",
+                errors={"founded_year__gte": "founded_year__gte не может быть больше founded_year__lte"},
+            )
+
+    def to_spec(self) -> FamilyFilterSpec:
+        filters = []
+        sort = []
+
+        if self.name__icontains:
+            filters.append(FamilyFilterSpec.by_name(self.name__icontains))
+
+        if self.owner_id:
+            filters.append(FamilyFilterSpec.by_owner_id(self.owner_id))
+
+        if self.founded_year__gte is not None:
+            filters.append(FamilyFilterSpec.founded_year_gte(self.founded_year__gte))
+
+        if self.founded_year__lte is not None:
+            filters.append(FamilyFilterSpec.founded_year_lte(self.founded_year__lte))
+
+        if self.search:
+            filters.append(FamilyFilterSpec.search(self.search))
+
+        if self.order_by:
+            sort.append(SortField(self.order_by, self.order_dir))
+
+        return FamilyFilterSpec(
+            filters=tuple(filters),
+            sort=tuple(sort),
+            limit=self.limit,
+            offset=self.offset,
+        )

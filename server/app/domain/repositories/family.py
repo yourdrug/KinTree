@@ -1,6 +1,8 @@
 from abc import abstractmethod
 
 from domain.entities.family import Family
+from domain.filters.base import BaseFilterSpec
+from domain.filters.page import FamilyPage
 from domain.repositories.base import AbstractRepository
 
 
@@ -15,6 +17,14 @@ class AbstractFamilyRepository(AbstractRepository):
         """
         Возвращает семью по ID.
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_list(
+        self,
+        filters: BaseFilterSpec,
+    ) -> FamilyPage:
+        """Возвращает список персон с фильтрацией и пагинацией."""
         raise NotImplementedError
 
     @abstractmethod
