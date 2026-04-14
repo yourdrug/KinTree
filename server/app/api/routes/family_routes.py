@@ -4,7 +4,7 @@ from domain.filters.base import BaseFilterSpec
 from domain.filters.page import FamilyPage
 from fastapi import APIRouter, Body, Depends, Path, Request, status
 
-from api.dependencies import get_service
+from application.dependencies import get_service
 from api.schemas.family import (
     CreateFamilyRequest,
     FamilyFilterSchema,

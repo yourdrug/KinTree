@@ -6,7 +6,7 @@ from fastapi import (
     status,
 )
 
-from api.dependencies import get_service
+from application.dependencies import get_service
 
 
 router: APIRouter = APIRouter(prefix="/account", tags=["Accounts"])

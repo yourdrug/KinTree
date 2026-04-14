@@ -11,7 +11,7 @@ from domain.exceptions import (
     DomainPersonError,
     FilterError,
     NotFoundValidationError,
-    ServerException,
+    ServerException, AuthenticationError, AccountAlreadyExistsError, AccountBlockedError,
 )
 from fastapi import status
 from fastapi.exceptions import (
@@ -164,7 +164,10 @@ async def handle_fastapi_expected_client_exceptions(
         BaseDomainError: status.HTTP_400_BAD_REQUEST,
         DomainPersonError: status.HTTP_400_BAD_REQUEST,
         DomainFamilyError: status.HTTP_400_BAD_REQUEST,
+        AuthenticationError: status.HTTP_401_UNAUTHORIZED,
+        AccountBlockedError: status.HTTP_403_FORBIDDEN,
         NotFoundValidationError: status.HTTP_404_NOT_FOUND,
+        AccountAlreadyExistsError: status.HTTP_409_CONFLICT,
         FilterError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     }
 

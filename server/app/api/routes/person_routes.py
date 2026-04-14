@@ -11,7 +11,7 @@ from fastapi import (
     status,
 )
 
-from api.dependencies import get_service
+from application.dependencies import get_service
 from api.schemas.person import (
     CreatePersonRequest,
     PatchPersonRequest,
