@@ -1,9 +1,26 @@
 """
-api/auth/auth_dependencies.py
+api/dependencies/auth_dependencies.py
 
 FastAPI dependencies for authentication.
-Import get_current_account wherever a route needs an authenticated user.
+
+Usage in routes:
+    # Require authenticated user — just inject the dependency
+    @router.get("/protected")
+    async def protected(account: Account = Depends(get_current_account)):
+        ...
+
+    # Only need the ID (lighter, no extra DB call)
+    @router.delete("/protected")
+    async def delete_something(account_id: str = Depends(get_current_account_id)):
+        ...
+
+    # Optional auth — endpoint works for both guests and logged-in users
+    @router.get("/public")
+    async def public(account: Account | None = Depends(get_optional_account)):
+        ...
 """
+
+from collections.abc import AsyncGenerator
 
 from domain.entities.account import Account
 from domain.exceptions import AuthenticationError
@@ -16,19 +33,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies.base_dependencies import get_asession
 
 
-# HTTPBearer extracts the token from the Authorization: Bearer <token> header.
-# auto_error=False lets us raise a custom 401 instead of FastAPI's default.
+# auto_error=False lets us raise a custom AuthenticationError instead of
+# FastAPI's generic 403, which keeps our error format consistent.
 _bearer = HTTPBearer(auto_error=False)
+_bearer_optional = HTTPBearer(auto_error=False)
 
 
-async def get_current_account_id(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-) -> str:
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _extract_account_id(credentials: HTTPAuthorizationCredentials | None) -> str:
     """
-    Validates the access token and returns the account_id (sub claim).
-    Raises AuthenticationError (→ 401) when:
-      - No Authorization header present
-      - Token is expired or malformed
+    Decode the bearer token and return the account_id (sub claim).
+    Raises AuthenticationError on any problem.
     """
     if credentials is None:
         raise AuthenticationError(
@@ -36,9 +55,9 @@ async def get_current_account_id(
             errors={"Authorization": "Заголовок отсутствует"},
         )
 
-    payload = decode_access_token(credentials.credentials)
-    account_id: str | None = payload.get("sub")
+    payload = decode_access_token(credentials.credentials)  # raises on expired / invalid
 
+    account_id: str | None = payload.get("sub")
     if not account_id:
         raise AuthenticationError(
             message="Недействительный токен",
@@ -48,14 +67,58 @@ async def get_current_account_id(
     return account_id
 
 
+async def _get_session_from_factory() -> AsyncGenerator[AsyncSession, None]:
+    """Thin wrapper so auth deps get their own session, independent of route sessions."""
+    session_factory = get_asession(master=False)
+    async for session in session_factory():
+        yield session
+
+
+# ---------------------------------------------------------------------------
+# Public dependencies
+# ---------------------------------------------------------------------------
+
+
+async def get_current_account_id(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> str:
+    """
+    Require a valid access token.
+
+    Returns the account_id string.
+    Raises 401 AuthenticationError when the token is missing, expired, or malformed.
+    """
+    return _extract_account_id(credentials)
+
+
 async def get_current_account(
     account_id: str = Depends(get_current_account_id),
-    asession: AsyncSession = Depends(get_asession(master=False)),
+    asession: AsyncSession = Depends(_get_session_from_factory),
 ) -> Account:
     """
-    Resolves the full Account domain entity from the token's sub claim.
-    Useful when routes need account data beyond just the ID.
-    """
+    Require a valid access token AND a matching account in the database.
 
+    Returns the full Account domain entity.
+    Raises 401 if token is invalid, 404 if the account no longer exists.
+    """
+    repo = AccountRepository(asession)
+    return await repo.get_by_id(account_id)
+
+
+async def get_optional_account(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_optional),
+    asession: AsyncSession = Depends(_get_session_from_factory),
+) -> Account | None:
+    """
+    Optional authentication — does NOT raise if no token is supplied.
+
+    Returns the Account if a valid token is present, None otherwise.
+    Still raises 401 if a token IS provided but is invalid/expired,
+    so clients cannot silently pass broken tokens.
+    """
+    if credentials is None:
+        return None
+
+    account_id = _extract_account_id(credentials)
     repo = AccountRepository(asession)
     return await repo.get_by_id(account_id)
