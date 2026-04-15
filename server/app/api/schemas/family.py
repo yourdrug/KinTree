@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from application.family.dto import PatchFamilyCommand, PutFamilyCommand
+from application.family.dto import PatchFamilyCommand, PutFamilyCommand, CreateFamilyCommand
 from domain.entities.family import Family
 from domain.exceptions import FilterError
 from domain.filters.base import SortDirection, SortField
@@ -18,17 +18,15 @@ from api.schemas.base import BasePageMeta, BasePaginationParams, BasePatchSchema
 
 class CreateFamilyRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, examples=["Семья Ивановых"])
-    owner_id: str = Field(..., min_length=1)
 
     description: str | None = None
     origin_place: str | None = None
     founded_year: int | None = Field(None, ge=1, le=9999)
     ended_year: int | None = Field(None, ge=1, le=9999)
 
-    def to_domain(self) -> Family:
-        return Family.create_family(
+    def to_command(self) -> CreateFamilyCommand:
+        return CreateFamilyCommand(
             name=self.name,
-            owner_id=self.owner_id,
             description=self.description,
             origin_place=self.origin_place,
             founded_year=self.founded_year,
@@ -44,9 +42,10 @@ class PutFamilyRequest(BaseModel):
     founded_year: int | None = Field(None, ge=1, le=9999)
     ended_year: int | None = Field(None, ge=1, le=9999)
 
-    def to_command(self, family_id: str) -> PutFamilyCommand:
+    def to_command(self, family_id: str, account_id: str) -> PutFamilyCommand:
         return PutFamilyCommand(
             family_id=family_id,
+            owner_id=account_id,
             name=self.name,
             description=self.description,
             origin_place=self.origin_place,

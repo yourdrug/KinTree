@@ -22,16 +22,15 @@ Usage in routes:
 
 from collections.abc import AsyncGenerator
 
+from application.account.service import AccountService
 from domain.entities.account import Account
 from domain.exceptions import AuthenticationError
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from infrastructure.account.repositories import AccountRepository
 from infrastructure.auth.jwt_service import decode_access_token
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies.base_dependencies import get_asession
-
+from api.dependencies.base_dependencies import get_asession, get_service
 
 # auto_error=False lets us raise a custom AuthenticationError instead of
 # FastAPI's generic 403, which keeps our error format consistent.
@@ -45,6 +44,7 @@ _bearer_optional = HTTPBearer(auto_error=False)
 
 
 def _extract_account_id(credentials: HTTPAuthorizationCredentials | None) -> str:
+    # TODO ref in auth service
     """
     Decode the bearer token and return the account_id (sub claim).
     Raises AuthenticationError on any problem.
@@ -93,7 +93,7 @@ async def get_current_account_id(
 
 async def get_current_account(
     account_id: str = Depends(get_current_account_id),
-    asession: AsyncSession = Depends(_get_session_from_factory),
+    service: AccountService = Depends(get_service(AccountService, master=False)),
 ) -> Account:
     """
     Require a valid access token AND a matching account in the database.
@@ -101,13 +101,15 @@ async def get_current_account(
     Returns the full Account domain entity.
     Raises 401 if token is invalid, 404 if the account no longer exists.
     """
-    repo = AccountRepository(asession)
-    return await repo.get_by_id(account_id)
+    account: Account = await service.get_account(
+        account_id=account_id,
+    )
+    return account
 
 
 async def get_optional_account(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_optional),
-    asession: AsyncSession = Depends(_get_session_from_factory),
+    service: AccountService = Depends(get_service(AccountService, master=False)),
 ) -> Account | None:
     """
     Optional authentication — does NOT raise if no token is supplied.
@@ -120,5 +122,8 @@ async def get_optional_account(
         return None
 
     account_id = _extract_account_id(credentials)
-    repo = AccountRepository(asession)
-    return await repo.get_by_id(account_id)
+
+    account: Account = await service.get_account(
+        account_id=account_id,
+    )
+    return account

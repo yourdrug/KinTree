@@ -20,6 +20,13 @@ class AbstractFamilyRepository(AbstractRepository):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_by_id_or_none(self, family_id: str) -> Family | None:
+        """
+        Возвращает семью по ID или None если объект не найден.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_list(
         self,
         filters: BaseFilterSpec,

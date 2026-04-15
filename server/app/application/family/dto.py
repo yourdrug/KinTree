@@ -2,6 +2,15 @@ from dataclasses import dataclass
 
 from domain.value_objects.unset import UNSET, UnsetType
 
+@dataclass(frozen=True)
+class CreateFamilyCommand:
+    name: str
+
+    description: str | None
+    origin_place: str | None
+    founded_year: int | None
+    ended_year: int | None
+
 
 @dataclass(frozen=True)
 class PatchFamilyCommand:
@@ -20,6 +29,7 @@ class PutFamilyCommand:
     family_id: str
 
     name: str
+    owner_id: str
 
     description: str | None
     origin_place: str | None

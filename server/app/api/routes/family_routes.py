@@ -1,4 +1,7 @@
+from api.dependencies.auth_dependencies import get_current_account, get_current_account_id
+from application.family.dto import CreateFamilyCommand
 from application.family.services import FamilyService
+from domain.entities.account import Account
 from domain.entities.family import Family
 from domain.filters.base import BaseFilterSpec
 from domain.filters.page import FamilyPage
@@ -58,14 +61,15 @@ async def get_family(
 @router.post(path="/", status_code=status.HTTP_201_CREATED)
 async def create_family(
     payload: CreateFamilyRequest = Body(...),
+    account: Account = Depends(get_current_account),
     service: FamilyService = Depends(get_service(FamilyService, master=True)),
 ) -> FamilyResponse:
     """
     Создание семьи по введенным данным.
     """
 
-    family: Family = payload.to_domain()
-    created_family: Family = await service.create_family(family=family)
+    create_command: CreateFamilyCommand = payload.to_command()
+    created_family: Family = await service.create_family(command=create_command, account=account)
     return FamilyResponse.from_domain(family=created_family)
 
 
@@ -73,6 +77,7 @@ async def create_family(
 async def update_family(
     family_id: str = Path(..., min_length=32, max_length=32),
     payload: PutFamilyRequest = Body(...),
+    account_id: str = Depends(get_current_account_id),
     service: FamilyService = Depends(get_service(FamilyService, master=True)),
 ) -> FamilyResponse:
     """
@@ -80,7 +85,7 @@ async def update_family(
     Если необязательный атрибут не передан, он устанавливается как None
     """
 
-    command = payload.to_command(family_id=family_id)
+    command = payload.to_command(family_id=family_id, account_id=account_id)
     updated_family: Family = await service.update_family(command=command)
     return FamilyResponse.from_domain(family=updated_family)
 

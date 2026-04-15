@@ -102,21 +102,21 @@ class Family:
                     errors={"years": "Год основания не может быть больше года окончания"},
                 )
 
-    @staticmethod
-    def create_family(
-        name: str,
-        owner_id: str,
-        description: str | None = None,
-        origin_place: str | None = None,
-        founded_year: int | None = None,
-        ended_year: int | None = None,
-    ) -> Family:
-        return Family(
-            id=generate_uuid(),
-            name=name,
-            owner_id=owner_id,
-            description=description,
-            origin_place=origin_place,
-            founded_year=founded_year,
-            ended_year=ended_year,
-        )
+
+def create_family(
+    name: str,
+    owner_id: str,
+    description: str | None = None,
+    origin_place: str | None = None,
+    founded_year: int | None = None,
+    ended_year: int | None = None,
+) -> Family:
+    return Family(
+        id=generate_uuid(),
+        name=name,
+        owner_id=owner_id,
+        description=description,
+        origin_place=origin_place,
+        founded_year=founded_year,
+        ended_year=ended_year,
+    )

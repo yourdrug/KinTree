@@ -1,6 +1,8 @@
 from typing import Any
 
-from domain.entities.family import Family
+from domain.entities.account import Account
+from domain.entities.family import Family, create_family
+from domain.exceptions import NotFoundValidationError
 from domain.filters.base import BaseFilterSpec
 from domain.filters.page import FamilyPage
 from domain.value_objects.unset import UnsetType
@@ -8,7 +10,7 @@ from infrastructure.common.services import BaseService
 
 from application.family.dto import (
     PatchFamilyCommand,
-    PutFamilyCommand,
+    PutFamilyCommand, CreateFamilyCommand,
 )
 
 
@@ -31,8 +33,17 @@ class FamilyService(BaseService):
                 filters=filters,
             )
 
-    async def create_family(self, family: Family) -> Family:
+    async def create_family(self, command: CreateFamilyCommand, account: Account) -> Family:
         async with self.uow:
+            family: Family = create_family(
+                name=command.name,
+                owner_id=account.id,
+                description=command.description,
+                origin_place=command.origin_place,
+                founded_year=command.founded_year,
+                ended_year=command.ended_year,
+            )
+
             created = await self.repository_facade.family_repository.create(
                 family=family,
             )
@@ -40,9 +51,15 @@ class FamilyService(BaseService):
 
     async def update_family(self, command: PutFamilyCommand) -> Family:
         async with self.uow:
-            existing = await self.repository_facade.family_repository.get_by_id(
+            existing: Family | None = await self.repository_facade.family_repository.get_by_id_or_none(
                 family_id=command.family_id,
             )
+
+            if not existing or existing.owner_id != command.owner_id:
+                raise NotFoundValidationError(
+                    message="Ошибка валидации",
+                    errors={"family_id": "Объект не существует."},
+                )
 
             updated = self._apply_put(command, existing)
 
