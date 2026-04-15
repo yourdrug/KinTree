@@ -1,4 +1,3 @@
-from api.dependencies.auth_dependencies import get_current_account, get_current_account_id
 from application.family.dto import CreateFamilyCommand
 from application.family.services import FamilyService
 from domain.entities.account import Account
@@ -7,6 +6,7 @@ from domain.filters.base import BaseFilterSpec
 from domain.filters.page import FamilyPage
 from fastapi import APIRouter, Body, Depends, Path, Request, status
 
+from api.dependencies.auth_dependencies import get_current_account, get_current_account_id
 from api.dependencies.base_dependencies import get_service
 from api.schemas.family import (
     CreateFamilyRequest,

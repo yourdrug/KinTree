@@ -1,5 +1,3 @@
-from typing import Optional
-
 from domain.entities.family import Family as DomainFamily
 from domain.filters.base import BaseFilterSpec
 from domain.filters.page import FamilyPage
@@ -31,7 +29,7 @@ class FamilyRepository(BaseRepository, AbstractFamilyRepository):
     async def get_by_id_or_none(self, family_id: str) -> DomainFamily | None:
         statement: Select = select(ORMFamily).where(ORMFamily.id == family_id)
         result: Result = await self.session.execute(statement)
-        family: Optional[ORMFamily] = result.scalar()
+        family: ORMFamily | None = result.scalar()
 
         return FamilyORMMapper.to_domain(family) if family else None
 

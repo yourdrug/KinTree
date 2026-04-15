@@ -1,4 +1,5 @@
 from application.account.service import AccountService
+from domain.entities.account import Account
 from fastapi import (
     APIRouter,
     Depends,
@@ -16,8 +17,8 @@ router: APIRouter = APIRouter(prefix="/account", tags=["Accounts"])
 async def get_account(
     account_id: str = Path(min_length=32, max_length=32),
     service: AccountService = Depends(get_service(AccountService, master=False)),
-) -> dict:
-    account: dict = await service.get_account(
+) -> Account:
+    account: Account = await service.get_account(
         account_id=account_id,
     )
 

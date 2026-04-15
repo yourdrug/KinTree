@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies.base_dependencies import get_asession, get_service
 
+
 # auto_error=False lets us raise a custom AuthenticationError instead of
 # FastAPI's generic 403, which keeps our error format consistent.
 _bearer = HTTPBearer(auto_error=False)

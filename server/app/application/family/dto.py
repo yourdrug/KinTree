@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from domain.value_objects.unset import UNSET, UnsetType
 
+
 @dataclass(frozen=True)
 class CreateFamilyCommand:
     name: str
