@@ -1,3 +1,7 @@
+"""
+infrastructure/account/account_mapper.py
+"""
+
 from domain.entities.account import Account as DomainAccount
 
 from infrastructure.db.models.account import Account as ORMAccount
@@ -5,7 +9,11 @@ from infrastructure.db.models.account import Account as ORMAccount
 
 class AccountORMMapper:
     @staticmethod
-    def to_domain(model: ORMAccount) -> DomainAccount:
+    def to_domain(
+        model: ORMAccount,
+        permissions: frozenset[str] = frozenset(),
+        role_name: str = "user",
+    ) -> DomainAccount:
         return DomainAccount(
             id=model.id,
             email=model.email,
@@ -13,6 +21,8 @@ class AccountORMMapper:
             is_acc_blocked=model.is_acc_blocked,
             is_verified=model.is_verified,
             refresh_token=model.refresh_token,
+            role_name=role_name,
+            permissions=permissions,
         )
 
     @staticmethod

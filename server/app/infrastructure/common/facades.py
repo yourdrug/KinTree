@@ -1,10 +1,20 @@
 from domain.repositories.account import AbstractAccountRepository
 from domain.repositories.family import AbstractFamilyRepository
+from domain.repositories.permission import (
+    AbstractAccountRoleRepository,
+    AbstractPermissionRepository,
+    AbstractRoleRepository,
+)
 from domain.repositories.person import AbstractPersonRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from infrastructure.account.repositories import AccountRepository
 from infrastructure.family.repositories import FamilyRepository
+from infrastructure.permissions.repositories import (
+    AccountRoleRepository,
+    PermissionRepository,
+    RoleRepository,
+)
 from infrastructure.person.repositories import PersonRepository
 
 
@@ -33,7 +43,8 @@ class RepositoryFacade(BaseFacade):
         """
 
         self.account_repository: AbstractAccountRepository = AccountRepository(asession)
-
         self.person_repository: AbstractPersonRepository = PersonRepository(asession)
-
         self.family_repository: AbstractFamilyRepository = FamilyRepository(asession)
+        self.permission_repository: AbstractPermissionRepository = PermissionRepository(asession)
+        self.role_repository: AbstractRoleRepository = RoleRepository(asession)
+        self.account_role_repository: AbstractAccountRoleRepository = AccountRoleRepository(asession)

@@ -1,3 +1,7 @@
+"""
+api/schemas/auth.py
+"""
+
 from __future__ import annotations
 
 from application.auth.dto import LoginCommand, RegisterCommand
@@ -35,8 +39,28 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
+    """
+    Ответ при логине/рефреше.
+
+    permissions — список всех codename разрешений пользователя.
+    Клиент может закэшировать и использовать для UI-логики
+    (показать/скрыть кнопки) без дополнительных запросов.
+
+    Пример:
+        {
+          "access_token": "eyJ...",
+          "refresh_token": "eyJ...",
+          "token_type": "bearer",
+          "role": "user",
+          "permissions": ["family:create", "family:read", "person:create", ...]
+        }
+    """
+
     access_token: str
     refresh_token: str
+    token_type: str = "bearer"
+    role: str
+    permissions: list[str] = Field(description="Отсортированный список codename всех разрешений пользователя")
 
 
 class RefreshRequest(BaseModel):
@@ -48,5 +72,7 @@ class AccountResponse(BaseModel):
     email: str
     is_verified: bool
     is_acc_blocked: bool
+    role: str
+    permissions: list[str]
 
     model_config = {"from_attributes": True}

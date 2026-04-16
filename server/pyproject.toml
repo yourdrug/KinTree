@@ -12,6 +12,7 @@ dependencies = [
     "pydantic-settings==2.13.1",
     "uvloop==0.22.1",
 
+    "typer==0.24.*",
     "alembic==1.18.4",
     "alembic_postgresql_enum==1.10.0",
     "psycopg[binary]==3.3.3",

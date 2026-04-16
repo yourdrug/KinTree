@@ -1,8 +1,7 @@
 """
 infrastructure/auth/jwt_service.py
 
-All JWT and password operations live here.
-Keeps cryptographic concerns out of the application layer.
+JWT и хэш-утилиты. Role вшивается в access-токен как claim.
 """
 
 from __future__ import annotations
@@ -19,26 +18,16 @@ from jwt import DecodeError, ExpiredSignatureError, InvalidTokenError
 from infrastructure.common.settings import settings
 
 
-# ── Token payloads ─────────────────────────────────────────────────────────────
-
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
 
 
-# ── Password helpers ───────────────────────────────────────────────────────────
-
-
 def hash_password(plain: str) -> str:
-    """Returns a bcrypt hash of the plain-text password."""
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Constant-time comparison of plain password against stored hash."""
     return bcrypt.checkpw(plain.encode(), hashed.encode())
-
-
-# ── Token helpers ──────────────────────────────────────────────────────────────
 
 
 def _now_utc() -> datetime:
@@ -64,14 +53,12 @@ def _decode(token: str) -> dict:
         ) from exc
 
 
-# ── Public API ─────────────────────────────────────────────────────────────────
-
-
-def create_access_token(account_id: str, email: str) -> str:
+def create_access_token(account_id: str, email: str, role: str) -> str:
     now = _now_utc()
     payload = {
         "sub": account_id,
         "email": email,
+        "role": role,
         "type": ACCESS_TOKEN_TYPE,
         "iat": now,
         "exp": now + timedelta(minutes=settings.JWT_TOKEN_ACCESS_LIFETIME_MINUTES),
@@ -80,10 +67,6 @@ def create_access_token(account_id: str, email: str) -> str:
 
 
 def create_refresh_token(account_id: str) -> str:
-    """
-    The refresh token carries a random jti (JWT ID) so each token is unique.
-    This lets us invalidate a specific token without a blocklist.
-    """
     now = _now_utc()
     payload = {
         "sub": account_id,
@@ -116,7 +99,6 @@ def decode_refresh_token(token: str) -> dict:
 
 
 def hash_token(token: str) -> str:
-    """SHA-256 digest stored in DB instead of the raw refresh token."""
     return hashlib.sha256(token.encode()).hexdigest()
 
 

@@ -1,3 +1,7 @@
+"""
+application/auth/dto.py
+"""
+
 from dataclasses import dataclass
 
 
@@ -17,4 +21,5 @@ class LoginCommand:
 class TokenPair:
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    permissions: list[str]  # отсортированный список codename
+    role: str  # имя роли
