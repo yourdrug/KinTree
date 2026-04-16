@@ -3,39 +3,30 @@
         "id": "d1fd0496cecf4d4380dfc26d5fce8f00",
         "role_id": "b4fd0496cecf4d4380dfc26d5fce8f00",
         "permission_id": "c1fd0496cecf4d4380dfc26d5fce8f00",
-        "creation_date": "2025-01-01T00:00:00.000000+03:00"
     },
-
     {
         "id": "d1fd0496cecf4d4380dfc26d5fce8f01",
         "role_id": "b4fd0496cecf4d4380dfc26d5fce8f01",
-        "permission_id": "c1fd0496cecf4d4380dfc26d5fce8f00",
-        "creation_date": "2025-01-01T00:00:00.000000+03:00"
+        "permission_id": "c1fd0496cecf4d4380dfc26d5fce8f00"
     },
     {
         "id": "d1fd0496cecf4d4380dfc26d5fce8f02",
         "role_id": "b4fd0496cecf4d4380dfc26d5fce8f01",
-        "permission_id": "c1fd0496cecf4d4380dfc26d5fce8f06",
-        "creation_date": "2025-01-01T00:00:00.000000+03:00"
+        "permission_id": "c1fd0496cecf4d4380dfc26d5fce8f06"
     },
-
     {
         "id": "d1fd0496cecf4d4380dfc26d5fce8f03",
         "role_id": "b4fd0496cecf4d4380dfc26d5fce8f02",
-        "permission_id": "c1fd0496cecf4d4380dfc26d5fce8f04",
-        "creation_date": "2025-01-01T00:00:00.000000+03:00"
+        "permission_id": "c1fd0496cecf4d4380dfc26d5fce8f04"
     },
-
     {
         "id": "d1fd0496cecf4d4380dfc26d5fce8f04",
         "role_id": "b4fd0496cecf4d4380dfc26d5fce8f03",
-        "permission_id": "c1fd0496cecf4d4380dfc26d5fce8f16",
-        "creation_date": "2025-01-01T00:00:00.000000+03:00"
+        "permission_id": "c1fd0496cecf4d4380dfc26d5fce8f16"
     },
     {
         "id": "d1fd0496cecf4d4380dfc26d5fce8f05",
         "role_id": "b4fd0496cecf4d4380dfc26d5fce8f03",
-        "permission_id": "c1fd0496cecf4d4380dfc26d5fce8f17",
-        "creation_date": "2025-01-01T00:00:00.000000+03:00"
+        "permission_id": "c1fd0496cecf4d4380dfc26d5fce8f17"
     }
 ]

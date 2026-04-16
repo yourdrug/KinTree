@@ -19,9 +19,7 @@ from infrastructure.db.models.basemodel import BaseModel
 class Permission(BaseModel):
     __tablename__ = "permissions"
 
-    __table_args__ = (
-        Index("idx_permission_codename", "codename", unique=True),
-    )
+    __table_args__ = (Index("idx_permission_codename", "codename", unique=True),)
 
     codename: Mapped[str] = mapped_column(
         String(128),
@@ -42,9 +40,7 @@ class Permission(BaseModel):
 class Role(BaseModel):
     __tablename__ = "roles"
 
-    __table_args__ = (
-        Index("idx_role_name", "name", unique=True),
-    )
+    __table_args__ = (Index("idx_role_name", "name", unique=True),)
 
     name: Mapped[str] = mapped_column(
         String(64),

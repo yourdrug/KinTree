@@ -2,21 +2,20 @@
 cli.py: File, containing cli app.
 """
 
-
 import asyncio
+from collections.abc import Callable
 from functools import wraps
 from typing import (
     Any,
-    Callable,
 )
 
+from infrastructure.db.database import database
 from typer import Typer
 
 from cli.commands.upload_account_permissions import upload_account_permissions
 from cli.commands.upload_account_roles import upload_account_roles
 from cli.commands.upload_account_roles_account_permissions import upload_account_roles_account_permissions
 from cli.commands.upload_all_fixtures import upload_all_fixtures
-from infrastructure.db.database import database
 
 
 class CLI:
@@ -77,13 +76,13 @@ class CLI:
         """
 
         commands_with_db: list[tuple] = [
-            ('upload-account-roles', upload_account_roles),
-            ('upload-account-permissions', upload_account_permissions),
+            ("upload-account-roles", upload_account_roles),
+            ("upload-account-permissions", upload_account_permissions),
             (
-                'upload-account-roles-account-permissions',
+                "upload-account-roles-account-permissions",
                 upload_account_roles_account_permissions,
             ),
-            ('upload-all-fixtures', upload_all_fixtures),
+            ("upload-all-fixtures", upload_all_fixtures),
         ]
 
         commands_without_db: list[tuple] = [
@@ -109,3 +108,6 @@ class CLI:
 
 
 cli: CLI = CLI()
+
+if __name__ == "__main__":
+    cli.execute_command()

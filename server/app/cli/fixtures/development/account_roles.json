@@ -2,25 +2,21 @@
     {
         "id": "b4fd0496cecf4d4380dfc26d5fce8f00",
         "name": "guest",
-        "description": "Гость",
-        "creation_date": "2025-01-01T00:00:00.000000+03:00"
+        "description": "Гость"
     },
     {
         "id": "b4fd0496cecf4d4380dfc26d5fce8f01",
         "name": "user",
-        "description": "Пользователь",
-        "creation_date": "2025-01-01T00:00:00.000000+03:00"
+        "description": "Пользователь"
     },
     {
         "id": "b4fd0496cecf4d4380dfc26d5fce8f02",
         "name": "moderator",
-        "description": "Модератор",
-        "creation_date": "2025-01-01T00:00:00.000000+03:00"
+        "description": "Модератор"
     },
     {
         "id": "b4fd0496cecf4d4380dfc26d5fce8f03",
         "name": "admin",
-        "description": "Администратор",
-        "creation_date": "2025-01-01T00:00:00.000000+03:00"
+        "description": "Администратор"
     }
 ]

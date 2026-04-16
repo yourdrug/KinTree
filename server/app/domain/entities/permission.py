@@ -14,7 +14,7 @@ class PermissionEntity:
     """Разрешение — атомарное право на действие."""
 
     id: str
-    codename: str          # "family:create" — уникальный строковый ключ
+    codename: str  # "family:create" — уникальный строковый ключ
     description: str = ""
 
     def __eq__(self, other: object) -> bool:
@@ -31,7 +31,7 @@ class RoleEntity:
     """Роль — именованная группа разрешений."""
 
     id: str
-    name: str              # "admin", "user", "moderator"
+    name: str  # "admin", "user", "moderator"
     description: str = ""
     permissions: list[PermissionEntity] = field(default_factory=list)
 
@@ -40,3 +40,10 @@ class RoleEntity:
 
     def get_permission_codenames(self) -> frozenset[str]:
         return frozenset(p.codename for p in self.permissions)
+
+
+@dataclass
+class RolePermissionEntity:
+    id: str
+    permission_id: str
+    role_id: str

@@ -28,6 +28,7 @@ def load_model_modules() -> None:
         "infrastructure.db.models.parent_child",
         "infrastructure.db.models.person",
         "infrastructure.db.models.spouse",
+        "infrastructure.db.models.permission",
     )
 
     for model_module in model_modules:

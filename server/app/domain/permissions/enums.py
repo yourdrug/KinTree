@@ -43,6 +43,7 @@ class DefaultRole(str, Enum):
     Предопределённые системные роли.
     При старте приложения проверяется/создаётся их наличие в БД.
     """
+
     GUEST = "guest"
     USER = "user"
     MODERATOR = "moderator"

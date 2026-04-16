@@ -27,31 +27,9 @@ class PermissionService(BaseService):
         async with self.uow:
             return await self.repository_facade.role_repository.get_role_with_permissions(role_name)
 
-    async def create_role(self, name: str, description: str = "") -> RoleEntity:
-        async with self.uow:
-            return await self.repository_facade.role_repository.create_role(
-                name=name, description=description
-            )
-
-    async def set_role_permissions(
-        self, role_name: str, permission_codenames: list[str]
-    ) -> RoleEntity:
-        async with self.uow:
-            return await self.repository_facade.role_repository.set_role_permissions(
-                role_name=role_name, permission_codenames=permission_codenames
-            )
-
-    async def assign_permission(self, role_name: str, permission_codename: str) -> None:
-        async with self.uow:
-            await self.repository_facade.role_repository.assign_permission_to_role(
-                role_name=role_name, permission_codename=permission_codename
-            )
-
-    async def revoke_permission(self, role_name: str, permission_codename: str) -> None:
-        async with self.uow:
-            await self.repository_facade.role_repository.revoke_permission_from_role(
-                role_name=role_name, permission_codename=permission_codename
-            )
+    # async def create_role(self, name: str, description: str = "") -> RoleEntity:
+    #     async with self.uow:
+    #         return await self.repository_facade.role_repository.create_role(name=name, description=description)
 
     # ── Аккаунты ───────────────────────────────────────────────────────────
 
@@ -63,6 +41,4 @@ class PermissionService(BaseService):
 
     async def get_account_permissions(self, account_id: str) -> frozenset[str]:
         async with self.uow:
-            return await self.repository_facade.account_role_repository.get_account_permissions(
-                account_id=account_id
-            )
+            return await self.repository_facade.account_role_repository.get_account_permissions(account_id=account_id)

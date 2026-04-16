@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from domain.entities.permission import PermissionEntity, RoleEntity
+from domain.entities.permission import PermissionEntity, RoleEntity, RolePermissionEntity
 
 
 class AbstractPermissionRepository(ABC):
@@ -21,7 +21,7 @@ class AbstractPermissionRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_permission(self, codename: str, description: str = "") -> PermissionEntity:
+    async def create_permission(self, permission: PermissionEntity) -> PermissionEntity:
         raise NotImplementedError
 
     @abstractmethod
@@ -45,25 +45,11 @@ class AbstractRoleRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_role(self, name: str, description: str = "") -> RoleEntity:
+    async def create_role(self, role_entity: RoleEntity) -> RoleEntity:
         raise NotImplementedError
 
     @abstractmethod
-    async def assign_permission_to_role(self, role_name: str, permission_codename: str) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def revoke_permission_from_role(self, role_name: str, permission_codename: str) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    async def set_role_permissions(self, role_name: str, permission_codenames: list[str]) -> RoleEntity:
-        """Заменяет все разрешения роли на переданный список."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def ensure_default_roles_exist(self) -> None:
-        """Создаёт системные роли при старте приложения."""
+    async def insert_or_update(self, role_permission: RolePermissionEntity) -> None:
         raise NotImplementedError
 
 
@@ -80,4 +66,3 @@ class AbstractAccountRoleRepository(ABC):
     @abstractmethod
     async def get_account_role_name(self, account_id: str) -> str:
         raise NotImplementedError
-    

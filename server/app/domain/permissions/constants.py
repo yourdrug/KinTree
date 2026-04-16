@@ -1,5 +1,6 @@
 # Дефолтные разрешения для каждой роли
-from domain.permissions.enums import DefaultRole, Permission as PermissionEnum
+from domain.permissions.enums import DefaultRole
+from domain.permissions.enums import Permission as PermissionEnum
 
 
 role_permissions: dict[str, list[str]] = {
