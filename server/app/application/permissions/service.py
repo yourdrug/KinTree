@@ -7,13 +7,11 @@ application/permissions/service.py
 
 from __future__ import annotations
 
-from domain.entities.permission import PermissionEntity, RoleEntity, AccountRoleEntity
-from domain.exceptions import NotFoundValidationError
+from domain.entities.permission import PermissionEntity, RoleEntity
 from infrastructure.common.services import BaseService
 
 
 class PermissionService(BaseService):
-
     async def get_all_permissions(self) -> list[PermissionEntity]:
         async with self.uow:
             return await self.repository_facade.permission_repository.get_all_permissions()

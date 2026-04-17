@@ -90,9 +90,7 @@ class RoleRepository(BaseRepository, AbstractRoleRepository):
             .join(ORMRolePermission, ORMRolePermission.permission_id == ORMPermission.id)
             .where(ORMRolePermission.role_id == orm_role.id)
         )
-        permissions: list[PermissionEntity | None] = [
-            PermissionMapper.to_domain(perm) for perm in perm_result.scalars().all()
-        ]
+        permissions: list[PermissionEntity] = [PermissionMapper.to_domain(perm) for perm in perm_result.scalars().all()]
         return RoleMapper.to_domain(orm_role, permissions)
 
     async def create_role(self, role_entity: RoleEntity) -> RoleEntity:

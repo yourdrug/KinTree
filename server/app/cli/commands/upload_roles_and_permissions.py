@@ -67,7 +67,7 @@ async def upload_roles_and_permissions() -> None:
                         role_id=role_id,
                         permission_id=perm_id,
                     )
-                    await repository.insert_or_update(role_permission=role_permission_entity)
+                    await repository.create_role_permissions(role_permission=role_permission_entity)
     except Exception as exception:
         logger.error("Error while uploading account roles and permissions", exc_info=exception)
         sys.exit(-1)

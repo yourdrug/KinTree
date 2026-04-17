@@ -172,9 +172,11 @@ class AccountBlockedError(ClientException):
 
     pass
 
+
 class DomainRoleError(BaseDomainError):
     """
     DomainRoleError: Exception raised when a domain role error occurs.
     This typically indicates a 400 Bad Request error scenario.
     """
+
     pass

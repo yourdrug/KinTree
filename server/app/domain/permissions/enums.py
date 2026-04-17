@@ -11,7 +11,9 @@ from enum import Enum
 
 
 class Permission(str, Enum):
-    def __new__(cls, value: str, description: str):
+    description: str
+
+    def __new__(cls, value: str, description: str) -> "Permission":
         obj = str.__new__(cls, value)
         obj._value_ = value
         obj.description = description
@@ -50,7 +52,9 @@ class DefaultRole(str, Enum):
     При старте приложения проверяется/создаётся их наличие в БД.
     """
 
-    def __new__(cls, value: str, description: str):
+    description: str
+
+    def __new__(cls, value: str, description: str) -> "DefaultRole":
         obj = str.__new__(cls, value)
         obj._value_ = value
         obj.description = description

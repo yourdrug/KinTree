@@ -61,7 +61,7 @@ class AccountRoleEntity:
 def create_permission_entity(
     codename: str,
     description: str = "",
-):
+) -> PermissionEntity:
     return PermissionEntity(
         id=generate_uuid(),
         codename=codename,
@@ -72,15 +72,15 @@ def create_permission_entity(
 def create_role_entity(
     name: str,
     description: str = "",
-    permissions: list[PermissionEntity] = None,
-):
-    return RoleEntity(id=generate_uuid(), name=name, description=description, permissions=permissions)
+    permissions: list[PermissionEntity] | None = None,
+) -> RoleEntity:
+    return RoleEntity(id=generate_uuid(), name=name, description=description, permissions=permissions or [])
 
 
 def create_role_permission_entity(
     role_id: str,
     permission_id: str,
-):
+) -> RolePermissionEntity:
     return RolePermissionEntity(
         id=generate_uuid(),
         role_id=role_id,
@@ -91,7 +91,7 @@ def create_role_permission_entity(
 def create_account_role_entity(
     account_id: str,
     role_id: str,
-):
+) -> AccountRoleEntity:
     return AccountRoleEntity(
         id=generate_uuid(),
         account_id=account_id,
