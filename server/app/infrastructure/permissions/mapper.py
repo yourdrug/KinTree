@@ -1,23 +1,6 @@
-from domain.entities.permission import PermissionEntity, RoleEntity, RolePermissionEntity
+from domain.entities.permission import AccountRoleEntity, PermissionEntity, RoleEntity, RolePermissionEntity
 
-from infrastructure.db.models.permission import Permission, Role
-
-
-def _map_permission(orm: Permission) -> PermissionEntity:
-    return PermissionEntity(
-        id=orm.id,
-        codename=orm.codename,
-        description=orm.description,
-    )
-
-
-def _map_role(orm: Role, permissions: list | None = None) -> RoleEntity:
-    return RoleEntity(
-        id=orm.id,
-        name=orm.name,
-        description=orm.description,
-        permissions=permissions or [],
-    )
+from infrastructure.db.models.permission import AccountRole, Permission, Role
 
 
 class RolePermissionMapper:
@@ -32,6 +15,15 @@ class RolePermissionMapper:
 
 class RoleMapper:
     @staticmethod
+    def to_domain(orm: Role, permissions: list[PermissionEntity] | None = None) -> RoleEntity:
+        return RoleEntity(
+            id=orm.id,
+            name=orm.name,
+            description=orm.description,
+            permissions=permissions or [],
+        )
+
+    @staticmethod
     def to_persistence(entity: RoleEntity) -> dict:
         return {
             "id": entity.id,
@@ -42,9 +34,35 @@ class RoleMapper:
 
 class PermissionMapper:
     @staticmethod
+    def to_domain(orm: Permission) -> PermissionEntity:
+        return PermissionEntity(
+            id=orm.id,
+            codename=orm.codename,
+            description=orm.description,
+        )
+
+    @staticmethod
     def to_persistence(entity: PermissionEntity) -> dict:
         return {
             "id": entity.id,
             "codename": entity.codename,
             "description": entity.description,
+        }
+
+
+class AccountRoleMapper:
+    @staticmethod
+    def to_domain(orm: AccountRole) -> AccountRoleEntity:
+        return AccountRoleEntity(
+            id=orm.id,
+            account_id=orm.account_id,
+            role_id=orm.role_id,
+        )
+
+    @staticmethod
+    def to_persistence(entity: AccountRoleEntity) -> dict:
+        return {
+            "id": entity.id,
+            "account_id": entity.account_id,
+            "role_id": entity.role_id,
         }

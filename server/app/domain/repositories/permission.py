@@ -8,7 +8,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from domain.entities.permission import PermissionEntity, RoleEntity, RolePermissionEntity
+from domain.entities.permission import (
+    AccountRoleEntity,
+    PermissionEntity,
+    RoleEntity,
+    RolePermissionEntity,
+)
 
 
 class AbstractPermissionRepository(ABC):
@@ -17,7 +22,7 @@ class AbstractPermissionRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_permission_by_codename(self, codename: str) -> PermissionEntity | None:
+    async def get_permission_or_none(self, codename: str) -> PermissionEntity | None:
         raise NotImplementedError
 
     @abstractmethod
@@ -25,8 +30,7 @@ class AbstractPermissionRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def ensure_permissions_exist(self, codenames: list[str]) -> list[PermissionEntity]:
-        """Создаёт разрешения если их нет, возвращает все."""
+    async def delete_all_permissions(self) -> None:
         raise NotImplementedError
 
 
@@ -36,7 +40,7 @@ class AbstractRoleRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_role_by_name(self, name: str) -> RoleEntity | None:
+    async def get_role_or_none(self, name: str) -> RoleEntity | None:
         raise NotImplementedError
 
     @abstractmethod
@@ -49,7 +53,15 @@ class AbstractRoleRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def insert_or_update(self, role_permission: RolePermissionEntity) -> None:
+    async def create_role_permissions(self, role_permission: RolePermissionEntity) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_all_role_permission(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_all_roles(self) -> None:
         raise NotImplementedError
 
 
@@ -60,7 +72,7 @@ class AbstractAccountRoleRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def set_account_role(self, account_id: str, role_name: str) -> None:
+    async def set_account_role(self, account_role: AccountRoleEntity) -> None:
         raise NotImplementedError
 
     @abstractmethod

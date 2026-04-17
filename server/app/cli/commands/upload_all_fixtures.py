@@ -2,15 +2,10 @@
 upload_all_fixtures.py: File, containing command for uploading all fixtures.
 """
 
-from logging import (
-    Logger,
-    getLogger,
-)
+from logging import Logger, getLogger
 import sys
 
-from cli.commands.upload_account_permissions import upload_account_permissions
-from cli.commands.upload_account_roles import upload_account_roles
-from cli.commands.upload_account_roles_account_permissions import upload_account_roles_account_permissions
+from cli.commands.upload_roles_and_permissions import upload_roles_and_permissions
 
 
 logger: Logger = getLogger("default")
@@ -25,9 +20,7 @@ async def upload_all_fixtures(profile: str = "development") -> None:
     """
 
     try:
-        await upload_account_roles(profile)
-        await upload_account_permissions(profile)
-        await upload_account_roles_account_permissions(profile)
+        await upload_roles_and_permissions()
     except Exception as exception:
         logger.error("Error while uploading all fixtures", exc_info=exception)
         sys.exit(-1)

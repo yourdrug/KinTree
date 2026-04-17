@@ -3,7 +3,7 @@ from domain.permissions.enums import DefaultRole
 from domain.permissions.enums import Permission as PermissionEnum
 
 
-role_permissions: dict[str, list[str]] = {
+role_permissions: dict[DefaultRole, list[PermissionEnum]] = {
     DefaultRole.GUEST: [
         PermissionEnum.FAMILY__READ,
         PermissionEnum.PERSON__READ,
@@ -34,5 +34,5 @@ role_permissions: dict[str, list[str]] = {
         PermissionEnum.ACCOUNT__READ_SELF,
         PermissionEnum.ACCOUNT__READ_ANY,
     ],
-    DefaultRole.ADMIN: [p.value for p in PermissionEnum],  # все разрешения
+    DefaultRole.ADMIN: list(PermissionEnum),  # все разрешения
 }
