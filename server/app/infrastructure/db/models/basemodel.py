@@ -31,3 +31,13 @@ class BaseModel(AsyncAttrs, DeclarativeBase):
         default=lambda: datetime.now(tz=TIMEZONE),
         comment="Entity creation date",
     )
+
+
+class LinkedBaseModel(AsyncAttrs, DeclarativeBase):
+    """
+    Базовый класс для таблиц связей (M2M junction tables).
+    Не имеет собственного PK — он определяется в дочернем классе
+    через составной primary_key=True на полях FK.
+    """
+
+    __abstract__: bool = True

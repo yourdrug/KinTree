@@ -19,3 +19,11 @@ class RelationType(Enum):
     BIOLOGICAL = "BIOLOGICAL"
     ADOPTED = "ADOPTED"
     STEP = "STEP"
+
+
+class MarriageStatus(Enum):
+    """Текущий статус брака."""
+
+    MARRIED = "MARRIED"  # в браке
+    DIVORCED = "DIVORCED"  # в разводе
+    WIDOWED = "WIDOWED"  # вдовец/вдова

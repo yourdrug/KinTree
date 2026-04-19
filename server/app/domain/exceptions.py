@@ -180,3 +180,7 @@ class DomainRoleError(BaseDomainError):
     """
 
     pass
+
+
+class DomainRelationError(BaseDomainError):
+    pass
