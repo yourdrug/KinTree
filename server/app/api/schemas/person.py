@@ -1,14 +1,13 @@
 """
 api/schemas/person.py
 
-Pydantic-схемы для Person API.
+Pydantic schemas for the Person API.
 
-Принципы:
-- Request-схема конвертирует себя в Command → .to_command().
-- Response-схема строится из доменного объекта → .from_domain().
-- Схемы не знают об ORM, только о доменных типах.
-- FilterSchema → to_spec() → доменная спецификация.
-- Никакой бизнес-логики в схемах — только сериализация/десериализация.
+Conventions:
+- Request schema  → .to_command() produces an application command
+- Response schema → .from_domain(entity) builds the response
+- Filter schema   → .to_spec() produces a domain filter specification
+- No business logic in schemas — only serialization and deserialization
 """
 
 from __future__ import annotations
@@ -22,8 +21,8 @@ from domain.entities.person import Person
 from domain.enums import PersonGender
 from domain.exceptions import FilterValidationError
 from domain.filters.base import SortDirection, SortField
+from domain.filters.page import Page
 from domain.filters.specs import PersonFilterSpec
-from domain.repositories.person import Page
 from domain.value_objects.partial_date import PartialDate
 from domain.value_objects.unset import UNSET
 from fastapi import Query, Request
@@ -54,10 +53,8 @@ class PartialDateSchema(BaseModel):
 class CreatePersonRequest(BaseModel):
     gender: PersonGender = Field(..., examples=[PersonGender.MALE])
     family_id: str = Field(..., min_length=1)
-
     first_name: str | None = Field(None, min_length=1, max_length=100)
     last_name: str | None = Field(None, min_length=1, max_length=100)
-
     birth_date: PartialDateSchema | None = None
     death_date: PartialDateSchema | None = None
     birth_date_raw: str | None = None
@@ -77,13 +74,11 @@ class CreatePersonRequest(BaseModel):
 
 
 class UpdatePersonRequest(BaseModel):
-    """PUT: все поля обязательны, отсутствующие → None."""
+    """PUT — full replacement; missing optional fields default to None."""
 
     gender: PersonGender
-
     first_name: str | None = Field(None, min_length=1, max_length=100)
     last_name: str | None = Field(None, min_length=1, max_length=100)
-
     birth_date: PartialDateSchema | None = None
     death_date: PartialDateSchema | None = None
     birth_date_raw: str | None = None
@@ -103,14 +98,13 @@ class UpdatePersonRequest(BaseModel):
 
 
 class PatchPersonRequest(BasePatchSchema):
-    """PATCH: только переданные поля."""
+    """PATCH — only provided fields are updated."""
 
     non_nullable: ClassVar[list[str]] = ["gender"]
 
     first_name: str | None = Field(None, min_length=1, max_length=100)
     last_name: str | None = Field(None, min_length=1, max_length=100)
     gender: PersonGender | None = None
-
     birth_date: PartialDateSchema | None = None
     death_date: PartialDateSchema | None = None
     birth_date_raw: str | None = None
@@ -119,10 +113,10 @@ class PatchPersonRequest(BasePatchSchema):
     def to_command(self, person_id: str) -> PatchPersonCommand:
         sent = self.model_fields_set
 
-        def _get(field_name: str, transform: Any = None) -> Any:
-            if field_name not in sent:
+        def _get(fname: str, transform: Any = None) -> Any:
+            if fname not in sent:
                 return UNSET
-            value = getattr(self, field_name)
+            value = getattr(self, fname)
             return transform(value) if transform and value is not None else value
 
         return PatchPersonCommand(
@@ -146,10 +140,8 @@ class PersonResponse(BaseModel):
     gender: PersonGender
     family_id: str
     is_alive: bool
-
     first_name: str | None = None
     last_name: str | None = None
-
     birth_date: PartialDateSchema | None = None
     death_date: PartialDateSchema | None = None
     birth_date_raw: str | None = None
@@ -192,8 +184,6 @@ class PersonPageResponse(BasePageResponse):
 
 @dataclass
 class PersonFilterSchema(BasePaginationParams):
-    """Query-параметры для GET /persons."""
-
     first_name__icontains: Annotated[str | None, Query(alias="first_name__icontains")] = None
     last_name__icontains: Annotated[str | None, Query(alias="last_name__icontains")] = None
     gender: Annotated[PersonGender | None, Query()] = None
@@ -255,23 +245,22 @@ class PersonFilterSchema(BasePaginationParams):
     def _validate_year_range(gte_name: str, gte_val: int | None, lte_name: str, lte_val: int | None) -> None:
         if gte_val is not None and lte_val is not None and gte_val > lte_val:
             raise FilterValidationError(
-                message="Ошибка валидации",
-                errors={gte_name: f"{gte_name} не может быть больше {lte_name}"},
+                message="Validation error",
+                errors={gte_name: f"{gte_name} cannot be greater than {lte_name}"},
             )
 
 
 def _parse_enum_list(raw: str | None, enum_cls: type[Enum], param_name: str) -> list | None:
     if raw is None:
         return None
-
     valid = {e.value for e in enum_cls}
     result = []
     for part in raw.split(","):
         value = part.strip()
         if value not in valid:
             raise FilterValidationError(
-                message="Ошибка валидации",
-                errors={param_name: f"Недопустимое значение «{value}». Допустимы: {sorted(valid)}"},
+                message="Validation error",
+                errors={param_name: f"Invalid value «{value}». Allowed: {sorted(valid)}"},
             )
         result.append(enum_cls(value))
     return result or None

@@ -1,10 +1,10 @@
 """
 domain/entities/family.py
 
-Агрегат Family.
+Family aggregate root.
 
-Family — корень агрегата, управляет своими членами.
-assert_can_add_member() проверяет инварианты перед добавлением персоны.
+Family is the consistency boundary for its members.
+assert_can_add_member() enforces all cross-person invariants before persistence.
 """
 
 from __future__ import annotations
@@ -14,20 +14,19 @@ from dataclasses import dataclass, field
 from domain.entities.person import Person
 from domain.exceptions import FamilyDomainError
 from domain.utils import generate_uuid
-
-
-MAX_FAMILY_SIZE = 2
+from domain.value_objects.unset import UNSET, UnsetType
 
 
 @dataclass
 class Family:
     """
-    Агрегат Family.
+    Family aggregate root.
 
-    Инварианты:
-    - founded_year <= ended_year (если оба заданы)
-    - Размер семьи не превышает MAX_FAMILY_SIZE
-    - Нет дублирующихся членов (same name + birth_date)
+    Invariants:
+    - name is non-empty
+    - owner_id is non-empty
+    - founded_year <= ended_year (when both set)
+    - No duplicate members (same name + birth_date)
     """
 
     id: str
@@ -43,45 +42,74 @@ class Family:
     def __post_init__(self) -> None:
         self._validate()
 
-    # ── Запросы ──────────────────────────────────────────────────────────────
+    # ── Queries ───────────────────────────────────────────────────────────────
 
     @property
     def members_count(self) -> int:
         return len(self.members)
 
-    # ── Команды ──────────────────────────────────────────────────────────────
+    # ── Commands ──────────────────────────────────────────────────────────────
 
     def assert_can_add_member(self, candidate: Person) -> None:
         """
-        Проверяет все инварианты перед добавлением члена семьи.
-        Вызывается в application-сервисе до сохранения в репозиторий.
+        Validates all invariants before a new member is added.
+        Called by PersonService before persisting — never by the repository.
         """
-        self._assert_size_limit()
         self._assert_no_duplicate(candidate)
 
-    # ── Инварианты ───────────────────────────────────────────────────────────
+    def apply_put(
+        self,
+        *,
+        name: str,
+        description: str | None,
+        origin_place: str | None,
+        founded_year: int | None,
+        ended_year: int | None,
+    ) -> None:
+        """Full replacement (PUT semantics). Validates after update."""
+        self.name = name
+        self.description = description
+        self.origin_place = origin_place
+        self.founded_year = founded_year
+        self.ended_year = ended_year
+        self._validate()
+
+    def apply_patch(
+        self,
+        *,
+        name: str | UnsetType = UNSET,
+        description: str | None | UnsetType = UNSET,
+        origin_place: str | None | UnsetType = UNSET,
+        founded_year: int | None | UnsetType = UNSET,
+        ended_year: int | None | UnsetType = UNSET,
+    ) -> None:
+        """Partial update (PATCH semantics). UNSET fields are untouched."""
+        if not isinstance(name, UnsetType):
+            self.name = name
+        if not isinstance(description, UnsetType):
+            self.description = description
+        if not isinstance(origin_place, UnsetType):
+            self.origin_place = origin_place
+        if not isinstance(founded_year, UnsetType):
+            self.founded_year = founded_year
+        if not isinstance(ended_year, UnsetType):
+            self.ended_year = ended_year
+        self._validate()
+
+    # ── Invariants ────────────────────────────────────────────────────────────
 
     def _validate(self) -> None:
         if not self.name or not self.name.strip():
-            raise FamilyDomainError(field="name", message="Название семьи не может быть пустым.")
+            raise FamilyDomainError(field="name", message="Family name cannot be empty.")
         if not self.owner_id:
-            raise FamilyDomainError(field="owner_id", message="Семья должна иметь владельца.")
+            raise FamilyDomainError(field="owner_id", message="Family must have an owner.")
         self._validate_years()
 
     def _validate_years(self) -> None:
-        if self.founded_year and self.ended_year and self.founded_year > self.ended_year:
+        if self.founded_year is not None and self.ended_year is not None and self.founded_year > self.ended_year:
             raise FamilyDomainError(
                 field="founded_year",
-                message="Год основания не может быть больше года окончания.",
-            )
-
-    def _assert_size_limit(self) -> None:
-        if len(self.members) >= MAX_FAMILY_SIZE:
-            raise FamilyDomainError(
-                field="family_id",
-                message=(
-                    f"В семье уже {len(self.members)} человек(а). Максимально допустимое количество: {MAX_FAMILY_SIZE}."
-                ),
+                message="Founded year cannot be greater than ended year.",
             )
 
     def _assert_no_duplicate(self, candidate: Person) -> None:
@@ -90,15 +118,16 @@ class Family:
                 raise FamilyDomainError(
                     field="person",
                     message=(
-                        f"В этой семье уже есть человек с именем «{candidate.full_name()}» и такой же датой рождения."
+                        f"A person named «{candidate.full_name()}» with the same "
+                        f"birth date already exists in this family."
                     ),
                 )
 
 
 def _is_duplicate(existing: Person, candidate: Person) -> bool:
     """
-    Дубль = совпадение (first_name + last_name + birth_date).
-    None != None в бизнес-смысле — не считается дублем.
+    Duplicate = same (first_name + last_name + birth_date).
+    None != None in business terms — not a duplicate.
     """
     names_match = (
         existing.first_name is not None
@@ -115,6 +144,7 @@ def _is_duplicate(existing: Person, candidate: Person) -> bool:
 
 
 def create_family(
+    *,
     name: str,
     owner_id: str,
     description: str | None = None,
@@ -122,7 +152,7 @@ def create_family(
     founded_year: int | None = None,
     ended_year: int | None = None,
 ) -> Family:
-    """Фабрика агрегата Family. Единственное место, где генерируется ID."""
+    """Factory for brand-new families. Generates ID and validates."""
     return Family(
         id=generate_uuid(),
         name=name,

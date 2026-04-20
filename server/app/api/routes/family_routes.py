@@ -55,7 +55,7 @@ async def get_families_list(
     """
     spec: BaseFilterSpec = filters.to_spec()
     page: Page[Family] = await service.get_families_list(spec)
-    return FamilyPageResponse.from_domain(page=page, request=request)
+    return FamilyPageResponse.from_page(page=page, request=request)
 
 
 @router.get(path="/{family_id:str}", status_code=status.HTTP_200_OK)

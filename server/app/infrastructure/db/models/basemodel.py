@@ -1,43 +1,48 @@
+"""
+infrastructure/db/models/basemodel.py
+
+- BaseModel      → entities with surrogate PK (id + creation_date)
+- LinkedBaseModel → M2M join tables, PK defined by child composite FKs
+"""
+
+from __future__ import annotations
+
 from datetime import datetime
 
 from domain.utils import generate_uuid
-from sqlalchemy import DateTime
+from sqlalchemy import DateTime, String
 from sqlalchemy.ext.asyncio import AsyncAttrs
-from sqlalchemy.orm import (
-    DeclarativeBase,
-    Mapped,
-    mapped_column,
-)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from infrastructure.common.settings import TIMEZONE
 
 
-class BaseModel(AsyncAttrs, DeclarativeBase):
-    """
-    BaseModel: Abstract base model for all database entities.
-    Provides common columns and configuration that will be inherited by all models.
-    """
+class _Base(AsyncAttrs, DeclarativeBase):
+    """Single shared registry for all ORM models."""
 
-    __abstract__: bool = True  # Marks this as abstract base class (no table will be created)
+    pass
+
+
+class BaseModel(_Base):
+    __abstract__ = True
 
     id: Mapped[str] = mapped_column(
+        String,
         primary_key=True,
         default=generate_uuid,
-        comment="Identifier of the entity",
+        comment="Entity identifier (UUID hex)",
     )
-
     creation_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(tz=TIMEZONE),
-        comment="Entity creation date",
+        comment="UTC creation timestamp",
     )
 
 
-class LinkedBaseModel(AsyncAttrs, DeclarativeBase):
+class LinkedBaseModel(_Base):
     """
-    Базовый класс для таблиц связей (M2M junction tables).
-    Не имеет собственного PK — он определяется в дочернем классе
-    через составной primary_key=True на полях FK.
+    Base for M2M join tables.
+    NO surrogate id — child declares composite PK via FK columns.
     """
 
-    __abstract__: bool = True
+    __abstract__ = True
