@@ -25,6 +25,7 @@ from types import TracebackType
 from domain.exceptions import DatabaseError
 from domain.repositories.account import AccountRepository
 from domain.repositories.family import FamilyRepository
+from domain.repositories.permission import AccountRoleRepository, PermissionRepository, RoleRepository
 from domain.repositories.person import PersonRepository
 from domain.repositories.relations import ParentChildRepository, SpouseRepository
 from sqlalchemy.exc import DBAPIError
@@ -48,6 +49,9 @@ class UnitOfWork:
     accounts: AccountRepository
     parent_child: ParentChildRepository
     spouses: SpouseRepository
+    permissions: PermissionRepository
+    roles: RoleRepository
+    account_roles: AccountRoleRepository
 
     def __init__(
         self,
@@ -57,6 +61,9 @@ class UnitOfWork:
         accounts: AccountRepository,
         parent_child: ParentChildRepository,
         spouses: SpouseRepository,
+        permissions: PermissionRepository,
+        roles: RoleRepository,
+        account_roles: AccountRoleRepository,
     ) -> None:
         self._session = session
         self.persons = persons
@@ -64,6 +71,9 @@ class UnitOfWork:
         self.accounts = accounts
         self.parent_child = parent_child
         self.spouses = spouses
+        self.permissions = permissions
+        self.roles = roles
+        self.account_roles = account_roles
 
     async def __aenter__(self) -> UnitOfWork:
         await self._session.begin()

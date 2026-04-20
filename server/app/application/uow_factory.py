@@ -27,6 +27,11 @@ from contextlib import asynccontextmanager
 from infrastructure.account.repositories import AccountRepositoryImpl
 from infrastructure.db.database import DatabaseManager
 from infrastructure.family.repositories import FamilyRepositoryImpl
+from infrastructure.permissions.repositories import (
+    AccountRoleRepositoryImpl,
+    PermissionRepositoryImpl,
+    RoleRepositoryImpl,
+)
 from infrastructure.person.repositories import PersonRepositoryImpl
 from infrastructure.relations.repositories import ParentChildRepositoryImpl, SpouseRepositoryImpl
 
@@ -60,6 +65,9 @@ class UoWFactory:
         accounts = AccountRepositoryImpl(session=session)
         spouses = SpouseRepositoryImpl(session=session)
         parent_child = ParentChildRepositoryImpl(session=session)
+        permissions = PermissionRepositoryImpl(session=session)
+        roles = RoleRepositoryImpl(session=session)
+        account_roles = AccountRoleRepositoryImpl(session=session)
 
         uow = UnitOfWork(
             session=session,
@@ -68,6 +76,9 @@ class UoWFactory:
             accounts=accounts,
             parent_child=parent_child,
             spouses=spouses,
+            permissions=permissions,
+            roles=roles,
+            account_roles=account_roles,
         )
 
         async with uow:

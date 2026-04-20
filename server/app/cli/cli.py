@@ -7,6 +7,7 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
+from application.uow_factory import UoWFactory
 from infrastructure.db.database import database
 from typer import Typer
 
@@ -53,8 +54,14 @@ class CLI:
                     asyncio.run(database.connect())
 
                     try:
-                        result = asyncio.run(func(*args, **kwargs))
-                        return result
+
+                        async def runner() -> Callable:
+                            uow_factory = UoWFactory(database)
+
+                            return await func(uow_factory, *args, **kwargs)
+
+                        return asyncio.run(runner())
+
                     finally:
                         asyncio.run(database.disconnect())
                 else:
