@@ -1,48 +1,35 @@
-from domain.entities.permission import AccountRoleEntity, PermissionEntity, RoleEntity, RolePermissionEntity
+"""
+infrastructure/permissions/mapper.py
 
-from infrastructure.db.models.permission import AccountRole, Permission, Role
+Маппер: ORM-модели ↔ доменные объекты системы разрешений.
 
+Принципы:
+- Маппер — чистый объект без состояния (staticmethod).
+- to_domain() строит Value Object / Entity через их фабрики/конструкторы.
+- to_persistence() возвращает dict — нет прямой зависимости от ORM-методов.
+- Нет бизнес-логики — только трансформация данных.
+"""
 
-class RolePermissionMapper:
-    @staticmethod
-    def to_persistence(entity: RolePermissionEntity) -> dict:
-        return {
-            "id": entity.id,
-            "role_id": entity.role_id,
-            "permission_id": entity.permission_id,
-        }
+from __future__ import annotations
 
+from domain.entities.permission import AccountRole, Permission, Role
 
-class RoleMapper:
-    @staticmethod
-    def to_domain(orm: Role, permissions: list[PermissionEntity] | None = None) -> RoleEntity:
-        return RoleEntity(
-            id=orm.id,
-            name=orm.name,
-            description=orm.description,
-            permissions=permissions or [],
-        )
-
-    @staticmethod
-    def to_persistence(entity: RoleEntity) -> dict:
-        return {
-            "id": entity.id,
-            "name": entity.name,
-            "description": entity.description,
-        }
+from infrastructure.db.models.permission import AccountRole as AccountRoleORM
+from infrastructure.db.models.permission import Permission as PermissionORM
+from infrastructure.db.models.permission import Role as RoleORM
 
 
 class PermissionMapper:
     @staticmethod
-    def to_domain(orm: Permission) -> PermissionEntity:
-        return PermissionEntity(
+    def to_domain(orm: PermissionORM) -> Permission:
+        return Permission(
             id=orm.id,
             codename=orm.codename,
             description=orm.description,
         )
 
     @staticmethod
-    def to_persistence(entity: PermissionEntity) -> dict:
+    def to_persistence(entity: Permission) -> dict:
         return {
             "id": entity.id,
             "codename": entity.codename,
@@ -50,17 +37,39 @@ class PermissionMapper:
         }
 
 
+class RoleMapper:
+    @staticmethod
+    def to_domain(
+        orm: RoleORM,
+        permissions: list[Permission] | None = None,
+    ) -> Role:
+        return Role(
+            id=orm.id,
+            name=orm.name,
+            description=orm.description,
+            permissions=frozenset(permissions or []),
+        )
+
+    @staticmethod
+    def to_persistence(entity: Role) -> dict:
+        return {
+            "id": entity.id,
+            "name": entity.name,
+            "description": entity.description,
+        }
+
+
 class AccountRoleMapper:
     @staticmethod
-    def to_domain(orm: AccountRole) -> AccountRoleEntity:
-        return AccountRoleEntity(
+    def to_domain(orm: AccountRoleORM) -> AccountRole:
+        return AccountRole(
             id=orm.id,
             account_id=orm.account_id,
             role_id=orm.role_id,
         )
 
     @staticmethod
-    def to_persistence(entity: AccountRoleEntity) -> dict:
+    def to_persistence(entity: AccountRole) -> dict:
         return {
             "id": entity.id,
             "account_id": entity.account_id,

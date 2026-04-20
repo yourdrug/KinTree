@@ -3,46 +3,43 @@ api/dependencies/permission_dependencies.py
 
 FastAPI-зависимости для проверки разрешений.
 
-Разрешения хранятся исключительно в БД и загружаются при аутентификации.
+Разрешения хранятся в БД и загружаются при аутентификации.
+Account.permissions — frozenset[str] codename'ов.
 
 Паттерны использования:
 
   1. Depends(require_permission("family:create"))
-     ─ Проверка по codename строкой
+     ─ Проверка одного пермишена по codename
 
-  2. Depends(require_any_permission(["family:create", "family:update_any"]))
-     ─ Хотя бы одно из разрешений
+  2. Depends(require_any_permission(["family:create", "family:update:any"]))
+     ─ Хотя бы один из пермишенов
 
   3. Depends(require_all_permissions(["family:create", "person:create"]))
-     ─ Все разрешения обязательны
+     ─ Все пермишены обязательны
 
   4. Depends(require_role("admin"))
      ─ Проверка роли из JWT-клейма (без запроса в БД)
 
-  5. check_owner_or_permission(account, "family:delete_any", owner_id)
+  5. check_owner_or_permission(account, "family:delete:any", owner_id)
      ─ Для проверок внутри handler'а после загрузки ресурса
 
-Разрешения берутся из account.permissions (frozenset[str]),
-который заполняется при аутентификации — никаких дополнительных
-запросов в БД при каждом HTTP-запросе.
+Можно использовать константы из PermissionCodename для избежания хардкода строк:
+  from domain.permissions.enums import PermissionCodename
+  Depends(require_permission(PermissionCodename.FAMILY__CREATE))
 """
 
 from __future__ import annotations
 
 from domain.entities.account import Account
 from domain.exceptions import AuthenticationError
+from domain.permissions.enums import PermissionCodename
 from fastapi import Depends
 
 from api.dependencies.auth_dependencies import get_current_account
 
 
 class _RequirePermission:
-    """
-    Dependency: требует наличия конкретного разрешения.
-
-    Использование:
-        account: Account = Depends(require_permission("family:create"))
-    """
+    """Dependency: требует наличия конкретного пермишена."""
 
     __slots__ = ("_codename",)
 
@@ -62,12 +59,7 @@ class _RequirePermission:
 
 
 class _RequireAnyPermission:
-    """
-    Dependency: требует хотя бы одно разрешение из списка.
-
-    Использование:
-        account: Account = Depends(require_any_permission(["admin:panel", "account:read_any"]))
-    """
+    """Dependency: требует хотя бы один пермишен из списка."""
 
     __slots__ = ("_codenames",)
 
@@ -87,12 +79,7 @@ class _RequireAnyPermission:
 
 
 class _RequireAllPermissions:
-    """
-    Dependency: требует все разрешения из списка.
-
-    Использование:
-        account: Account = Depends(require_all_permissions(["family:create", "person:create"]))
-    """
+    """Dependency: требует все пермишены из списка."""
 
     __slots__ = ("_codenames",)
 
@@ -113,11 +100,8 @@ class _RequireAllPermissions:
 
 class _RequireRole:
     """
-    Dependency: требует конкретную роль из JWT-клейма.
-    Не делает запрос в БД — роль читается из токена.
-
-    Использование:
-        account: Account = Depends(require_role("admin"))
+    Dependency: требует конкретную роль.
+    Читает роль из Account.role_name — без запроса в БД.
     """
 
     __slots__ = ("_role_name",)
@@ -137,34 +121,38 @@ class _RequireRole:
         return account
 
 
-def require_permission(codename: str) -> _RequirePermission:
+# ── Фабричные функции (публичный API зависимостей) ────────────────────────────
+
+
+def require_permission(codename: str | PermissionCodename) -> _RequirePermission:
     """
-    Dependency-фабрика: проверяет наличие разрешения по codename.
+    Dependency-фабрика: проверяет наличие пермишена по codename.
 
     Пример:
+        Depends(require_permission(PermissionCodename.FAMILY__CREATE))
         Depends(require_permission("family:create"))
     """
-    return _RequirePermission(codename)
+    return _RequirePermission(str(codename))
 
 
-def require_any_permission(codenames: list[str]) -> _RequireAnyPermission:
+def require_any_permission(codenames: list[str | PermissionCodename]) -> _RequireAnyPermission:
     """
-    Dependency-фабрика: хотя бы одно из разрешений.
+    Dependency-фабрика: хотя бы один пермишен из списка.
 
     Пример:
-        Depends(require_any_permission(["admin:panel", "account:read_any"]))
+        Depends(require_any_permission([PermissionCodename.ADMIN__PANEL, PermissionCodename.ACCOUNT__READ_ANY]))
     """
-    return _RequireAnyPermission(codenames)
+    return _RequireAnyPermission([str(c) for c in codenames])
 
 
-def require_all_permissions(codenames: list[str]) -> _RequireAllPermissions:
+def require_all_permissions(codenames: list[str | PermissionCodename]) -> _RequireAllPermissions:
     """
-    Dependency-фабрика: все разрешения обязательны.
+    Dependency-фабрика: все пермишены обязательны.
 
     Пример:
-        Depends(require_all_permissions(["family:create", "person:create"]))
+        Depends(require_all_permissions([PermissionCodename.FAMILY__CREATE, PermissionCodename.PERSON__CREATE]))
     """
-    return _RequireAllPermissions(codenames)
+    return _RequireAllPermissions([str(c) for c in codenames])
 
 
 def require_role(role_name: str) -> _RequireRole:
@@ -179,12 +167,13 @@ def require_role(role_name: str) -> _RequireRole:
 
 def check_owner_or_permission(
     account: Account,
-    codename: str,
+    codename: str | PermissionCodename,
     resource_owner_id: str,
 ) -> None:
     """
-    Проверяет: текущий пользователь является владельцем ресурса
-    ИЛИ имеет расширенное разрешение.
+    Вспомогательная функция (не Depends):
+    проверяет, что текущий пользователь является владельцем ресурса
+    ИЛИ имеет расширенный пермишен.
 
     Вызывается вручную внутри handler'а, когда owner_id известен
     только после загрузки ресурса из БД.
@@ -193,16 +182,16 @@ def check_owner_or_permission(
         family = await service.get_family(family_id)
         check_owner_or_permission(
             account=account,
-            codename="family:delete_any",
+            codename=PermissionCodename.FAMILY__DELETE_ANY,
             resource_owner_id=family.owner_id,
         )
         await service.delete_family(family_id)
 
     Raises:
-        AuthenticationError — если не владелец и нет разрешения.
+        AuthenticationError если не владелец и нет пермишена.
     """
     is_owner = account.id == resource_owner_id
-    has_perm = account.has_permission(codename)
+    has_perm = account.has_permission(str(codename))
 
     if not is_owner and not has_perm:
         raise AuthenticationError(

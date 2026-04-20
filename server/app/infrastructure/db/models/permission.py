@@ -4,16 +4,21 @@ infrastructure/db/models/permission.py
 ORM-модели для системы разрешений.
 
 Схема:
-    permissions  — справочник разрешений (codename уникален)
-    roles        — справочник ролей
-    role_permissions — M2M: роль ↔ разрешение
-    account_roles    — M2M: аккаунт ↔ роль (один аккаунт = одна роль в нашем случае)
+  permissions      — справочник пермишенов (codename уникален)
+  roles            — справочник ролей (name уникален)
+  role_permissions — M2M: роль ↔ пермишен
+  account_roles    — один аккаунт = одна роль
+
+Решения:
+- role_permissions и account_roles используют LinkedBaseModel (без суррогатного id).
+  Исключение: account_roles всё же имеет id для конфликт-разрешения в pg_insert.
+- Все уникальные ограничения явные, с именами — для читаемых ошибок и миграций.
 """
 
 from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
-from infrastructure.db.models.basemodel import BaseModel
+from infrastructure.db.models.basemodel import BaseModel, LinkedBaseModel
 
 
 class Permission(BaseModel):
@@ -25,7 +30,7 @@ class Permission(BaseModel):
         String(128),
         unique=True,
         nullable=False,
-        comment="Уникальный строковый ключ: 'resource:action'",
+        comment="Уникальный строковый ключ: 'resource:action[:scope]'",
     )
 
     description: Mapped[str] = mapped_column(
@@ -33,7 +38,7 @@ class Permission(BaseModel):
         nullable=False,
         default="",
         server_default="",
-        comment="Человекочитаемое описание разрешения",
+        comment="Человекочитаемое описание пермишена",
     )
 
 
@@ -54,11 +59,12 @@ class Role(BaseModel):
         nullable=False,
         default="",
         server_default="",
+        comment="Описание роли",
     )
 
 
-class RolePermission(BaseModel):
-    """M2M: роль → разрешение."""
+class RolePermission(LinkedBaseModel):
+    """M2M: роль → пермишен. Составной PK."""
 
     __tablename__ = "role_permissions"
 
@@ -70,11 +76,13 @@ class RolePermission(BaseModel):
 
     role_id: Mapped[str] = mapped_column(
         ForeignKey("roles.id", ondelete="CASCADE"),
+        primary_key=True,
         nullable=False,
     )
 
     permission_id: Mapped[str] = mapped_column(
         ForeignKey("permissions.id", ondelete="CASCADE"),
+        primary_key=True,
         nullable=False,
     )
 
@@ -94,9 +102,11 @@ class AccountRole(BaseModel):
         ForeignKey("Account.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
+        comment="ID аккаунта (один аккаунт — одна роль)",
     )
 
     role_id: Mapped[str] = mapped_column(
         ForeignKey("roles.id", ondelete="RESTRICT"),
         nullable=False,
+        comment="ID роли",
     )

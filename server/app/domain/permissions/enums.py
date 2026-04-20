@@ -1,13 +1,16 @@
 """
 domain/permissions/enums.py
 
-Enum — единственный источник правды о том КАКИЕ пермишены существуют.
-БД хранит только то КОМУ они назначены.
+Единственный источник правды о том, КАКИЕ пермишены существуют в системе.
 
-Правило: добавил пермишен в enum → создал Alembic-миграцию → задеплоил.
-Никакого автосинка — изменения явные, версионированные, откатываемые.
+DDD-принципы:
+- Enum — константы домена, не инфраструктура.
+- БД хранит только то, КОМУ назначены пермишены.
+- Добавил пермишен в enum → создал Alembic-миграцию → задеплоил.
+- Никакого автосинка во время HTTP-запросов — изменения явные, версионированные.
 
-Соглашение по именованию: RESOURCE__ACTION
+Соглашение по именованию codename: resource:action[:scope]
+Примеры: "family:read", "family:delete:own", "family:delete:any"
 """
 
 from __future__ import annotations
@@ -15,7 +18,7 @@ from __future__ import annotations
 from enum import Enum
 
 
-class Permission(str, Enum):
+class PermissionCodename(str, Enum):
     """
     Все пермишены приложения.
 
@@ -25,7 +28,7 @@ class Permission(str, Enum):
 
     description: str
 
-    def __new__(cls, value: str, description: str) -> Permission:
+    def __new__(cls, value: str, description: str) -> PermissionCodename:
         obj = str.__new__(cls, value)
         obj._value_ = value
         obj.description = description
@@ -62,7 +65,7 @@ class Permission(str, Enum):
     ADMIN__MANAGE_ROLES = ("admin:manage_roles", "Управление ролями пользователей")
 
 
-class DefaultRole(str, Enum):
+class RoleName(str, Enum):
     """
     Системные роли. Создаются один раз при инициализации БД.
     Новые роли добавляются через Alembic-миграцию.
@@ -70,7 +73,7 @@ class DefaultRole(str, Enum):
 
     description: str
 
-    def __new__(cls, value: str, description: str) -> DefaultRole:
+    def __new__(cls, value: str, description: str) -> RoleName:
         obj = str.__new__(cls, value)
         obj._value_ = value
         obj.description = description

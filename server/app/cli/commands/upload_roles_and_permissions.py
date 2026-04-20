@@ -1,83 +1,101 @@
 """
-upload_roles_and_permissions.py
+cli/commands/upload_roles_and_permissions.py
 
-Функция загрузки ролей и разрешений.
+CLI-команда: полная пересинхронизация ролей и пермишенов.
+
+Отличие от автосинка при старте (sync_permissions):
+- Эта команда делает ПОЛНЫЙ СБРОС: удаляет всё и создаёт заново.
+- Используется для ручного восстановления или при деплоях
+  где нужно явно сбросить накопившиеся «мусорные» данные.
+
+Автосинк при старте (lifespan) делает МЯГКИЙ upsert:
+- Не удаляет существующие данные.
+- Только добавляет новое и обновляет описания.
+
+Когда использовать эту команду:
+  make upload-roles-permissions
 """
 
 from __future__ import annotations
 
-from logging import Logger, getLogger
+import logging
 import sys
 
 from application.uow_factory import UoWFactory
-from domain.entities.permission import (
-    create_permission_entity,
-    create_role_entity,
-    create_role_permission_entity,
+from domain.entities.permission import create_permission, create_role
+from domain.permissions.constants import (
+    PERMISSION_DESCRIPTIONS,
+    ROLE_DESCRIPTIONS,
+    ROLE_PERMISSIONS,
 )
-from domain.permissions.constants import role_permissions
-from domain.permissions.enums import DefaultRole
-from domain.permissions.enums import Permission as PermissionEnum
+from domain.permissions.enums import PermissionCodename, RoleName
 
 
-logger: Logger = getLogger("default")
+logger = logging.getLogger("default")
 
 
 async def upload_roles_and_permissions(uow_factory: UoWFactory) -> None:
     """
-    Загружает роли и permissions в БД.
+    Полная пересинхронизация: удалить всё → создать заново.
 
-    Принципы:
-    - одна транзакция (через UoW)
-    - orchestration здесь
+    Алгоритм:
+      1. Удалить все role_permissions (M2M связи)
+      2. Удалить все account_roles (чтобы снять FK)
+         — НЕ удаляем! Это приведёт к потере связей аккаунт-роль.
+         Вместо этого пересоздаём роли с теми же name — FK не сломается.
+      3. Пересоздать permissions (upsert по codename)
+      4. Пересоздать roles (upsert по name)
+      5. Установить связи role → permissions
+
+    FK account_roles.role_id → roles.id сохраняется, потому что
+    мы делаем upsert по name, а не delete+insert.
     """
+    logger.info("Загрузка ролей и пермишенов (полная пересинхронизация)...")
 
     try:
         async with uow_factory.create(master=True) as uow:
-            # --- 1. очистка ---
-            await uow.roles.remove_all_permissions()
-            await uow.roles.remove_all()
-            await uow.permissions.remove_all()
+            # --- 1. Очистить связи роль-пермишен ---
+            await uow.roles.remove_all_role_permissions()
+            logger.info("Связи роль-пермишен очищены")
 
-            # --- 2. permissions ---
-            permissions_map: dict[str, str] = {}
-
-            for perm in PermissionEnum:
-                entity = create_permission_entity(
+            # --- 2. Upsert пермишенов ---
+            permissions_to_create = [
+                create_permission(
                     codename=perm.value,
-                    description=perm.description,
+                    description=PERMISSION_DESCRIPTIONS.get(perm, ""),
                 )
+                for perm in PermissionCodename
+            ]
+            synced_permissions = await uow.permissions.upsert_many(permissions_to_create)
+            perm_by_codename = {p.codename: p for p in synced_permissions}
+            logger.info(f"Пермишены: {len(synced_permissions)} синхронизировано")
 
-                created = await uow.permissions.create(entity)
-                permissions_map[perm.value] = created.id
-
-            # --- 3. roles ---
-            roles_map: dict[str, str] = {}
-
-            for role in DefaultRole:
-                role_entity = create_role_entity(
+            # --- 3. Upsert ролей ---
+            roles_to_create = [
+                create_role(
                     name=role.value,
-                    description=role.description,
+                    description=ROLE_DESCRIPTIONS.get(role, ""),
                 )
+                for role in RoleName
+            ]
+            synced_roles = await uow.roles.upsert_many(roles_to_create)
+            logger.info(f"Роли: {len(synced_roles)} синхронизировано")
 
-                created = await uow.roles.create(role_entity)  # type: ignore
-                roles_map[role.value] = created.id
+            # --- 4. Установить связи роль → пермишены ---
+            for role in synced_roles:
+                try:
+                    role_enum = RoleName(role.name, role.description)
+                except ValueError:
+                    logger.warning(f"Роль '{role.name}' не найдена в RoleName enum, пропускаем")
+                    continue
 
-            # --- 4. связи role ↔ permission ---
-            for role, perms in role_permissions.items():
-                role_id = roles_map[role.value]
+                codenames = [p.value for p in ROLE_PERMISSIONS.get(role_enum, [])]
+                permission_ids = [perm_by_codename[cn].id for cn in codenames if cn in perm_by_codename]
+                await uow.roles.set_permissions(role.id, permission_ids)
+                logger.info(f"Роль '{role.name}': назначено {len(permission_ids)} пермишенов")
 
-                for perm in perms:
-                    perm_id = permissions_map[perm.value]
-
-                    relation = create_role_permission_entity(
-                        role_id=role_id,
-                        permission_id=perm_id,
-                    )
-
-                    await uow.roles.add_permission(relation)
     except Exception as exc:
-        logger.error("Error while uploading roles and permissions", exc_info=exc)
-        sys.exit(-1)
+        logger.error("Ошибка при загрузке ролей и пермишенов", exc_info=exc)
+        sys.exit(1)
     else:
-        logger.info("Roles and permissions successfully uploaded")
+        logger.info("Роли и пермишены успешно загружены")
