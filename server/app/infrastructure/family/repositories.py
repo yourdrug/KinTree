@@ -1,4 +1,5 @@
 from domain.entities.family import Family as DomainFamily
+from domain.exceptions import NotFoundError
 from domain.filters.base import BaseFilterSpec
 from domain.filters.page import Page
 from sqlalchemy import Delete, delete, exists, func, insert, select, update
@@ -28,6 +29,9 @@ class FamilyRepositoryImpl:
         statement: Select = select(ORMFamily).where(ORMFamily.id == family_id)
         result: Result = await self._session.execute(statement)
         family: ORMFamily = result.scalar_one()
+
+        if family is None:
+            raise NotFoundError(resource="Family", resource_id=family_id)
 
         return self._mapper.to_domain(family)
 

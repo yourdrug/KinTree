@@ -8,7 +8,9 @@ infrastructure/account/repositories.py
 from __future__ import annotations
 
 from domain.entities.account import Account as DomainAccount
-from sqlalchemy import exists, select, update
+from domain.utils import generate_uuid
+from sqlalchemy import exists, insert, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine.result import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,44 +51,10 @@ class AccountRepositoryImpl:
         return self._mapper.to_domain(account, permissions=permissions, role_name=role_name)
 
     async def save(self, account: DomainAccount) -> DomainAccount:
-        """Protocol alias: создать или обновить."""
+        """Upsert: INSERT если новый, UPDATE если существует."""
         if await self.exists(account.id):
-            # точечное обновление — только изменяемые поля
-            stmt = (
-                update(ORMAccount)
-                .where(ORMAccount.id == account.id)
-                .values(
-                    email=account.email,
-                    hashed_password=account.hashed_password,
-                    is_acc_blocked=account.is_acc_blocked,
-                    is_verified=account.is_verified,
-                    refresh_token=account.refresh_token,
-                )
-                .returning(ORMAccount)
-            )
-            result: Result = await self._session.execute(stmt)
-            orm_account: ORMAccount = result.scalar_one()
-            permissions = await self._load_permissions(orm_account.id)
-            role_name = await self._load_role_name(orm_account.id)
-            return self._mapper.to_domain(orm_account, permissions, role_name)
-        return await self.create(account)
-
-    async def create(self, account: DomainAccount) -> DomainAccount:
-        from sqlalchemy import insert as sa_insert
-
-        data = self._mapper.to_persistence(account)
-        statement = sa_insert(ORMAccount).values(**data).returning(ORMAccount)
-        result: Result = await self._session.execute(statement)
-        orm_account: ORMAccount = result.scalar_one()
-
-        # Назначаем роль "user" при создании
-        await self._assign_default_role(orm_account.id)
-
-        return self._mapper.to_domain(
-            orm_account,
-            permissions=frozenset(),  # новый аккаунт — загрузим при следующем запросе
-            role_name="user",
-        )
+            return await self._update(account)
+        return await self._create(account)
 
     async def update_refresh_token(
         self,
@@ -97,6 +65,25 @@ class AccountRepositoryImpl:
         await self._session.execute(statement)
 
     # ── Private helpers ────────────────────────────────────────────────────
+
+    async def _create(self, account: DomainAccount) -> DomainAccount:
+        data = self._mapper.to_persistence(account)
+        stmt = insert(ORMAccount).values(**data).returning(ORMAccount)
+        result: Result = await self._session.execute(stmt)
+        orm: ORMAccount = result.scalar_one()
+
+        await self._assign_default_role(orm.id)
+
+        return self._mapper.to_domain(orm, permissions=frozenset(), role_name="user")
+
+    async def _update(self, account: DomainAccount) -> DomainAccount:
+        data = self._mapper.to_persistence(account)
+        stmt = update(ORMAccount).where(ORMAccount.id == account.id).values(**data).returning(ORMAccount)
+        result: Result = await self._session.execute(stmt)
+        orm: ORMAccount = result.scalar_one()
+        permissions = await self._load_permissions(orm.id)
+        role_name = await self._load_role_name(orm.id)
+        return self._mapper.to_domain(orm, permissions=permissions, role_name=role_name)
 
     async def _load_permissions(self, account_id: str) -> frozenset[str]:
         """Один JOIN-запрос для всех разрешений аккаунта."""
@@ -118,9 +105,6 @@ class AccountRepositoryImpl:
         return result.scalar_one_or_none() or "user"
 
     async def _assign_default_role(self, account_id: str) -> None:
-        from domain.utils import generate_uuid
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
-
         role_result = await self._session.execute(select(Role).where(Role.name == "user"))
         role = role_result.scalar_one_or_none()
         if not role:

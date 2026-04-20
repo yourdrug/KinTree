@@ -1,3 +1,17 @@
+"""
+api/routes/family_routes.py
+
+HTTP-роуты для агрегата Family.
+
+Принципы:
+- Роутер тонкий: принял запрос → создал команду → вызвал сервис → вернул ответ.
+- Никакой бизнес-логики в роутере.
+- Зависимости инжектируются через Depends.
+- Пагинация и фильтры — через FilterSchema.
+"""
+
+from __future__ import annotations
+
 from application.family.commands import CreateFamilyCommand
 from application.family.services import FamilyService
 from domain.entities.account import Account
@@ -30,7 +44,7 @@ async def get_families_list(
     """
     Получить список семей с фильтрацией, сортировкой и пагинацией.
 
-     Query-параметры фильтрации:
+    Query-параметры фильтрации:
     - `name__icontains` — поиск по названию
     - `owner_id` — поиск по точному ID владельца
     - `founded_year__gte` / `founded_year__lte` — диапазон года основания
@@ -39,9 +53,8 @@ async def get_families_list(
     - `order_dir` — направление (asc | desc)
     - `limit` / `offset` — пагинация
     """
-
     spec: BaseFilterSpec = filters.to_spec()
-    page: Page[Family] = await service.get_families_list(filters=spec)
+    page: Page[Family] = await service.get_families_list(spec)
     return FamilyPageResponse.from_domain(page=page, request=request)
 
 
@@ -50,11 +63,8 @@ async def get_family(
     family_id: str = Path(..., min_length=32, max_length=32),
     service: FamilyService = Depends(get_family_service),
 ) -> FamilyResponse:
-    """
-    Получить семью по ID
-    """
-
-    family: Family = await service.get_family(family_id=family_id)
+    """Получить семью по ID."""
+    family: Family = await service.get_family(family_id)
     return FamilyResponse.from_domain(family=family)
 
 
@@ -64,12 +74,9 @@ async def create_family(
     account: Account = Depends(get_current_account),
     service: FamilyService = Depends(get_family_service),
 ) -> FamilyResponse:
-    """
-    Создание семьи по введенным данным.
-    """
-
-    create_command: CreateFamilyCommand = payload.to_command()
-    created_family: Family = await service.create_family(command=create_command, account=account)
+    """Создание семьи по введенным данным."""
+    command: CreateFamilyCommand = payload.to_command()
+    created_family: Family = await service.create_family(command=command, account=account)
     return FamilyResponse.from_domain(family=created_family)
 
 
@@ -82,11 +89,10 @@ async def update_family(
 ) -> FamilyResponse:
     """
     Перезаписать объект семьи для обновления.
-    Если необязательный атрибут не передан, он устанавливается как None
+    Если необязательный атрибут не передан, он устанавливается как None.
     """
-
     command = payload.to_command(family_id=family_id, account_id=account_id)
-    updated_family: Family = await service.update_family(command=command)
+    updated_family: Family = await service.update_family(command)
     return FamilyResponse.from_domain(family=updated_family)
 
 
@@ -100,9 +106,8 @@ async def patch_update_family(
     Частично обновить объект семьи.
     Если атрибут не передан, он не изменяется.
     """
-
     command = payload.to_command(family_id)
-    updated_family = await service.patch_update_family(command)
+    updated_family: Family = await service.patch_update_family(command)
     return FamilyResponse.from_domain(family=updated_family)
 
 
@@ -111,9 +116,5 @@ async def delete_family(
     family_id: str = Path(..., min_length=32, max_length=32),
     service: FamilyService = Depends(get_family_service),
 ) -> None:
-    """
-    Удалить объект семьи
-    """
-
-    await service.delete_family(family_id=family_id)
-    return None
+    """Удалить объект семьи."""
+    await service.delete_family(family_id)
