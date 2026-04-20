@@ -5,8 +5,13 @@ from typing import Final
 
 class UnsetType:
     """
-    Sentinel для различия между "не передано" и "передано как None".
-    Используется в PATCH командах.
+    Sentinel-тип для PATCH-команд.
+
+    Различает два состояния:
+    - UNSET  → поле не было передано клиентом (не трогаем)
+    - None   → поле передано явно как null (сбрасываем значение)
+
+    Синглтон: все сравнения через `isinstance(v, UnsetType)`.
     """
 
     _instance: UnsetType | None = None

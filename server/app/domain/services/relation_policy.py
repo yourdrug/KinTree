@@ -5,7 +5,7 @@ from typing import Any
 from domain.entities.parent_child import ParentChildRelation
 from domain.entities.spouse import SpouseRelation, create_spouse_relation
 from domain.enums import MarriageStatus, RelationType
-from domain.exceptions import DomainRelationError
+from domain.exceptions import RelationDomainError
 
 
 class RelationPolicy:
@@ -49,7 +49,7 @@ class RelationPolicy:
         """Эта конкретная пара (parent, child) уже существует."""
         for rel in existing:
             if rel.parent_id == parent_id and rel.child_id == child_id:
-                raise DomainRelationError(
+                raise RelationDomainError(
                     message="Связь уже существует",
                     errors={"relation": "Эта родительская связь уже добавлена."},
                 )
@@ -63,7 +63,7 @@ class RelationPolicy:
         """Нельзя одновременно быть родителем и супругом одного человека."""
         for rel in spouse_relations:
             if rel.involves(person_a) and rel.involves(person_b):
-                raise DomainRelationError(
+                raise RelationDomainError(
                     message="Ошибка валидации",
                     errors={"relation": ("Нельзя добавить родительскую связь: эти люди уже состоят в браке.")},
                 )
@@ -84,7 +84,7 @@ class RelationPolicy:
         bio_parents = [r for r in existing if r.child_id == child_id and r.relation_type == RelationType.BIOLOGICAL]
 
         if len(bio_parents) >= 2:
-            raise DomainRelationError(
+            raise RelationDomainError(
                 message="Ошибка валидации",
                 errors={"relation": ("У ребёнка уже есть 2 биологических родителя. Используйте тип ADOPTED или STEP.")},
             )
@@ -124,12 +124,12 @@ class RelationPolicy:
         for rel in existing:
             if rel.involves(person_a) and rel.involves(person_b):
                 if rel.is_active():
-                    raise DomainRelationError(
+                    raise RelationDomainError(
                         message="Связь уже существует",
                         errors={"relation": "Эти люди уже состоят в браке."},
                     )
                 else:
-                    raise DomainRelationError(
+                    raise RelationDomainError(
                         message="Связь уже существует",
                         errors={
                             "relation": (
@@ -149,7 +149,7 @@ class RelationPolicy:
         """Нельзя быть одновременно родителем и супругом."""
         for rel in parent_relations:
             if rel.involves(person_a) and rel.involves(person_b):
-                raise DomainRelationError(
+                raise RelationDomainError(
                     message="Ошибка валидации",
                     errors={
                         "relation": (

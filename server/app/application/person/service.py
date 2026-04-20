@@ -1,156 +1,157 @@
+"""
+application/person/service.py
+
+Application-сервис для агрегата Person.
+
+Принципы:
+- Сервис не наследует BaseService — получает зависимости явно через __init__.
+- Работает через UnitOfWork, не через RepositoryFacade.
+- Бизнес-логика сборки агрегата инкапсулирована в _load_family_with_members().
+- PATCH применяется через функцию _apply_patch() — чисто, без магии.
+- Все публичные методы — use case'ы: одна операция = один метод.
+"""
+
+from __future__ import annotations
+
 from typing import Any
 
 from domain.entities.family import Family
-from domain.entities.person import Person
+from domain.entities.person import Person, create_person
 from domain.filters.base import BaseFilterSpec
-from domain.repositories.person import PersonPage
+from domain.repositories.person import Page
+from domain.value_objects.name import PersonName
 from domain.value_objects.unset import UnsetType
-from infrastructure.common.services import BaseService
 
-from application.person.dto import PatchPersonCommand, PutPersonCommand
+from application.person.commands import CreatePersonCommand, PatchPersonCommand, UpdatePersonCommand
+from application.uow_factory import UoWFactory
 
 
-class PersonService(BaseService):
+class PersonService:
+    """
+    Application-сервис: управление агрегатом Person.
+
+    Получает UoWFactory — фабрику Unit of Work.
+    Каждый use case создаёт свой UoW (и транзакцию) через фабрику.
+    """
+
+    def __init__(self, uow_factory: UoWFactory) -> None:
+        self._uow_factory = uow_factory
+
+    # ── Запросы ──────────────────────────────────────────────────────────────
+
     async def get_person(self, person_id: str) -> Person:
-        async with self.uow:
-            person: Person = await self.repository_facade.person_repository.get_by_id(
-                person_id=person_id,
+        async with self._uow_factory.create(master=False) as uow:
+            return await uow.persons.get_by_id(person_id)
+
+    async def list_persons(self, spec: BaseFilterSpec) -> Page[Person]:
+        async with self._uow_factory.create(master=False) as uow:
+            return await uow.persons.list(spec)
+
+    # ── Команды ──────────────────────────────────────────────────────────────
+
+    async def create_person(self, command: CreatePersonCommand) -> Person:
+        async with self._uow_factory.create(master=True) as uow:
+            family = await self._load_family_with_members(uow, command.family_id)
+
+            person = create_person(
+                gender=command.gender,
+                family_id=command.family_id,
+                first_name=command.first_name,
+                last_name=command.last_name,
+                birth_date=command.birth_date,
+                death_date=command.death_date,
+                birth_date_raw=command.birth_date_raw,
+                death_date_raw=command.death_date_raw,
             )
 
-            return person
-
-    async def get_persons_list(
-        self,
-        filters: BaseFilterSpec,
-    ) -> PersonPage:
-        async with self.uow:
-            return await self.repository_facade.person_repository.get_list(
-                filters=filters,
-            )
-
-    async def create_person(self, person: Person) -> Person:
-        async with self.uow:
-            family = await self._load_family_aggregate(person.family_id)
+            # Доменный инвариант: семья разрешает добавление
             family.assert_can_add_member(person)
 
-            created_person: Person = await self.repository_facade.person_repository.create(
-                person=person,
-            )
+            return await uow.persons.save(person)
 
-            return created_person
+    async def update_person(self, command: UpdatePersonCommand) -> Person:
+        async with self._uow_factory.create(master=True) as uow:
+            existing = await uow.persons.get_by_id(command.person_id)
 
-    async def update_person(self, command: PutPersonCommand) -> Person:
-        async with self.uow:
-            existing = await self.repository_facade.person_repository.get_by_id(
-                person_id=command.person_id,
-            )
-
-            person: Person = self._apply_put_person(command=command, existing=existing)
-
-            family = await self._load_family_aggregate(
+            updated = Person(
+                id=existing.id,
                 family_id=existing.family_id,
-                exclude_person_id=existing.id,  # исключаем самого себя
-            )
-            family.assert_can_add_member(person)
-
-            updated_person: Person = await self.repository_facade.person_repository.update(
-                person=person,
-            )
-
-            return updated_person
-
-    async def patch_update_person(self, command: PatchPersonCommand) -> Person:
-        async with self.uow:
-            existing = await self.repository_facade.person_repository.get_by_id(
-                person_id=command.person_id,
+                name=PersonName(first_name=command.first_name, last_name=command.last_name),
+                gender=command.gender,
+                birth_date=command.birth_date,
+                death_date=command.death_date,
+                birth_date_raw=command.birth_date_raw,
+                death_date_raw=command.death_date_raw,
             )
 
-            updated_person: Person = self._apply_patch_update(
-                command=command,
-                existing=existing,
-            )
+            family = await self._load_family_with_members(uow, existing.family_id, exclude_id=existing.id)
+            family.assert_can_add_member(updated)
 
-            if self._patch_affects_identity(command):
-                family = await self._load_family_aggregate(
-                    family_id=existing.family_id,
-                    exclude_person_id=existing.id,
-                )
-                family.assert_can_add_member(updated_person)
+            return await uow.persons.save(updated)
 
-            return await self.repository_facade.person_repository.update(
-                person=updated_person,
-            )
+    async def patch_person(self, command: PatchPersonCommand) -> Person:
+        async with self._uow_factory.create(master=True) as uow:
+            existing = await uow.persons.get_by_id(command.person_id)
+            updated = _apply_patch(command, existing)
+
+            if _patch_affects_identity(command):
+                family = await self._load_family_with_members(uow, existing.family_id, exclude_id=existing.id)
+                family.assert_can_add_member(updated)
+
+            return await uow.persons.save(updated)
 
     async def delete_person(self, person_id: str) -> None:
-        async with self.uow:
-            await self.repository_facade.person_repository.delete(
-                person_id=person_id,
-            )
+        async with self._uow_factory.create(master=True) as uow:
+            await uow.persons.remove(person_id)
 
-            return None
-
-    async def _load_family_aggregate(
-        self,
-        family_id: str,
-        exclude_person_id: str | None = None,
-    ) -> Family:
-        """
-        Собирает агрегат Family с текущими членами.
-        exclude_person_id — исключает конкретного человека из списка
-        (нужно при update, чтобы не сравнивать запись саму с собой).
-        """
-        members = await self.repository_facade.person_repository.get_persons_by_family(
-            family_id=family_id,
-        )
-
-        if exclude_person_id:
-            members = [m for m in members if m.id != exclude_person_id]
-
-        family: Family = await self.repository_facade.family_repository.get_by_id(
-            family_id=family_id,
-        )
-
-        family.members = members
-        return family
+    # ── Приватные хелперы ─────────────────────────────────────────────────────
 
     @staticmethod
-    def _patch_affects_identity(command: PatchPersonCommand) -> bool:
-        identity_fields = {"first_name", "last_name", "birth_date"}
+    async def _load_family_with_members(
+        uow: Any,
+        family_id: str,
+        exclude_id: str | None = None,
+    ) -> Family:
+        """
+        Загружает агрегат Family вместе со списком членов.
+        exclude_id — исключает конкретного члена (при update, чтобы не сравнивать с собой).
+        """
+        family = await uow.families.get_by_id(family_id)
+        members = await uow.persons.find_by_family(family_id)
+        family.members = [m for m in members if m.id != exclude_id] if exclude_id else members
+        return family
 
-        # Поля, которые реально переданы в команде (не UNSET)
-        provided_fields = {
-            field for field in command.__dataclass_fields__ if not isinstance(getattr(command, field), UnsetType)
-        }
 
-        return bool(identity_fields & provided_fields)
+# ── Чистые функции для патча ──────────────────────────────────────────────────
 
-    def _apply_patch_update(self, command: PatchPersonCommand, existing: Person) -> Person:
-        def resolve(command_value: object, existing_value: object) -> Any:
-            if isinstance(command_value, UnsetType):
-                return existing_value  # не трогаем
-            return command_value  # берём из команды (даже если None)
 
-        return Person(
-            id=existing.id,
-            family_id=existing.family_id,
-            first_name=resolve(command.first_name, existing.first_name),
-            last_name=resolve(command.last_name, existing.last_name),
-            gender=resolve(command.gender, existing.gender),
-            birth_date=resolve(command.birth_date, existing.birth_date),
-            death_date=resolve(command.death_date, existing.death_date),
-            birth_date_raw=resolve(command.birth_date_raw, existing.birth_date_raw),
-            death_date_raw=resolve(command.death_date_raw, existing.death_date_raw),
-        )
+def _resolve(new: Any, old: Any) -> Any:
+    """Если new = UNSET — берём старое значение, иначе новое (даже если None)."""
+    return old if isinstance(new, UnsetType) else new
 
-    def _apply_put_person(self, command: PutPersonCommand, existing: Person) -> Person:
-        return Person(
-            id=existing.id,
-            family_id=existing.family_id,
-            first_name=command.first_name,
-            last_name=command.last_name,
-            gender=command.gender,
-            birth_date=command.birth_date,
-            death_date=command.death_date,
-            birth_date_raw=command.birth_date_raw,
-            death_date_raw=command.death_date_raw,
-        )
+
+def _apply_patch(command: PatchPersonCommand, existing: Person) -> Person:
+    """
+    Применяет PATCH-команду к существующей персоне.
+    Возвращает новый объект Person (existing не мутируется).
+    """
+    first_name = _resolve(command.first_name, existing.first_name)
+    last_name = _resolve(command.last_name, existing.last_name)
+
+    return Person(
+        id=existing.id,
+        family_id=existing.family_id,
+        name=PersonName(first_name=first_name, last_name=last_name),
+        gender=_resolve(command.gender, existing.gender),
+        birth_date=_resolve(command.birth_date, existing.birth_date),
+        death_date=_resolve(command.death_date, existing.death_date),
+        birth_date_raw=_resolve(command.birth_date_raw, existing.birth_date_raw),
+        death_date_raw=_resolve(command.death_date_raw, existing.death_date_raw),
+    )
+
+
+def _patch_affects_identity(command: PatchPersonCommand) -> bool:
+    """Патч затрагивает поля, влияющие на уникальность в семье."""
+    identity_fields = {"first_name", "last_name", "birth_date"}
+    provided = {f for f in command.__dataclass_fields__ if not isinstance(getattr(command, f), UnsetType)}
+    return bool(identity_fields & provided)

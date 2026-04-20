@@ -7,7 +7,7 @@ from domain.entities.account import Account
 from fastapi import APIRouter, Body, Depends, status
 
 from api.dependencies.auth_dependencies import get_current_account, get_current_account_id
-from api.dependencies.base_dependencies import get_service
+from api.dependencies.dependencies import get_auth_service
 from api.schemas.auth import (
     AccountResponse,
     LoginRequest,
@@ -23,7 +23,7 @@ router: APIRouter = APIRouter(prefix="/auth", tags=["Auth"])
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(
     payload: RegisterRequest = Body(...),
-    service: AuthService = Depends(get_service(AuthService, master=True)),
+    service: AuthService = Depends(get_auth_service),
 ) -> AccountResponse:
     account = await service.register(payload.to_command())
     return AccountResponse(
@@ -39,7 +39,7 @@ async def register(
 @router.post("/login", status_code=status.HTTP_200_OK)
 async def login(
     payload: LoginRequest = Body(...),
-    service: AuthService = Depends(get_service(AuthService, master=True)),
+    service: AuthService = Depends(get_auth_service),
 ) -> TokenResponse:
     token_pair = await service.login(payload.to_command())
     return TokenResponse(
@@ -53,7 +53,7 @@ async def login(
 @router.post("/refresh", status_code=status.HTTP_200_OK)
 async def refresh(
     payload: RefreshRequest = Body(...),
-    service: AuthService = Depends(get_service(AuthService, master=True)),
+    service: AuthService = Depends(get_auth_service),
 ) -> TokenResponse:
     token_pair = await service.refresh(payload.refresh_token)
     return TokenResponse(
@@ -67,7 +67,7 @@ async def refresh(
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
     account_id: str = Depends(get_current_account_id),
-    service: AuthService = Depends(get_service(AuthService, master=True)),
+    service: AuthService = Depends(get_auth_service),
 ) -> None:
     await service.logout(account_id=account_id)
 

@@ -1,75 +1,96 @@
-from domain.entities.person import Person as DomainPerson
+"""
+infrastructure/person/repositories.py
+
+Реализация репозитория Person через SQLAlchemy.
+
+Принципы:
+- Реализует Protocol PersonRepository — структурное соответствие.
+- Знает о ORM-моделях и маппере, не знает о доменной логике.
+- save() = upsert: если id существует — UPDATE, иначе INSERT.
+- get_by_id() бросает NotFoundError (доменное исключение), не sqlalchemy.exc.
+- Пагинация и фильтрация делегируются FilterTranslator.
+"""
+
+from __future__ import annotations
+
+from domain.entities.person import Person
+from domain.exceptions import NotFoundError
 from domain.filters.base import BaseFilterSpec
-from domain.repositories.person import AbstractPersonRepository, PersonPage
-from sqlalchemy import Delete, Insert, Sequence, Update, delete, insert, select, update
+from domain.repositories.person import Page
+from sqlalchemy import delete, exists, func, insert, select, update
 from sqlalchemy.engine.result import Result
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
-from infrastructure.common.repositories import BaseRepository
+from infrastructure.db.filters.translator import FilterTranslator
 from infrastructure.db.models.person import Person as ORMPerson
 from infrastructure.person.filters import person_filter_translator
-from infrastructure.person.person_mapper import PersonORMMapper
+from infrastructure.person.mapper import PersonMapper
 
 
-class PersonRepository(BaseRepository, AbstractPersonRepository):
-    async def exists(self, object_id: str) -> bool:
-        return await self._check_exists(object_id=object_id, model=ORMPerson)
+class PersonRepositoryImpl:
+    """
+    SQLAlchemy-реализация репозитория Person.
 
-    async def get_by_id(self, person_id: str) -> DomainPerson:
-        statement: Select = select(ORMPerson).where(ORMPerson.id == person_id)
-        result: Result = await self.session.execute(statement)
-        person: ORMPerson = result.scalar_one()
+    Следует Protocol PersonRepository — явное наследование не нужно.
+    """
 
-        return PersonORMMapper.to_domain(person)
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._translator: FilterTranslator = person_filter_translator
+        self._mapper = PersonMapper()
 
-    async def get_list(
-        self,
-        filters: BaseFilterSpec,
-    ) -> PersonPage:
-        statement: Select = select(ORMPerson)
+    async def get_by_id(self, person_id: str) -> Person:
+        stmt = select(ORMPerson).where(ORMPerson.id == person_id)
+        result: Result = await self._session.execute(stmt)
+        orm = result.scalar_one_or_none()
+        if orm is None:
+            raise NotFoundError(resource="Person", resource_id=person_id)
+        return self._mapper.to_domain(orm)
 
-        statement = person_filter_translator.apply(statement, filters)
-        total = await self._get_count(statement)
-        statement = person_filter_translator.apply_pagination(statement, filters)
+    async def find_by_family(self, family_id: str) -> list[Person]:
+        stmt = select(ORMPerson).where(ORMPerson.family_id == family_id)
+        result: Result = await self._session.execute(stmt)
+        return [self._mapper.to_domain(row) for row in result.scalars().all()]
 
-        result: Result = await self.session.execute(statement)
-        persons = [PersonORMMapper.to_domain(p) for p in result.scalars().all()]
+    async def list(self, spec: BaseFilterSpec) -> Page[Person]:
+        stmt: Select = select(ORMPerson)
+        stmt = self._translator.apply(stmt, spec)
+        total = await self._get_count(stmt)
+        stmt = self._translator.apply_pagination(stmt, spec)
 
-        return PersonPage(
-            result=persons,
-            total=total,
-            limit=filters.limit,
-            offset=filters.offset,
-        )
+        result: Result = await self._session.execute(stmt)
+        persons = [self._mapper.to_domain(row) for row in result.scalars().all()]
 
-    async def get_persons_by_family(self, family_id: str) -> list[DomainPerson]:
-        """Возвращает всех членов семьи (для проверки инвариантов агрегата)."""
-        statement: Select = select(ORMPerson).where(ORMPerson.family_id == family_id)
-        result: Result = await self.session.execute(statement)
-        orm_persons: Sequence[ORMPerson] = result.scalars().all()
+        return Page(result=persons, total=total, limit=spec.limit, offset=spec.offset)
 
-        return [PersonORMMapper.to_domain(person) for person in orm_persons]
+    async def save(self, person: Person) -> Person:
+        """
+        Upsert: INSERT если новый, UPDATE если существует.
+        Определяем по exists() — избегаем ошибок при ON CONFLICT.
+        """
+        data = self._mapper.to_persistence(person)
+        already_exists = await self.exists(person.id)
 
-    async def create(self, person: DomainPerson) -> DomainPerson:
-        data = PersonORMMapper.to_persistence(person)
+        if already_exists:
+            stmt = update(ORMPerson).where(ORMPerson.id == person.id).values(**data).returning(ORMPerson)
+        else:
+            stmt = insert(ORMPerson).values(**data).returning(ORMPerson)
 
-        statement: Insert = insert(ORMPerson).values(**data).returning(ORMPerson)
-        result: Result = await self.session.execute(statement)
-        orm_person: ORMPerson = result.scalar_one()
+        result: Result = await self._session.execute(stmt)
+        orm = result.scalar_one()
+        return self._mapper.to_domain(orm)
 
-        return PersonORMMapper.to_domain(orm_person)
+    async def remove(self, person_id: str) -> None:
+        stmt = delete(ORMPerson).where(ORMPerson.id == person_id)
+        await self._session.execute(stmt)
 
-    async def update(self, person: DomainPerson) -> DomainPerson:
-        data = PersonORMMapper.to_persistence(person)
+    async def exists(self, person_id: str) -> bool:
+        stmt = select(exists().where(ORMPerson.id == person_id))
+        result: Result = await self._session.execute(stmt)
+        return result.scalar() or False
 
-        statement: Update = update(ORMPerson).where(ORMPerson.id == person.id).values(**data).returning(ORMPerson)
-        result: Result = await self.session.execute(statement)
-        orm_person: ORMPerson = result.scalar_one()
-
-        return PersonORMMapper.to_domain(orm_person)
-
-    async def delete(self, person_id: str) -> None:
-        statement: Delete = delete(ORMPerson).where(ORMPerson.id == person_id)
-        await self.session.execute(statement)
-
-        return None
+    async def _get_count(self, filtered_stmt: Select) -> int:
+        count_stmt = select(func.count()).select_from(filtered_stmt.subquery())
+        result: Result = await self._session.execute(count_stmt)
+        return result.scalar_one()

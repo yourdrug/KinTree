@@ -3,17 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from application.family.dto import CreateFamilyCommand, PatchFamilyCommand, PutFamilyCommand
+from application.family.commands import CreateFamilyCommand, PatchFamilyCommand, PutFamilyCommand
 from domain.entities.family import Family
-from domain.exceptions import FilterError
+from domain.exceptions import FilterValidationError
 from domain.filters.base import SortDirection, SortField
-from domain.filters.page import FamilyPage
+from domain.filters.page import Page
 from domain.filters.specs import FamilyFilterSpec
 from domain.value_objects.unset import UNSET
 from fastapi import Query, Request
 from pydantic import BaseModel, Field
 
-from api.schemas.base import BasePageMeta, BasePaginationParams, BasePatchSchema
+from api.schemas.base import BasePageResponse, BasePaginationParams, BasePatchSchema
 
 
 class CreateFamilyRequest(BaseModel):
@@ -105,11 +105,11 @@ class FamilyResponse(BaseModel):
         )
 
 
-class FamilyPageResponse(BasePageMeta):
+class FamilyPageResponse(BasePageResponse):
     result: list[FamilyResponse]
 
     @classmethod
-    def from_domain(cls, page: FamilyPage, request: Request) -> FamilyPageResponse:
+    def from_domain(cls, page: Page[Family], request: Request) -> FamilyPageResponse:
         meta = cls._build_meta(
             total=page.total,
             limit=page.limit,
@@ -163,7 +163,7 @@ class FamilyFilterSchema(BasePaginationParams):
             and self.founded_year__lte is not None
             and self.founded_year__gte > self.founded_year__lte
         ):
-            raise FilterError(
+            raise FilterValidationError(
                 message="Ошибка валидации",
                 errors={"founded_year__gte": "founded_year__gte не может быть больше founded_year__lte"},
             )

@@ -1,222 +1,118 @@
-from collections.abc import Callable
-from functools import wraps
+"""
+api/exception_handlers.py
+
+Единый обработчик исключений для FastAPI.
+
+Принципы:
+- Один маппинг exception_type → status_code, не разбросан по нескольким функциям.
+- Все доменные исключения имеют единый интерфейс as_dict() — нет дублирования.
+- handle_domain_exception() — центральный обработчик клиентских ошибок.
+- Неожиданные ошибки логируются с exc_info и возвращают 500.
+"""
+
+from __future__ import annotations
+
 from logging import Logger, getLogger
-from typing import Any
 
 from domain.exceptions import (
-    AccountAlreadyExistsError,
     AccountBlockedError,
     AuthenticationError,
-    BaseDomainError,
     ClientException,
-    DatabaseInteractionError,
-    DomainFamilyError,
-    DomainPersonError,
-    FilterError,
-    NotFoundValidationError,
+    ConflictError,
+    DatabaseError,
+    DomainValidationError,
+    FamilyDomainError,
+    FilterValidationError,
+    NotFoundError,
+    PermissionDeniedError,
+    PersonDomainError,
+    RelationDomainError,
     ServerException,
 )
-from fastapi import status
-from fastapi.exceptions import (
-    HTTPException,
-    RequestValidationError,
-)
+from fastapi import FastAPI, status
+from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse
-
-from api.schemas.base import HTTPExceptionSchema
 
 
 logger: Logger = getLogger("default")
 
 
-def handle_exceptions(
-    func: Callable,
-) -> Callable:
-    """
-    handle_exceptions: Decorator for handling exceptions.
+# ── Маппинг исключений → HTTP-коды ───────────────────────────────────────────
 
-    Args:
-        func (Callable): Function to be decorated.
+_CLIENT_STATUS_MAP: dict[type[ClientException], int] = {
+    DomainValidationError: status.HTTP_400_BAD_REQUEST,
+    PersonDomainError: status.HTTP_400_BAD_REQUEST,
+    FamilyDomainError: status.HTTP_400_BAD_REQUEST,
+    RelationDomainError: status.HTTP_400_BAD_REQUEST,
+    AuthenticationError: status.HTTP_401_UNAUTHORIZED,
+    PermissionDeniedError: status.HTTP_403_FORBIDDEN,
+    AccountBlockedError: status.HTTP_403_FORBIDDEN,
+    NotFoundError: status.HTTP_404_NOT_FOUND,
+    ConflictError: status.HTTP_409_CONFLICT,
+    FilterValidationError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    ClientException: status.HTTP_400_BAD_REQUEST,  # fallback
+}
 
-    Returns:
-        Callable: Decorated function.
-    """
-
-    @wraps(func)
-    async def wrapper(
-        *args: Any,
-        **kwargs: Any,
-    ) -> Any:
-        """
-        wrapper: Wrapper for handling exceptions.
-
-        Args:
-            *args (Any): Any position arguments.
-            **kwargs (Any): Any keyword arguments.
-
-        Returns:
-            Any: Function result.
-        """
-
-        try:
-            return await func(*args, **kwargs)
-
-        except ClientException as exception:
-            message = f"Expected Client Exception in function <{func.__name__}> {exception.message}"
-
-            if exception.errors:
-                message += f" with: {exception.errors}"
-
-            logger.error(message)
-        except ServerException as exception:
-            message = f"Expected Server Exception in function <{func.__name__}> {exception.message}"
-
-            if exception.errors:
-                message += f" with: {exception.errors}"
-
-            logger.error(message)
-        except Exception as exception:
-            logger.error(f"Unexpected Exception in function <{func.__name__}> {exception}")
-
-    return wrapper
+_SERVER_STATUS_MAP: dict[type[ServerException], int] = {
+    DatabaseError: status.HTTP_500_INTERNAL_SERVER_ERROR,
+    ServerException: status.HTTP_500_INTERNAL_SERVER_ERROR,  # fallback
+}
 
 
-async def handle_fastapi_expected_server_exceptions(
-    request: Request,
-    exception: Exception,
-) -> JSONResponse:
-    """
-    handle_fastapi_expected_server_exceptions: Handles expected FastAPI server exceptions.
-
-    Args:
-        request (Request): FastAPI request.
-        exception (Exception): Expected server exception.
-
-    Returns:
-        JSONResponse: JSON response.
-    """
-
-    if not isinstance(request, Request):
-        raise exception
-
-    if not isinstance(exception, ServerException):
-        logger.critical(f"Internal Server Error {exception}", exc_info=True)
-
-        return JSONResponse(
-            content=HTTPExceptionSchema(message="Internal Server Error").model_dump(),
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-    exception_mapping: dict[type[ServerException], int] = {
-        ServerException: status.HTTP_500_INTERNAL_SERVER_ERROR,
-        DatabaseInteractionError: status.HTTP_500_INTERNAL_SERVER_ERROR,
-    }
-
-    status_code: int | None = exception_mapping.get(type(exception))
-
-    if not status_code:
-        logger.critical(f"Internal Server Error {exception}", exc_info=True)
-
-        return JSONResponse(
-            content=HTTPExceptionSchema(message="Internal Server Error").model_dump(),
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-    message = f"Expected Server Exception {exception.message}"
-
-    if exception.errors:
-        message += f" with: {exception.errors}"
-
-    logger.error(message)
-
-    return JSONResponse(
-        content=HTTPExceptionSchema(**exception.dict()).model_dump(),
-        status_code=status_code,
-    )
+def _json(data: dict, status_code: int) -> JSONResponse:
+    return JSONResponse(content=data, status_code=status_code)
 
 
-async def handle_fastapi_expected_client_exceptions(
-    request: Request,
-    exception: Exception,
-) -> JSONResponse:
-    """
-    handle_fastapi_expected_client_exceptions: Handles expected FastAPI client exceptions.
-
-    Args:
-        request (Request): FastAPI request.
-        exception (Exception): Expected client exception.
-
-    Returns:
-        JSONResponse: JSON response.
-    """
-
-    if not isinstance(request, Request):
-        raise exception
-
-    if not isinstance(exception, ClientException):
-        logger.critical(f"Internal Server Error {exception}", exc_info=True)
-
-        return JSONResponse(
-            content=HTTPExceptionSchema(message="Internal Server Error").model_dump(),
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-    exception_mapping: dict[type[ClientException], int] = {
-        ClientException: status.HTTP_400_BAD_REQUEST,
-        BaseDomainError: status.HTTP_400_BAD_REQUEST,
-        DomainPersonError: status.HTTP_400_BAD_REQUEST,
-        DomainFamilyError: status.HTTP_400_BAD_REQUEST,
-        AuthenticationError: status.HTTP_401_UNAUTHORIZED,
-        AccountBlockedError: status.HTTP_403_FORBIDDEN,
-        NotFoundValidationError: status.HTTP_404_NOT_FOUND,
-        AccountAlreadyExistsError: status.HTTP_409_CONFLICT,
-        FilterError: status.HTTP_422_UNPROCESSABLE_CONTENT,
-    }
-
-    status_code: int | None = exception_mapping.get(type(exception))
-
-    if not status_code:
-        logger.critical(f"Internal Server Error {exception}", exc_info=True)
-
-        return JSONResponse(
-            content=HTTPExceptionSchema(message="Internal Server Error").model_dump(),
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-    return JSONResponse(
-        content=HTTPExceptionSchema(**exception.dict()).model_dump(),
-        status_code=status_code,
-    )
+def _error(message: str, errors: dict | None = None) -> dict:
+    result: dict = {"message": message}
+    if errors:
+        result["errors"] = errors
+    return result
 
 
-async def handle_fastapi_validation_exceptions(
-    request: Request,
-    exception: Exception,
-) -> JSONResponse:
-    """
-    handle_fastapi_validation_exceptions: Handles FastAPI validation exceptions.
+# ── Handlers ──────────────────────────────────────────────────────────────────
 
-    Args:
-        request (Request): FastAPI request.
-        exception (Exception): Validation exception.
 
-    Returns:
-        JSONResponse: JSON response.
-    """
+async def handle_client_exception(request: Request, exc: Exception) -> JSONResponse:
+    """4xx — клиентские ошибки (доменные инварианты, авторизация, not found)."""
+    if not isinstance(exc, ClientException):
+        logger.error("Unexpected exception in client handler", exc_info=exc)
+        return _json(_error("Internal Server Error"), status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    if not isinstance(request, Request):
-        raise exception
+    status_code = status.HTTP_400_BAD_REQUEST
+    for exc_type, code in _CLIENT_STATUS_MAP.items():
+        if isinstance(exc, exc_type):
+            status_code = code
+            break
 
-    if not isinstance(exception, RequestValidationError):
-        logger.critical(f"Internal Server Error {exception}", exc_info=True)
+    return _json(exc.as_dict(), status_code)
 
-        return JSONResponse(
-            content=HTTPExceptionSchema(message="Internal Server Error").model_dump(),
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
 
-    messages: dict = {  # pydantic validation error messages in russian
+async def handle_server_exception(request: Request, exc: Exception) -> JSONResponse:
+    """5xx — серверные ошибки."""
+    if not isinstance(exc, ServerException):
+        logger.critical("Unexpected exception in server handler", exc_info=exc)
+        return _json(_error("Internal Server Error"), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    logger.error("Server exception: %s", exc, exc_info=True)
+
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    for exc_type, code in _SERVER_STATUS_MAP.items():
+        if isinstance(exc, exc_type):
+            status_code = code
+            break
+
+    return _json(exc.as_dict(), status_code)
+
+
+async def handle_validation_exception(request: Request, exc: Exception) -> JSONResponse:
+    """422 — ошибки валидации Pydantic (RequestValidationError)."""
+    if not isinstance(exc, RequestValidationError):
+        logger.critical("Unexpected exception in validation handler", exc_info=exc)
+        return _json(_error("Internal Server Error"), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    _MESSAGES = {
         "missing": "Обязательное поле",
         "extra_forbidden": "Запрещено добавлять лишние поля",
         "frozen_field": "Нельзя изменять это поле",
@@ -240,92 +136,49 @@ async def handle_fastapi_validation_exceptions(
     }
 
     errors: dict = {}
-
-    for error in exception.errors():
-        if "type" not in error or "loc" not in error or not len(error["loc"]) or "msg" not in error:
+    for error in exc.errors():
+        if "loc" not in error or not error["loc"]:
             continue
+        field = str(error["loc"][-1])
+        tmpl = _MESSAGES.get(error.get("type", ""), error.get("msg", "Ошибка"))
+        errors[field] = tmpl.format(**error.get("ctx", {}))
 
-        field: str = error["loc"][-1]
-        errors[field] = messages.get(error["type"], error["msg"]).format(**error.get("ctx", {}))
-
-    content: dict
-
-    if errors:
-        content = {"message": "Ошибка валидации", "errors": errors}
-    else:
-        content = {"message": "Ошибка валидации"}
-
-    return JSONResponse(
-        content=HTTPExceptionSchema(**content).model_dump(),
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-    )
+    content = _error("Ошибка валидации", errors) if errors else _error("Ошибка валидации")
+    return _json(content, status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
-async def handle_fastapi_unexpected_exceptions(
-    request: Request,
-    exception: Exception,
-) -> JSONResponse:
-    """
-    handle_fastapi_unexpected_exceptions: Handles unexpected FastAPI exceptions.
+async def handle_http_exception(request: Request, exc: Exception) -> JSONResponse:
+    """Обрабатывает стандартные FastAPI HTTPException."""
+    if not isinstance(exc, HTTPException):
+        logger.critical("Unexpected exception in http handler", exc_info=exc)
+        return _json(_error("Internal Server Error"), status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    Args:
-        request (Request): FastAPI request.
-        exception (Exception): Unexpected exception.
-
-    Returns:
-        JSONResponse: JSON response.
-    """
-
-    if not isinstance(request, Request):
-        raise exception
-
-    logger.error(f"Unexpected server exception {exception}", exc_info=True)
-
-    return JSONResponse(
-        content=HTTPExceptionSchema(message="Internal Server Error").model_dump(),
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-    )
-
-
-async def handle_fastapi_http_exceptions(
-    request: Request,
-    exception: Exception,
-) -> JSONResponse:
-    """
-    handle_fastapi_http_exceptions: Handles FastAPI HTTP exceptions.
-
-    Args:
-        request (Request): FastAPI request.
-        exception (Exception): HTTP exception.
-
-    Returns:
-        JSONResponse: JSON response.
-    """
-
-    if not isinstance(request, Request):
-        raise exception
-
-    if not isinstance(exception, HTTPException):
-        logger.critical(f"Internal Server Error {exception}", exc_info=True)
-
-        return JSONResponse(
-            content=HTTPExceptionSchema(message="Internal Server Error").dict(),
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
-    messages: dict = {  # fastapi http bearer exception messages in russian
+    _AUTH_MESSAGES = {
         "Not authenticated": "Не авторизован",
         "Invalid authentication credentials": "Неверные учетные данные",
     }
 
-    content: dict
-
-    if isinstance(exception.detail, dict):
-        content = {"message": f"{exception.detail}"}
+    if isinstance(exc.detail, dict):
+        content = _error(str(exc.detail))
     else:
-        content = {"message": messages.get(exception.detail, exception.detail)}
+        content = _error(_AUTH_MESSAGES.get(exc.detail, exc.detail))
 
-    return JSONResponse(
-        content=HTTPExceptionSchema(**content).model_dump(),
-        status_code=exception.status_code,
-    )
+    return _json(content, exc.status_code)
+
+
+async def handle_unexpected_exception(request: Request, exc: Exception) -> JSONResponse:
+    """Fallback для необработанных исключений."""
+    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    return _json(_error("Internal Server Error"), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def register_exception_handlers(app: FastAPI) -> None:
+    """
+    Регистрирует все обработчики в FastAPI-приложении.
+    Вызывается в create_app().
+    """
+    app.add_exception_handler(ServerException, handle_server_exception)
+    app.add_exception_handler(ClientException, handle_client_exception)
+    app.add_exception_handler(RequestValidationError, handle_validation_exception)
+    app.add_exception_handler(HTTPException, handle_http_exception)
+    app.add_exception_handler(Exception, handle_unexpected_exception)

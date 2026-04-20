@@ -1,8 +1,25 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+
+from domain.exceptions import DomainValidationError
 
 
 @dataclass(frozen=True)
 class PartialDate:
+    """
+    Value Object: неполная дата (год/месяц/день могут отсутствовать).
+
+    Примеры допустимых значений:
+    - PartialDate(year=1990)                  — только год
+    - PartialDate(year=1990, month=6)         — год и месяц
+    - PartialDate(year=1990, month=6, day=15) — полная дата
+    - PartialDate(month=6, day=15)            — без года (редко, но допустимо)
+
+    Недопустимо:
+    - PartialDate(day=15) без month
+    """
+
     year: int | None = None
     month: int | None = None
     day: int | None = None
@@ -20,22 +37,18 @@ class PartialDate:
         return self.year, self.month, self.day
 
     def _validate(self) -> None:
-        year, month, day = self.year, self.month, self.day
+        if self.month is not None and not (1 <= self.month <= 12):
+            raise DomainValidationError(field="month", message="Месяц должен быть от 1 до 12.")
 
-        # (optional)
-        # if month is not None and year is None:
-        #     raise ValueError("Year must be provided if month is set")
-
-        if month is not None and not (1 <= month <= 12):
-            raise ValueError("Month must be between 1 and 12")
-
-        if day is not None:
-            if month is None:
-                raise ValueError("Month must be provided if day is set")
-
-            max_day = self._days_in_month(year, month)
-            if not (1 <= day <= max_day):
-                raise ValueError(f"Day must be between 1 and {max_day} for month {month}")
+        if self.day is not None:
+            if self.month is None:
+                raise DomainValidationError(field="day", message="День нельзя указать без месяца.")
+            max_day = self._days_in_month(self.year, self.month)
+            if not (1 <= self.day <= max_day):
+                raise DomainValidationError(
+                    field="day",
+                    message=f"День должен быть от 1 до {max_day} для месяца {self.month}.",
+                )
 
     @staticmethod
     def _days_in_month(year: int | None, month: int) -> int:
@@ -43,12 +56,11 @@ class PartialDate:
             return 31
         if month in {4, 6, 9, 11}:
             return 30
-
-        # February
-        if year is not None and PartialDate._is_leap_year(year):
+        # Февраль
+        if year is not None and PartialDate._is_leap(year):
             return 29
         return 28
 
     @staticmethod
-    def _is_leap_year(year: int) -> bool:
+    def _is_leap(year: int) -> bool:
         return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)

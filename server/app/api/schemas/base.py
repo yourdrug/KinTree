@@ -1,82 +1,66 @@
+"""
+api/schemas/base.py
+
+Базовые Pydantic-схемы, которые наследуются во всём API.
+
+Принципы:
+- BasePageResponse — общий формат пагинированного ответа.
+- BasePaginationParams — общие query-параметры limit/offset.
+- BasePatchSchema — защита non-nullable полей от явной передачи null.
+- ErrorResponse — стандартный формат ошибки.
+"""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Annotated, Any, ClassVar
 from urllib.parse import urlencode
 
-from domain.exceptions import BaseDomainError
+from domain.exceptions import DomainValidationError
 from fastapi import Query
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 
-class Schema(BaseModel):
-    """
-    Schema: Base schema with common configuration for all models.
-    Provides default Pydantic configuration inherited by all other schemas.
-    """
+class ErrorResponse(BaseModel):
+    """Стандартный формат ошибки в API."""
 
-    model_config: ClassVar[ConfigDict] = ConfigDict(
-        strict=False,  # Disables strict type checking for more flexible validation.
-        frozen=True,  # Makes models immutable after creation.
-        extra="ignore",  # Controls handling of extra fields ('ignore' to silently exclude).
-        from_attributes=True,  # Enables ORM mode for model instantiation from objects.
-    )
-
-
-class HTTPExceptionSchema(Schema):
-    """
-    HTTPExceptionSchema: Standard format for API error responses.
-    """
-
-    message: str = Field(
-        min_length=1,
-        max_length=4096,
-        description="Main error message",
-        examples=["Something went wrong"],
-    )
-
-    errors: dict[Any, Any] | None = Field(
-        default=None,
-        description="Field-specific error messages (key=field name, value=error message)",
-        examples=[{"email": "Must be unique"}],
-    )
+    message: str = Field(description="Сообщение об ошибке")
+    errors: dict[str, Any] | None = Field(default=None, description="Детали по полям")
 
 
 class BasePatchSchema(BaseModel):
+    """
+    Базовая схема для PATCH-запросов.
+
+    non_nullable — список полей, которые нельзя передать как null.
+    Например: gender не может быть null, но может быть не передан.
+    """
+
     non_nullable: ClassVar[list[str]] = []
 
     @model_validator(mode="before")
     @classmethod
-    def validate_non_nullable_fields(cls, data: Any) -> Any:
+    def validate_non_nullable(cls, data: Any) -> Any:
         errors = {}
         for field in cls.non_nullable:
             if field in data and data[field] is None:
                 errors[field] = "Не может быть null"
 
         if errors:
-            raise BaseDomainError(message="Ошибка валидации", errors=errors)
-
+            raise DomainValidationError(message="Ошибка валидации", errors=errors)
         return data
 
 
 @dataclass
 class BasePaginationParams:
-    """
-    Базовые параметры пагинации.
+    """Базовые параметры пагинации для Filter-схем."""
 
-    Наследуется всеми фильтр-схемами.
-    dataclass + Annotated[T, Query(...)] — FastAPI читает поля
-    как query-параметры, не как request body.
-    """
-
-    limit: Annotated[int, Query(ge=1, le=100, description="Количество записей на странице")] = 20
+    limit: Annotated[int, Query(ge=1, le=100, description="Записей на странице")] = 20
     offset: Annotated[int, Query(ge=0, description="Смещение")] = 0
 
 
-class BasePageMeta(BaseModel):
-    """
-    Мета-информация о странице.
-    Выносим отдельно, чтобы конкретные Page-схемы
-    могли наследовать только мету без поля result.
-    """
+class BasePageResponse(BaseModel):
+    """Мета-информация о странице. Наследуется конкретными Page-ответами."""
 
     total: int = Field(ge=0)
     limit: int = Field(ge=1)
@@ -97,31 +81,13 @@ class BasePageMeta(BaseModel):
         base_url: str,
         query_params: Any,
     ) -> dict[str, Any]:
-        """
-        Вычисляет мета-поля страницы.
-        Используется наследниками в их методе from_domain().
-        """
         total_pages = max(1, (total + limit - 1) // limit) if limit > 0 else 0
         has_next = offset + limit < total
         has_prev = offset > 0
 
-        next_url = None
-        if has_next:
-            next_url = cls._make_url(
-                base_url=base_url,
-                query_params=query_params,
-                limit=limit,
-                new_offset=offset + limit,
-            )
-
-        prev_url = None
-        if has_prev:
-            prev_url = cls._make_url(
-                base_url=base_url,
-                query_params=query_params,
-                limit=limit,
-                new_offset=max(0, offset - limit),
-            )
+        def make_url(new_offset: int) -> str:
+            params = {**dict(query_params), "limit": limit, "offset": new_offset}
+            return f"{base_url}?{urlencode(params)}"
 
         return {
             "total": total,
@@ -130,16 +96,6 @@ class BasePageMeta(BaseModel):
             "total_pages": total_pages,
             "has_next": has_next,
             "has_prev": has_prev,
-            "next_url": next_url,
-            "prev_url": prev_url,
+            "next_url": make_url(offset + limit) if has_next else None,
+            "prev_url": make_url(max(0, offset - limit)) if has_prev else None,
         }
-
-    @staticmethod
-    def _make_url(
-        base_url: str,
-        query_params: Any,
-        limit: int,
-        new_offset: int,
-    ) -> str:
-        params = {**dict(query_params), "limit": limit, "offset": new_offset}
-        return f"{base_url}?{urlencode(params)}"

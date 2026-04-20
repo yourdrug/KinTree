@@ -1,5 +1,5 @@
 """
-application/auth/dto.py
+application/auth/commands.py
 """
 
 from dataclasses import dataclass

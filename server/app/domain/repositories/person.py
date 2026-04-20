@@ -1,60 +1,54 @@
+"""
+domain/repositories/person.py
+
+Контракт репозитория Person.
+
+Принципы:
+- Только протокол (Protocol), без ABC наследования — убирает лишнюю связность.
+- Репозиторий работает исключительно с доменными типами.
+- Возвращает Page[Person] — обобщённый тип, не зависящий от ORM.
+- Методы говорят на языке домена: get_by_id, find_by_family, save, remove.
+"""
+
 from __future__ import annotations
 
-from abc import abstractmethod
+from typing import Protocol
 
 from domain.entities.person import Person
 from domain.filters.base import BaseFilterSpec
-from domain.filters.page import PersonPage
-from domain.repositories.base import AbstractRepository
+from domain.filters.page import Page
 
 
-class AbstractPersonRepository(AbstractRepository):
+class PersonRepository(Protocol):
     """
     Контракт репозитория персон.
 
-    Живёт в домене — сервис зависит только от этого интерфейса,
-    не от конкретной реализации с SQLAlchemy.
+    Protocol вместо ABC:
+    - Нет обязательного наследования.
+    - Реализация проверяется структурно (duck typing + mypy).
+    - Легко мокировать в тестах.
     """
 
-    @abstractmethod
-    async def exists(self, object_id: str) -> bool:
-        """Проверяет существование объекта по ID."""
-        raise NotImplementedError
-
-    @abstractmethod
     async def get_by_id(self, person_id: str) -> Person:
-        """
-        Возвращает персону по ID.
-        Бросает PersonNotFoundError если не найдена.
-        """
-        raise NotImplementedError
+        """Возвращает персону или бросает NotFoundError."""
+        ...
 
-    # TODO get_by_id_or_None
+    async def find_by_family(self, family_id: str) -> list[Person]:
+        """Все персоны семьи — используется для проверки инвариантов агрегата."""
+        ...
 
-    @abstractmethod
-    async def get_list(
-        self,
-        filters: BaseFilterSpec,
-    ) -> PersonPage:
-        """Возвращает список персон с фильтрацией и пагинацией."""
-        raise NotImplementedError
+    async def list(self, spec: BaseFilterSpec) -> Page[Person]:
+        """Список с фильтрацией и пагинацией."""
+        ...
 
-    @abstractmethod
-    async def create(self, person: Person) -> Person:
-        """Создаёт персону и возвращает её с заполненными полями из БД."""
-        raise NotImplementedError
+    async def save(self, person: Person) -> Person:
+        """Создать или обновить. Возвращает сохранённый объект."""
+        ...
 
-    @abstractmethod
-    async def get_persons_by_family(self, family_id: str) -> list[Person]:
-        """Создаёт персону и возвращает её с заполненными полями из БД."""
-        raise NotImplementedError
+    async def remove(self, person_id: str) -> None:
+        """Удалить по ID."""
+        ...
 
-    @abstractmethod
-    async def update(self, person: Person) -> Person:
-        """Обновляет персону целиком и возвращает обновлённую версию."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def delete(self, person_id: str) -> None:
-        """Удаляет персону по ID."""
-        raise NotImplementedError
+    async def exists(self, person_id: str) -> bool:
+        """Проверить существование."""
+        ...

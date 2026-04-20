@@ -1,5 +1,5 @@
 """
-infrastructure/account/account_mapper.py
+infrastructure/account/mapper.py
 """
 
 from domain.entities.account import Account as DomainAccount
@@ -7,9 +7,9 @@ from domain.entities.account import Account as DomainAccount
 from infrastructure.db.models.account import Account as ORMAccount
 
 
-class AccountORMMapper:
-    @staticmethod
+class AccountMapper:
     def to_domain(
+        self,
         model: ORMAccount,
         permissions: frozenset[str] = frozenset(),
         role_name: str = "user",
@@ -25,8 +25,7 @@ class AccountORMMapper:
             permissions=permissions,
         )
 
-    @staticmethod
-    def to_persistence(entity: DomainAccount) -> dict:
+    def to_persistence(self, entity: DomainAccount) -> dict:
         return {
             "id": entity.id,
             "email": entity.email,

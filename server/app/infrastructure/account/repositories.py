@@ -8,13 +8,12 @@ infrastructure/account/repositories.py
 from __future__ import annotations
 
 from domain.entities.account import Account as DomainAccount
-from domain.repositories.account import AbstractAccountRepository
-from sqlalchemy import select, update
+from sqlalchemy import exists, select, update
 from sqlalchemy.engine.result import Result
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from infrastructure.account.account_mapper import AccountORMMapper
-from infrastructure.common.repositories import BaseRepository
-from infrastructure.db.models.account import Account
+from infrastructure.account.mapper import AccountMapper
+from infrastructure.db.models.account import Account as ORMAccount
 from infrastructure.db.models.permission import (
     AccountRole,
     Permission,
@@ -23,38 +22,67 @@ from infrastructure.db.models.permission import (
 )
 
 
-class AccountRepository(BaseRepository, AbstractAccountRepository):
-    async def exists(self, object_id: str) -> bool:
-        return await self._check_exists(object_id=object_id, model=Account)
+class AccountRepositoryImpl:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._mapper = AccountMapper()
+
+    async def exists(self, account_id: str) -> bool:
+        stmt = select(exists().where(ORMAccount.id == account_id))
+        result: Result = await self._session.execute(stmt)
+        return result.scalar() or False
 
     async def get_by_id(self, account_id: str) -> DomainAccount:
-        result: Result = await self.session.execute(select(Account).where(Account.id == account_id))
-        account: Account = result.scalar_one()
+        result: Result = await self._session.execute(select(ORMAccount).where(ORMAccount.id == account_id))
+        account: ORMAccount = result.scalar_one()
         permissions = await self._load_permissions(account_id)
         role_name = await self._load_role_name(account_id)
-        return AccountORMMapper.to_domain(account, permissions=permissions, role_name=role_name)
+        return self._mapper.to_domain(account, permissions=permissions, role_name=role_name)
 
     async def get_by_email(self, email: str) -> DomainAccount | None:
-        result: Result = await self.session.execute(select(Account).where(Account.email == email))
-        account: Account | None = result.scalar_one_or_none()
+        result: Result = await self._session.execute(select(ORMAccount).where(ORMAccount.email == email))
+        account: ORMAccount | None = result.scalar_one_or_none()
         if account is None:
             return None
         permissions = await self._load_permissions(account.id)
         role_name = await self._load_role_name(account.id)
-        return AccountORMMapper.to_domain(account, permissions=permissions, role_name=role_name)
+        return self._mapper.to_domain(account, permissions=permissions, role_name=role_name)
+
+    async def save(self, account: DomainAccount) -> DomainAccount:
+        """Protocol alias: создать или обновить."""
+        if await self.exists(account.id):
+            # точечное обновление — только изменяемые поля
+            stmt = (
+                update(ORMAccount)
+                .where(ORMAccount.id == account.id)
+                .values(
+                    email=account.email,
+                    hashed_password=account.hashed_password,
+                    is_acc_blocked=account.is_acc_blocked,
+                    is_verified=account.is_verified,
+                    refresh_token=account.refresh_token,
+                )
+                .returning(ORMAccount)
+            )
+            result: Result = await self._session.execute(stmt)
+            orm_account: ORMAccount = result.scalar_one()
+            permissions = await self._load_permissions(orm_account.id)
+            role_name = await self._load_role_name(orm_account.id)
+            return self._mapper.to_domain(orm_account, permissions, role_name)
+        return await self.create(account)
 
     async def create(self, account: DomainAccount) -> DomainAccount:
         from sqlalchemy import insert as sa_insert
 
-        data = AccountORMMapper.to_persistence(account)
-        statement = sa_insert(Account).values(**data).returning(Account)
-        result: Result = await self.session.execute(statement)
-        orm_account: Account = result.scalar_one()
+        data = self._mapper.to_persistence(account)
+        statement = sa_insert(ORMAccount).values(**data).returning(ORMAccount)
+        result: Result = await self._session.execute(statement)
+        orm_account: ORMAccount = result.scalar_one()
 
         # Назначаем роль "user" при создании
         await self._assign_default_role(orm_account.id)
 
-        return AccountORMMapper.to_domain(
+        return self._mapper.to_domain(
             orm_account,
             permissions=frozenset(),  # новый аккаунт — загрузим при следующем запросе
             role_name="user",
@@ -65,14 +93,14 @@ class AccountRepository(BaseRepository, AbstractAccountRepository):
         account_id: str,
         hashed_refresh_token: str | None,
     ) -> None:
-        statement = update(Account).where(Account.id == account_id).values(refresh_token=hashed_refresh_token)
-        await self.session.execute(statement)
+        statement = update(ORMAccount).where(ORMAccount.id == account_id).values(refresh_token=hashed_refresh_token)
+        await self._session.execute(statement)
 
     # ── Private helpers ────────────────────────────────────────────────────
 
     async def _load_permissions(self, account_id: str) -> frozenset[str]:
         """Один JOIN-запрос для всех разрешений аккаунта."""
-        result = await self.session.execute(
+        result = await self._session.execute(
             select(Permission.codename)
             .join(RolePermission, RolePermission.permission_id == Permission.id)
             .join(Role, Role.id == RolePermission.role_id)
@@ -82,7 +110,7 @@ class AccountRepository(BaseRepository, AbstractAccountRepository):
         return frozenset(result.scalars().all())
 
     async def _load_role_name(self, account_id: str) -> str:
-        result = await self.session.execute(
+        result = await self._session.execute(
             select(Role.name)
             .join(AccountRole, AccountRole.role_id == Role.id)
             .where(AccountRole.account_id == account_id)
@@ -93,7 +121,7 @@ class AccountRepository(BaseRepository, AbstractAccountRepository):
         from domain.utils import generate_uuid
         from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-        role_result = await self.session.execute(select(Role).where(Role.name == "user"))
+        role_result = await self._session.execute(select(Role).where(Role.name == "user"))
         role = role_result.scalar_one_or_none()
         if not role:
             return  # роли ещё нет — lifespan инициализирует их
@@ -103,4 +131,4 @@ class AccountRepository(BaseRepository, AbstractAccountRepository):
             .values(id=generate_uuid(), account_id=account_id, role_id=role.id)
             .on_conflict_do_nothing(index_elements=["account_id"])
         )
-        await self.session.execute(stmt)
+        await self._session.execute(stmt)

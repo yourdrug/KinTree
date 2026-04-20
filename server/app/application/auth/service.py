@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from domain.entities.account import Account, create_account
 from domain.exceptions import (
-    AccountAlreadyExistsError,
     AccountBlockedError,
     AuthenticationError,
+    ConflictError,
 )
 from infrastructure.auth.jwt_service import (
     create_access_token,
@@ -22,19 +22,23 @@ from infrastructure.auth.jwt_service import (
     verify_password,
     verify_token_hash,
 )
-from infrastructure.common.services import BaseService
 
-from application.auth.dto import LoginCommand, RegisterCommand, TokenPair
+from application.auth.commands import LoginCommand, RegisterCommand, TokenPair
+from application.uow_factory import UoWFactory
 
 
-class AuthService(BaseService):
+class AuthService:
+    def __init__(self, uow_factory: UoWFactory) -> None:
+        self._uow_factory = uow_factory
+
     async def register(self, command: RegisterCommand) -> Account:
-        async with self.uow:
-            existing = await self.repository_facade.account_repository.get_by_email(
+        async with self._uow_factory.create(master=True) as uow:
+            existing = await uow.accounts.get_by_email(
                 email=command.email,
             )
+
             if existing is not None:
-                raise AccountAlreadyExistsError(
+                raise ConflictError(
                     message="Аккаунт уже существует",
                     errors={"email": "Этот email уже зарегистрирован"},
                 )
@@ -44,11 +48,11 @@ class AuthService(BaseService):
                 hashed_password=hash_password(command.password),
             )
 
-            return await self.repository_facade.account_repository.create(account)
+            return await uow.accounts.save(account)
 
     async def login(self, command: LoginCommand) -> TokenPair:
-        async with self.uow:
-            account = await self.repository_facade.account_repository.get_by_email(
+        async with self._uow_factory.create(master=True) as uow:
+            account = await uow.accounts.get_by_email(
                 email=command.email,
             )
 
@@ -56,10 +60,7 @@ class AuthService(BaseService):
                 raise AuthenticationError(message="Неверный email или пароль")
 
             if account.is_acc_blocked:
-                raise AccountBlockedError(
-                    message="Аккаунт заблокирован",
-                    errors={"account": "Ваш аккаунт заблокирован. Обратитесь в поддержку."},
-                )
+                raise AccountBlockedError
 
             access_token = create_access_token(
                 account_id=account.id,
@@ -68,7 +69,7 @@ class AuthService(BaseService):
             )
             refresh_token = create_refresh_token(account_id=account.id)
 
-            await self.repository_facade.account_repository.update_refresh_token(
+            await uow.accounts.update_refresh_token(
                 account_id=account.id,
                 hashed_refresh_token=hash_token(refresh_token),
             )
@@ -84,13 +85,13 @@ class AuthService(BaseService):
         payload = decode_refresh_token(refresh_token)
         account_id: str = payload["sub"]
 
-        async with self.uow:
-            account = await self.repository_facade.account_repository.get_by_id(
+        async with self._uow_factory.create(master=True) as uow:
+            account = await uow.accounts.get_by_id(
                 account_id=account_id,
             )
 
             if account.is_acc_blocked:
-                raise AccountBlockedError(message="Аккаунт заблокирован")
+                raise AccountBlockedError
 
             if account.refresh_token is None or not verify_token_hash(refresh_token, account.refresh_token):
                 raise AuthenticationError(
@@ -105,7 +106,7 @@ class AuthService(BaseService):
             )
             new_refresh = create_refresh_token(account_id=account.id)
 
-            await self.repository_facade.account_repository.update_refresh_token(
+            await uow.accounts.update_refresh_token(
                 account_id=account.id,
                 hashed_refresh_token=hash_token(new_refresh),
             )
@@ -118,8 +119,8 @@ class AuthService(BaseService):
             )
 
     async def logout(self, account_id: str) -> None:
-        async with self.uow:
-            await self.repository_facade.account_repository.update_refresh_token(
+        async with self._uow_factory.create(master=True) as uow:
+            await uow.accounts.update_refresh_token(
                 account_id=account_id,
                 hashed_refresh_token=None,
             )

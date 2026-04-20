@@ -4,7 +4,7 @@ api/schemas/auth.py
 
 from __future__ import annotations
 
-from application.auth.dto import LoginCommand, RegisterCommand
+from application.auth.commands import LoginCommand, RegisterCommand
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
@@ -58,7 +58,6 @@ class TokenResponse(BaseModel):
 
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
     role: str
     permissions: list[str] = Field(description="Отсортированный список codename всех разрешений пользователя")
 

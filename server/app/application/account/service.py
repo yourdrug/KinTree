@@ -1,11 +1,15 @@
 from domain.entities.account import Account
-from infrastructure.common.services import BaseService
+
+from application.uow_factory import UoWFactory
 
 
-class AccountService(BaseService):
+class AccountService:
+    def __init__(self, uow_factory: UoWFactory) -> None:
+        self._uow_factory = uow_factory
+
     async def get_account(self, account_id: str) -> Account:
-        async with self.uow:
-            account: Account = await self.repository_facade.account_repository.get_by_id(
+        async with self._uow_factory.create(master=False) as uow:
+            account: Account = await uow.accounts.get_by_id(
                 account_id=account_id,
             )
 

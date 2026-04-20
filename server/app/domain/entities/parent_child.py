@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from domain.enums import RelationType
-from domain.exceptions import DomainRelationError
+from domain.exceptions import RelationDomainError
 
 
 @dataclass(frozen=True)
@@ -25,12 +25,12 @@ class ParentChildRelation:
 
     def __post_init__(self) -> None:
         if not self.parent_id or not self.child_id:
-            raise DomainRelationError(
+            raise RelationDomainError(
                 message="Ошибка валидации",
                 errors={"ids": "ID родителя и ребёнка не могут быть пустыми."},
             )
         if self.parent_id == self.child_id:
-            raise DomainRelationError(
+            raise RelationDomainError(
                 message="Ошибка валидации",
                 errors={"ids": "Человек не может быть родителем самого себя."},
             )

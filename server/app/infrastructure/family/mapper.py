@@ -3,9 +3,8 @@ from domain.entities.family import Family as DomainFamily
 from infrastructure.db.models.family import Family as ORMFamily
 
 
-class FamilyORMMapper:
-    @staticmethod
-    def to_domain(model: ORMFamily) -> DomainFamily:
+class FamilyMapper:
+    def to_domain(self, model: ORMFamily) -> DomainFamily:
         return DomainFamily(
             id=model.id,
             name=model.name,
@@ -16,8 +15,7 @@ class FamilyORMMapper:
             ended_year=model.ended_year,
         )
 
-    @staticmethod
-    def to_persistence(entity: DomainFamily) -> dict:
+    def to_persistence(self, entity: DomainFamily) -> dict:
         return {
             "id": entity.id,
             "name": entity.name,

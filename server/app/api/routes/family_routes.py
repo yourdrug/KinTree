@@ -1,13 +1,13 @@
-from application.family.dto import CreateFamilyCommand
+from application.family.commands import CreateFamilyCommand
 from application.family.services import FamilyService
 from domain.entities.account import Account
 from domain.entities.family import Family
 from domain.filters.base import BaseFilterSpec
-from domain.filters.page import FamilyPage
+from domain.filters.page import Page
 from fastapi import APIRouter, Body, Depends, Path, Request, status
 
 from api.dependencies.auth_dependencies import get_current_account, get_current_account_id
-from api.dependencies.base_dependencies import get_service
+from api.dependencies.dependencies import get_family_service
 from api.schemas.family import (
     CreateFamilyRequest,
     FamilyFilterSchema,
@@ -25,7 +25,7 @@ router: APIRouter = APIRouter(prefix="/families", tags=["Families"])
 async def get_families_list(
     request: Request,
     filters: FamilyFilterSchema = Depends(),
-    service: FamilyService = Depends(get_service(FamilyService, master=False)),
+    service: FamilyService = Depends(get_family_service),
 ) -> FamilyPageResponse:
     """
     Получить список семей с фильтрацией, сортировкой и пагинацией.
@@ -41,14 +41,14 @@ async def get_families_list(
     """
 
     spec: BaseFilterSpec = filters.to_spec()
-    page: FamilyPage = await service.get_families_list(filters=spec)
+    page: Page[Family] = await service.get_families_list(filters=spec)
     return FamilyPageResponse.from_domain(page=page, request=request)
 
 
 @router.get(path="/{family_id:str}", status_code=status.HTTP_200_OK)
 async def get_family(
     family_id: str = Path(..., min_length=32, max_length=32),
-    service: FamilyService = Depends(get_service(FamilyService, master=False)),
+    service: FamilyService = Depends(get_family_service),
 ) -> FamilyResponse:
     """
     Получить семью по ID
@@ -62,7 +62,7 @@ async def get_family(
 async def create_family(
     payload: CreateFamilyRequest = Body(...),
     account: Account = Depends(get_current_account),
-    service: FamilyService = Depends(get_service(FamilyService, master=True)),
+    service: FamilyService = Depends(get_family_service),
 ) -> FamilyResponse:
     """
     Создание семьи по введенным данным.
@@ -78,7 +78,7 @@ async def update_family(
     family_id: str = Path(..., min_length=32, max_length=32),
     payload: PutFamilyRequest = Body(...),
     account_id: str = Depends(get_current_account_id),
-    service: FamilyService = Depends(get_service(FamilyService, master=True)),
+    service: FamilyService = Depends(get_family_service),
 ) -> FamilyResponse:
     """
     Перезаписать объект семьи для обновления.
@@ -94,7 +94,7 @@ async def update_family(
 async def patch_update_family(
     family_id: str = Path(..., min_length=32, max_length=32),
     payload: PatchFamilyRequest = Body(...),
-    service: FamilyService = Depends(get_service(FamilyService, master=True)),
+    service: FamilyService = Depends(get_family_service),
 ) -> FamilyResponse:
     """
     Частично обновить объект семьи.
@@ -109,7 +109,7 @@ async def patch_update_family(
 @router.delete(path="/{family_id:str}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_family(
     family_id: str = Path(..., min_length=32, max_length=32),
-    service: FamilyService = Depends(get_service(FamilyService, master=True)),
+    service: FamilyService = Depends(get_family_service),
 ) -> None:
     """
     Удалить объект семьи

@@ -1,50 +1,33 @@
-from abc import abstractmethod
+from __future__ import annotations
+
+from typing import Protocol
 
 from domain.entities.family import Family
 from domain.filters.base import BaseFilterSpec
-from domain.filters.page import FamilyPage
-from domain.repositories.base import AbstractRepository
+from domain.filters.page import Page
 
 
-class AbstractFamilyRepository(AbstractRepository):
-    @abstractmethod
-    async def exists(self, object_id: str) -> bool:
-        """Проверяет существование объекта по ID."""
-        raise NotImplementedError
-
-    @abstractmethod
+class FamilyRepository(Protocol):
     async def get_by_id(self, family_id: str) -> Family:
-        """
-        Возвращает семью по ID.
-        """
-        raise NotImplementedError
+        """Возвращает семью или бросает NotFoundError."""
+        ...
 
-    @abstractmethod
     async def get_by_id_or_none(self, family_id: str) -> Family | None:
-        """
-        Возвращает семью по ID или None если объект не найден.
-        """
-        raise NotImplementedError
+        """Возвращает семью или None."""
+        ...
 
-    @abstractmethod
-    async def get_list(
-        self,
-        filters: BaseFilterSpec,
-    ) -> FamilyPage:
-        """Возвращает список персон с фильтрацией и пагинацией."""
-        raise NotImplementedError
+    async def list(self, spec: BaseFilterSpec) -> Page[Family]:
+        """Список с фильтрацией и пагинацией."""
+        ...
 
-    @abstractmethod
-    async def create(self, family: Family) -> Family:
-        """Создаёт семью и возвращает её с заполненными полями из БД."""
-        raise NotImplementedError
+    async def save(self, family: Family) -> Family:
+        """Создать или обновить. Возвращает сохранённый объект."""
+        ...
 
-    @abstractmethod
-    async def update(self, family: Family) -> Family:
-        """Обновляет семью целиком и возвращает обновлённую версию."""
-        raise NotImplementedError
+    async def remove(self, family_id: str) -> None:
+        """Удалить по ID."""
+        ...
 
-    @abstractmethod
-    async def delete(self, family_id: str) -> None:
-        """Удаляет семью по ID."""
-        raise NotImplementedError
+    async def exists(self, family_id: str) -> bool:
+        """Проверить существование."""
+        ...

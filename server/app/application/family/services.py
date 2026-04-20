@@ -2,40 +2,38 @@ from typing import Any
 
 from domain.entities.account import Account
 from domain.entities.family import Family, create_family
-from domain.exceptions import NotFoundValidationError
+from domain.exceptions import NotFoundError
 from domain.filters.base import BaseFilterSpec
-from domain.filters.page import FamilyPage
+from domain.filters.page import Page
 from domain.value_objects.unset import UnsetType
-from infrastructure.common.services import BaseService
 
-from application.family.dto import (
+from application.family.commands import (
     CreateFamilyCommand,
     PatchFamilyCommand,
     PutFamilyCommand,
 )
+from application.uow_factory import UoWFactory
 
 
-class FamilyService(BaseService):
-    # TODO ref get_by_id_or_None
+class FamilyService:
+    def __init__(self, uow_factory: UoWFactory) -> None:
+        self._uow_factory = uow_factory
 
     async def get_family(self, family_id: str) -> Family:
-        async with self.uow:
-            family = await self.repository_facade.family_repository.get_by_id(
-                family_id=family_id,
-            )
-            return family
+        async with self._uow_factory.create(master=False) as uow:
+            return await uow.families.get_by_id(family_id=family_id)
 
     async def get_families_list(
         self,
         filters: BaseFilterSpec,
-    ) -> FamilyPage:
-        async with self.uow:
-            return await self.repository_facade.family_repository.get_list(
-                filters=filters,
+    ) -> Page[Family]:
+        async with self._uow_factory.create(master=False) as uow:
+            return await uow.families.list(
+                spec=filters,
             )
 
     async def create_family(self, command: CreateFamilyCommand, account: Account) -> Family:
-        async with self.uow:
+        async with self._uow_factory.create(master=True) as uow:
             family: Family = create_family(
                 name=command.name,
                 owner_id=account.id,
@@ -45,44 +43,39 @@ class FamilyService(BaseService):
                 ended_year=command.ended_year,
             )
 
-            created = await self.repository_facade.family_repository.create(
-                family=family,
-            )
+            created = await uow.families.save(family=family)
             return created
 
     async def update_family(self, command: PutFamilyCommand) -> Family:
-        async with self.uow:
-            existing: Family | None = await self.repository_facade.family_repository.get_by_id_or_none(
+        async with self._uow_factory.create(master=True) as uow:
+            existing: Family | None = await uow.families.get_by_id_or_none(
                 family_id=command.family_id,
             )
 
             if not existing or existing.owner_id != command.owner_id:
-                raise NotFoundValidationError(
-                    message="Ошибка валидации",
-                    errors={"family_id": "Объект не существует."},
-                )
+                raise NotFoundError(resource="Family", resource_id=command.family_id)
 
             updated = self._apply_put(command, existing)
 
-            return await self.repository_facade.family_repository.update(
+            return await uow.families.save(
                 family=updated,
             )
 
     async def patch_update_family(self, command: PatchFamilyCommand) -> Family:
-        async with self.uow:
-            existing = await self.repository_facade.family_repository.get_by_id(
+        async with self._uow_factory.create(master=True) as uow:
+            existing = await uow.families.get_by_id(
                 family_id=command.family_id,
             )
 
             updated = self._apply_patch(command, existing)
 
-            return await self.repository_facade.family_repository.update(
+            return await uow.families.save(
                 family=updated,
             )
 
     async def delete_family(self, family_id: str) -> None:
-        async with self.uow:
-            await self.repository_facade.family_repository.delete(
+        async with self._uow_factory.create(master=True) as uow:
+            await uow.families.remove(
                 family_id=family_id,
             )
 

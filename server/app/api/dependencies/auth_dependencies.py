@@ -20,17 +20,14 @@ Usage in routes:
         ...
 """
 
-from collections.abc import AsyncGenerator
-
-from application.account.service import AccountService
+from application.uow_factory import UoWFactory
 from domain.entities.account import Account
 from domain.exceptions import AuthenticationError
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from infrastructure.auth.jwt_service import decode_access_token
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies.base_dependencies import get_asession, get_service
+from api.dependencies.dependencies import get_uow_factory
 
 
 # auto_error=False lets us raise a custom AuthenticationError instead of
@@ -39,16 +36,12 @@ _bearer = HTTPBearer(auto_error=False)
 _bearer_optional = HTTPBearer(auto_error=False)
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
-def _extract_account_id(credentials: HTTPAuthorizationCredentials | None) -> str:
-    # TODO ref in auth service
+async def get_current_account_id(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+) -> str:
     """
-    Decode the bearer token and return the account_id (sub claim).
-    Raises AuthenticationError on any problem.
+    Декодирует Bearer-токен и возвращает account_id.
+    Бросает AuthenticationError если токен отсутствует или невалиден.
     """
     if credentials is None:
         raise AuthenticationError(
@@ -56,9 +49,9 @@ def _extract_account_id(credentials: HTTPAuthorizationCredentials | None) -> str
             errors={"Authorization": "Заголовок отсутствует"},
         )
 
-    payload = decode_access_token(credentials.credentials)  # raises on expired / invalid
-
+    payload = decode_access_token(credentials.credentials)
     account_id: str | None = payload.get("sub")
+
     if not account_id:
         raise AuthenticationError(
             message="Недействительный токен",
@@ -68,63 +61,34 @@ def _extract_account_id(credentials: HTTPAuthorizationCredentials | None) -> str
     return account_id
 
 
-async def _get_session_from_factory() -> AsyncGenerator[AsyncSession, None]:
-    """Thin wrapper so auth deps get their own session, independent of route sessions."""
-    session_factory = get_asession(master=False)
-    async for session in session_factory():
-        yield session
-
-
-# ---------------------------------------------------------------------------
-# Public dependencies
-# ---------------------------------------------------------------------------
-
-
-async def get_current_account_id(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-) -> str:
-    """
-    Require a valid access token.
-
-    Returns the account_id string.
-    Raises 401 AuthenticationError when the token is missing, expired, or malformed.
-    """
-    return _extract_account_id(credentials)
-
-
 async def get_current_account(
     account_id: str = Depends(get_current_account_id),
-    service: AccountService = Depends(get_service(AccountService, master=False)),
+    uow_factory: UoWFactory = Depends(get_uow_factory),
 ) -> Account:
     """
-    Require a valid access token AND a matching account in the database.
-
-    Returns the full Account domain entity.
-    Raises 401 if token is invalid, 404 if the account no longer exists.
+    Возвращает аутентифицированный аккаунт из БД.
+    Бросает AuthenticationError/NotFoundError.
     """
-    account: Account = await service.get_account(
-        account_id=account_id,
-    )
-    return account
+    async with uow_factory.create(master=False) as uow:
+        return await uow.accounts.get_by_id(account_id)
 
 
 async def get_optional_account(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_optional),
-    service: AccountService = Depends(get_service(AccountService, master=False)),
+    uow_factory: UoWFactory = Depends(get_uow_factory),
 ) -> Account | None:
     """
-    Optional authentication — does NOT raise if no token is supplied.
-
-    Returns the Account if a valid token is present, None otherwise.
-    Still raises 401 if a token IS provided but is invalid/expired,
-    so clients cannot silently pass broken tokens.
+    Необязательная аутентификация.
+    Возвращает Account если токен валиден, None если токен отсутствует.
+    Бросает AuthenticationError если токен присутствует, но невалиден.
     """
     if credentials is None:
         return None
 
-    account_id = _extract_account_id(credentials)
+    payload = decode_access_token(credentials.credentials)
+    account_id: str | None = payload.get("sub")
+    if not account_id:
+        return None
 
-    account: Account = await service.get_account(
-        account_id=account_id,
-    )
-    return account
+    async with uow_factory.create(master=False) as uow:
+        return await uow.accounts.get_by_id(account_id)

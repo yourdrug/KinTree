@@ -1,28 +1,31 @@
-from abc import abstractmethod
+from __future__ import annotations
+
+from typing import Protocol
 
 from domain.entities.account import Account
-from domain.repositories.base import AbstractRepository
 
 
-class AbstractAccountRepository(AbstractRepository):
-    @abstractmethod
-    async def exists(self, object_id: str) -> bool:
-        raise NotImplementedError
-
-    @abstractmethod
+class AccountRepository(Protocol):
     async def get_by_id(self, account_id: str) -> Account:
-        raise NotImplementedError
+        """Возвращает аккаунт или бросает NotFoundError."""
+        ...
 
-    @abstractmethod
     async def get_by_email(self, email: str) -> Account | None:
-        """Returns Account or None if not found."""
-        raise NotImplementedError
+        """Возвращает аккаунт по email или None."""
+        ...
 
-    @abstractmethod
-    async def create(self, account: Account) -> Account:
-        raise NotImplementedError
+    async def save(self, account: Account) -> Account:
+        """Создать или обновить. Возвращает сохранённый объект."""
+        ...
 
-    @abstractmethod
-    async def update_refresh_token(self, account_id: str, hashed_refresh_token: str | None) -> None:
-        """Persists a new (or cleared) hashed refresh token."""
-        raise NotImplementedError
+    async def update_refresh_token(
+        self,
+        account_id: str,
+        hashed_refresh_token: str | None,
+    ) -> None:
+        """Обновить хэш refresh-токена (или очистить при logout)."""
+        ...
+
+    async def exists(self, account_id: str) -> bool:
+        """Проверить существование."""
+        ...

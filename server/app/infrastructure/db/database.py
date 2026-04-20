@@ -7,8 +7,7 @@ from logging import (
     getLogger,
 )
 
-from api.exception_handlers import handle_exceptions
-from domain.exceptions import DatabaseInteractionError
+from domain.exceptions import DatabaseError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -96,7 +95,7 @@ class DatabaseNode:
         """
 
         if not self.async_engine:
-            raise DatabaseInteractionError("Async engine is not created")
+            raise DatabaseError("Async engine is not created")
 
         await self.async_engine.dispose()
 
@@ -118,7 +117,6 @@ class DatabaseNode:
 
         self.async_engine = None
 
-    @handle_exceptions
     async def connect(
         self,
     ) -> None:
@@ -129,7 +127,6 @@ class DatabaseNode:
         await self._create_engine()
         await self._create_async_session_factory()
 
-    @handle_exceptions
     async def disconnect(
         self,
     ) -> None:
@@ -152,7 +149,7 @@ class DatabaseNode:
         """
 
         if not self.async_session_factory:
-            raise DatabaseInteractionError("Async session factory is not created")
+            raise DatabaseError("Async session factory is not created")
 
         return self.async_session_factory()
 
@@ -291,7 +288,7 @@ class DatabaseManager:
         """
 
         if not self.slave_nodes:
-            raise DatabaseInteractionError("No slave nodes available")
+            raise DatabaseError("No slave nodes available")
 
         slave: DatabaseNode = self.slave_nodes[self.current_slave_index]
 
@@ -299,7 +296,6 @@ class DatabaseManager:
 
         return slave
 
-    @handle_exceptions
     async def connect(
         self,
     ) -> None:
@@ -327,7 +323,6 @@ class DatabaseManager:
 
         logger.info(f"Database environment: {'CLUSTER' if self.is_cluster else 'SINGLE NODE'}")
 
-    @handle_exceptions
     async def disconnect(
         self,
     ) -> None:
@@ -362,7 +357,7 @@ class DatabaseManager:
         """
 
         if not self.master_node:
-            raise DatabaseInteractionError("Master database node is not available")
+            raise DatabaseError("Master database node is not available")
 
         return self.master_node.new_session()
 

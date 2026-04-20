@@ -1,21 +1,33 @@
+"""
+domain/entities/family.py
+
+Агрегат Family.
+
+Family — корень агрегата, управляет своими членами.
+assert_can_add_member() проверяет инварианты перед добавлением персоны.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
 from domain.entities.person import Person
-from domain.exceptions import DomainFamilyError
+from domain.exceptions import FamilyDomainError
 from domain.utils import generate_uuid
 
 
-MAX_FAMILY_SIZE = 2  # пример ограничения для демонстрации
+MAX_FAMILY_SIZE = 2
 
 
 @dataclass
 class Family:
     """
     Агрегат Family.
-    Знает о своих членах и применяет бизнес-инварианты
-    на уровне всей семьи.
+
+    Инварианты:
+    - founded_year <= ended_year (если оба заданы)
+    - Размер семьи не превышает MAX_FAMILY_SIZE
+    - Нет дублирующихся членов (same name + birth_date)
     """
 
     id: str
@@ -31,76 +43,75 @@ class Family:
     def __post_init__(self) -> None:
         self._validate()
 
-    def _validate(self) -> None:
-        self._validate_years()
+    # ── Запросы ──────────────────────────────────────────────────────────────
+
+    @property
+    def members_count(self) -> int:
+        return len(self.members)
+
+    # ── Команды ──────────────────────────────────────────────────────────────
 
     def assert_can_add_member(self, candidate: Person) -> None:
         """
-        Проверяет все инварианты перед добавлением нового члена семьи.
-        Выбрасывает DomainFamilyError при нарушении любого правила.
+        Проверяет все инварианты перед добавлением члена семьи.
+        Вызывается в application-сервисе до сохранения в репозиторий.
         """
-        self._assert_family_size_limit()
-        self._assert_no_duplicate_member(candidate)
+        self._assert_size_limit()
+        self._assert_no_duplicate(candidate)
 
-    def _assert_family_size_limit(self) -> None:
-        """Инвариант: в семье не более MAX_FAMILY_SIZE человек."""
-        if len(self.members) >= MAX_FAMILY_SIZE:
-            raise DomainFamilyError(
-                message="Ошибка валидации",
-                errors={
-                    "family_id": (
-                        f"В семье уже {len(self.members)} "
-                        f"{'человек' if len(self.members) >= 5 else 'человека'}. "
-                        f"Максимально допустимое количество: {MAX_FAMILY_SIZE}."
-                    )
-                },
-            )
+    # ── Инварианты ───────────────────────────────────────────────────────────
 
-    def _assert_no_duplicate_member(self, candidate: Person) -> None:
-        """
-        Инвариант: в одной семье не может быть двух людей
-        с одинаковыми first_name, last_name и birth_date.
-        """
-        for member in self.members:
-            if self._is_duplicate(member, candidate):
-                raise DomainFamilyError(
-                    message="Ошибка валидации",
-                    errors={
-                        "person": (
-                            "В этой семье уже есть человек "
-                            f"с именем «{candidate.full_name()}» "
-                            "и такой же датой рождения."
-                        )
-                    },
-                )
-
-    @staticmethod
-    def _is_duplicate(existing: Person, candidate: Person) -> bool:
-        """
-        Дубль — совпадение first_name + last_name + birth_date.
-        Пустые имена и даты в сравнении не участвуют
-        (None != None в бизнес-смысле не считается дублем).
-        """
-        names_match = (
-            existing.first_name is not None
-            and existing.last_name is not None
-            and existing.first_name == candidate.first_name
-            and existing.last_name == candidate.last_name
-        )
-        dates_match = (
-            existing.birth_date is not None
-            and candidate.birth_date is not None
-            and existing.birth_date == candidate.birth_date
-        )
-        return names_match and dates_match
+    def _validate(self) -> None:
+        if not self.name or not self.name.strip():
+            raise FamilyDomainError(field="name", message="Название семьи не может быть пустым.")
+        if not self.owner_id:
+            raise FamilyDomainError(field="owner_id", message="Семья должна иметь владельца.")
+        self._validate_years()
 
     def _validate_years(self) -> None:
-        if self.founded_year and self.ended_year:
-            if self.founded_year > self.ended_year:
-                raise DomainFamilyError(
-                    message="Ошибка валидации",
-                    errors={"years": "Год основания не может быть больше года окончания"},
+        if self.founded_year and self.ended_year and self.founded_year > self.ended_year:
+            raise FamilyDomainError(
+                field="founded_year",
+                message="Год основания не может быть больше года окончания.",
+            )
+
+    def _assert_size_limit(self) -> None:
+        if len(self.members) >= MAX_FAMILY_SIZE:
+            raise FamilyDomainError(
+                field="family_id",
+                message=(
+                    f"В семье уже {len(self.members)} человек(а). Максимально допустимое количество: {MAX_FAMILY_SIZE}."
+                ),
+            )
+
+    def _assert_no_duplicate(self, candidate: Person) -> None:
+        for member in self.members:
+            if _is_duplicate(member, candidate):
+                raise FamilyDomainError(
+                    field="person",
+                    message=(
+                        f"В этой семье уже есть человек с именем «{candidate.full_name()}» и такой же датой рождения."
+                    ),
                 )
+
+
+def _is_duplicate(existing: Person, candidate: Person) -> bool:
+    """
+    Дубль = совпадение (first_name + last_name + birth_date).
+    None != None в бизнес-смысле — не считается дублем.
+    """
+    names_match = (
+        existing.first_name is not None
+        and existing.last_name is not None
+        and existing.first_name == candidate.first_name
+        and existing.last_name == candidate.last_name
+    )
+    dates_match = (
+        existing.birth_date is not None
+        and candidate.birth_date is not None
+        and existing.birth_date == candidate.birth_date
+    )
+    return names_match and dates_match
 
 
 def create_family(
@@ -111,6 +122,7 @@ def create_family(
     founded_year: int | None = None,
     ended_year: int | None = None,
 ) -> Family:
+    """Фабрика агрегата Family. Единственное место, где генерируется ID."""
     return Family(
         id=generate_uuid(),
         name=name,

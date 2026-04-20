@@ -1,186 +1,145 @@
+"""
+domain/exceptions.py
+
+Иерархия доменных исключений.
+
+Принципы:
+- ClientException  → проблема на стороне клиента (4xx)
+- ServerException  → проблема на стороне сервера (5xx)
+- DomainError      → нарушение бизнес-инварианта (400)
+- NotFoundError    → объект не найден (404)
+- ConflictError    → конфликт состояния (409)
+- AuthError        → проблема аутентификации/авторизации (401/403)
+- FilterError      → некорректный фильтр (422)
+
+Все исключения имеют единый интерфейс: message + errors + dict().
+"""
+
+from __future__ import annotations
+
 from typing import Any
 
 
-class BaseExc(Exception):
+# ── Base ─────────────────────────────────────────────────────────────────────
+
+
+class AppException(Exception):
+    """Базовое исключение приложения."""
+
+    def __init__(self, message: str, errors: dict[str, Any] | None = None) -> None:
+        self.message = message
+        self.errors = errors
+        super().__init__(message)
+
+    def __str__(self) -> str:
+        return self.message
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(message={self.message!r}, errors={self.errors!r})"
+
+    def as_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"message": self.message}
+        if self.errors:
+            result["errors"] = self.errors
+        return result
+
+
+# ── Server ────────────────────────────────────────────────────────────────────
+
+
+class ServerException(AppException):
+    """Ошибка на стороне сервера (5xx)."""
+
+
+class DatabaseError(ServerException):
+    """Ошибка взаимодействия с базой данных."""
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(
+            message="Ошибка взаимодействия с БД",
+            errors={"detail": detail} if detail else None,
+        )
+
+
+# ── Client ────────────────────────────────────────────────────────────────────
+
+
+class ClientException(AppException):
+    """Ошибка на стороне клиента (4xx)."""
+
+
+class DomainValidationError(ClientException):
     """
-    BaseExc: Base exception class for all custom exceptions in the application.
+    Нарушение бизнес-инварианта (400).
+
+    Удобный конструктор: принимает field + message ИЛИ словарь errors.
     """
 
     def __init__(
         self,
-        message: str,
-        errors: dict | None = None,
+        message: str = "Ошибка валидации",
+        errors: dict[str, Any] | None = None,
+        *,
+        field: str | None = None,
     ) -> None:
-        """
-        __init__.py: Initializes the base exception.
-
-        Args:
-            message: Human-readable error message.
-            errors: Optional dictionary containing field-specific error details.
-        """
-
-        self.message: str = message
-        self.errors: dict | None = errors
-
-    def __str__(
-        self,
-    ) -> str:
-        """
-        __str__.py: Returns string representation of the exception.
-
-        Returns:
-            The error message as a string.
-        """
-
-        return self.message
-
-    def __repr__(
-        self,
-    ) -> str:
-        """
-        __repr__: Returns official string representation of the exception.
-
-        Returns:
-            The error message as a string for debugging purposes.
-        """
-
-        return self.message
-
-    def dict(
-        self,
-    ) -> dict:
-        """
-        dict: Converts exception to dictionary format for API responses.
-
-        Returns:
-            Dictionary containing:
-                - message: The error message
-                - errors: Field-specific errors if present
-
-            Example:
-                {
-                    'message': 'Validation failed',
-                    'errors': {
-                        'email': 'Must be unique'
-                    }
-                }
-        """
-
-        result: dict[str, Any] = {
-            "message": self.message,
-        }
-
-        if self.errors:
-            result["errors"] = self.errors
-
-        return result
+        if field is not None and errors is None:
+            errors = {field: message}
+            message = "Ошибка валидации"
+        super().__init__(message=message, errors=errors)
 
 
-class ClientException(BaseExc):
-    """
-    ClientException: Base class for all client-side exceptions.
-    """
-
-    pass
+class PersonDomainError(DomainValidationError):
+    """Нарушение инварианта агрегата Person."""
 
 
-class ServerException(BaseExc):
-    """
-    ServerException: Base class for all server-side exceptions.
-    """
-
-    pass
+class FamilyDomainError(DomainValidationError):
+    """Нарушение инварианта агрегата Family."""
 
 
-class DatabaseInteractionError(ServerException):
-    """
-    DatabaseInteractionError: Exception raised when a database interaction error occurs.
-    This typically indicates a 500 Internal Server Error scenario.
-    """
-
-    pass
+class RelationDomainError(DomainValidationError):
+    """Нарушение инварианта связей между персонами."""
 
 
-class NotFoundValidationError(ClientException):
-    """
-    NotFoundValidationError: Exception raised when a requested resource is not found.
-    This typically indicates a 404 Not Found error scenario.
-    """
+class NotFoundError(ClientException):
+    """Запрошенный ресурс не найден (404)."""
 
-    pass
-
-
-class BaseDomainError(ClientException):
-    """
-    BaseDomainError: Exception raised when a base domain error occurs.
-    Basic error for abstractions
-    """
-
-    pass
+    def __init__(self, resource: str, resource_id: str | None = None) -> None:
+        msg = f"{resource} не найден"
+        errors = {resource.lower(): msg}
+        if resource_id:
+            errors["id"] = resource_id
+        super().__init__(message=msg, errors=errors)
 
 
-class DomainPersonError(BaseDomainError):
-    """
-    DomainPersonError: Exception raised when a domain validating person error occurs.
-    This typically indicates a 400 Bad Request error scenario.
-    """
-
-    pass
-
-
-class DomainFamilyError(BaseDomainError):
-    """
-    DomainFamilyError: Exception raised when a domain validating family error occurs.
-    This typically indicates a 400 Bad Request error scenario.
-    """
-
-    pass
-
-
-class FilterError(ClientException):
-    """
-    FilterError: Exception raised when a filter error occurs.
-    This typically indicates a 422 Unprocessable Content error scenario.
-    """
-
-    pass
+class ConflictError(ClientException):
+    """Конфликт состояния — ресурс уже существует (409)."""
 
 
 class AuthenticationError(ClientException):
-    """
-    AuthenticationError: Raised on invalid credentials or token issues.
-    Typically a 401 Unauthorized.
-    """
-
-    pass
+    """Ошибка аутентификации — невалидный/истёкший токен (401)."""
 
 
-class AccountAlreadyExistsError(ClientException):
-    """
-    AccountAlreadyExistsError: Raised when registering with an existing email.
-    Typically a 409 Conflict.
-    """
+class PermissionDeniedError(ClientException):
+    """Недостаточно прав (403)."""
 
-    pass
+    def __init__(self, required: str | list[str] | None = None) -> None:
+        errors: dict[str, Any] = {}
+        if isinstance(required, str):
+            errors["required_permission"] = required
+        elif isinstance(required, list):
+            errors["required_any_of"] = required
+        super().__init__(message="Недостаточно прав", errors=errors or None)
 
 
 class AccountBlockedError(ClientException):
-    """
-    AccountBlockedError: Raised when a blocked account tries to authenticate.
-    Typically a 403 Forbidden.
-    """
+    """Аккаунт заблокирован (403)."""
 
-    pass
-
-
-class DomainRoleError(BaseDomainError):
-    """
-    DomainRoleError: Exception raised when a domain role error occurs.
-    This typically indicates a 400 Bad Request error scenario.
-    """
-
-    pass
+    def __init__(self) -> None:
+        super().__init__(
+            message="Аккаунт заблокирован",
+            errors={"account": "Ваш аккаунт заблокирован. Обратитесь в поддержку."},
+        )
 
 
-class DomainRelationError(BaseDomainError):
-    pass
+class FilterValidationError(ClientException):
+    """Некорректные параметры фильтрации (422)."""
