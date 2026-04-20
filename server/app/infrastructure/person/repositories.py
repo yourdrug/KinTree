@@ -38,7 +38,6 @@ class PersonRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._translator: FilterTranslator = person_filter_translator
-        self._mapper = PersonMapper()
 
     async def get_by_id(self, person_id: str) -> Person:
         stmt = select(ORMPerson).where(ORMPerson.id == person_id)
@@ -46,12 +45,12 @@ class PersonRepositoryImpl:
         orm = result.scalar_one_or_none()
         if orm is None:
             raise NotFoundError(resource="Person", resource_id=person_id)
-        return self._mapper.to_domain(orm)
+        return PersonMapper.to_domain(orm)
 
     async def find_by_family(self, family_id: str) -> list[Person]:
         stmt = select(ORMPerson).where(ORMPerson.family_id == family_id)
         result: Result = await self._session.execute(stmt)
-        return [self._mapper.to_domain(row) for row in result.scalars().all()]
+        return [PersonMapper.to_domain(row) for row in result.scalars().all()]
 
     async def list(self, spec: BaseFilterSpec) -> Page[Person]:
         stmt: Select = select(ORMPerson)
@@ -60,7 +59,7 @@ class PersonRepositoryImpl:
         stmt = self._translator.apply_pagination(stmt, spec)
 
         result: Result = await self._session.execute(stmt)
-        persons = [self._mapper.to_domain(row) for row in result.scalars().all()]
+        persons = [PersonMapper.to_domain(row) for row in result.scalars().all()]
 
         return Page(result=persons, total=total, limit=spec.limit, offset=spec.offset)
 
@@ -69,7 +68,7 @@ class PersonRepositoryImpl:
         Upsert: INSERT если новый, UPDATE если существует.
         Определяем по exists() — избегаем ошибок при ON CONFLICT.
         """
-        data = self._mapper.to_persistence(person)
+        data = PersonMapper.to_persistence(person)
         already_exists = await self.exists(person.id)
 
         if already_exists:
@@ -79,7 +78,7 @@ class PersonRepositoryImpl:
 
         result: Result = await self._session.execute(stmt)
         orm = result.scalar_one()
-        return self._mapper.to_domain(orm)
+        return PersonMapper.to_domain(orm)
 
     async def remove(self, person_id: str) -> None:
         stmt = delete(ORMPerson).where(ORMPerson.id == person_id)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from application.relations.dto import (
+from application.relations.commands import (
     AddParentChildCommand,
     AddSpouseCommand,
     DivorceCommand,

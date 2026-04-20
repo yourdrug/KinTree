@@ -1,60 +1,76 @@
 """
 domain/permissions/enums.py
 
-Строковые перечисления разрешений и ролей.
-Хранятся в БД как VARCHAR — миграции при добавлении новых значений не нужны.
+Enum — единственный источник правды о том КАКИЕ пермишены существуют.
+БД хранит только то КОМУ они назначены.
 
-Соглашение: RESOURCE__ACTION
+Правило: добавил пермишен в enum → создал Alembic-миграцию → задеплоил.
+Никакого автосинка — изменения явные, версионированные, откатываемые.
+
+Соглашение по именованию: RESOURCE__ACTION
 """
+
+from __future__ import annotations
 
 from enum import Enum
 
 
 class Permission(str, Enum):
+    """
+    Все пермишены приложения.
+
+    Значение (value) — строка которая хранится в БД и JWT.
+    description — человекочитаемое описание для UI и документации.
+    """
+
     description: str
 
-    def __new__(cls, value: str, description: str) -> "Permission":
+    def __new__(cls, value: str, description: str) -> Permission:
         obj = str.__new__(cls, value)
         obj._value_ = value
         obj.description = description
         return obj
 
-    # ── Семьи ─────────────────────────────────────────
-    FAMILY__READ = ("family:read", "Чтение семей")
+    # ── Семьи ─────────────────────────────────────────────────────────────────
+    FAMILY__READ = ("family:read", "Просмотр семей")
     FAMILY__CREATE = ("family:create", "Создание семей")
-    FAMILY__UPDATE_OWN = ("family:update:own", "Обновление своей семьи")
+    FAMILY__UPDATE_OWN = ("family:update:own", "Редактирование своей семьи")
     FAMILY__DELETE_OWN = ("family:delete:own", "Удаление своей семьи")
-    FAMILY__UPDATE_ANY = ("family:update:any", "Обновление любой семьи")
+    FAMILY__UPDATE_ANY = ("family:update:any", "Редактирование любой семьи")
     FAMILY__DELETE_ANY = ("family:delete:any", "Удаление любой семьи")
 
-    # ── Персоны ───────────────────────────────────────
-    PERSON__READ = ("person:read", "Чтение персон")
+    # ── Персоны ───────────────────────────────────────────────────────────────
+    PERSON__READ = ("person:read", "Просмотр персон")
     PERSON__CREATE = ("person:create", "Создание персон")
-    PERSON__UPDATE_OWN = ("person:update:own", "Обновление своей персоны")
-    PERSON__DELETE_OWN = ("person:delete:own", "Удаление своей персоны")
-    PERSON__UPDATE_ANY = ("person:update:any", "Обновление любой персоны")
+    PERSON__UPDATE_OWN = ("person:update:own", "Редактирование своих персон")
+    PERSON__DELETE_OWN = ("person:delete:own", "Удаление своих персон")
+    PERSON__UPDATE_ANY = ("person:update:any", "Редактирование любой персоны")
     PERSON__DELETE_ANY = ("person:delete:any", "Удаление любой персоны")
 
-    # ── Аккаунты ──────────────────────────────────────
-    ACCOUNT__READ_SELF = ("account:read:own", "Чтение своего аккаунта")
-    ACCOUNT__READ_ANY = ("account:read:any", "Чтение любого аккаунта")
+    # ── Связи ─────────────────────────────────────────────────────────────────
+    RELATION__CREATE = ("relation:create", "Создание связей между персонами")
+    RELATION__DELETE = ("relation:delete", "Удаление связей между персонами")
+
+    # ── Аккаунты ──────────────────────────────────────────────────────────────
+    ACCOUNT__READ_SELF = ("account:read:own", "Просмотр своего аккаунта")
+    ACCOUNT__READ_ANY = ("account:read:any", "Просмотр любого аккаунта")
     ACCOUNT__BLOCK = ("account:block", "Блокировка аккаунта")
     ACCOUNT__DELETE = ("account:delete", "Удаление аккаунта")
 
-    # ── Админка ───────────────────────────────────────
-    ADMIN__PANEL = ("admin:panel", "Доступ к админ панели")
-    ADMIN__MANAGE_ROLES = ("admin:manage_roles", "Управление ролями")
+    # ── Администрирование ─────────────────────────────────────────────────────
+    ADMIN__PANEL = ("admin:panel", "Доступ к панели администратора")
+    ADMIN__MANAGE_ROLES = ("admin:manage_roles", "Управление ролями пользователей")
 
 
 class DefaultRole(str, Enum):
     """
-    Предопределённые системные роли.
-    При старте приложения проверяется/создаётся их наличие в БД.
+    Системные роли. Создаются один раз при инициализации БД.
+    Новые роли добавляются через Alembic-миграцию.
     """
 
     description: str
 
-    def __new__(cls, value: str, description: str) -> "DefaultRole":
+    def __new__(cls, value: str, description: str) -> DefaultRole:
         obj = str.__new__(cls, value)
         obj._value_ = value
         obj.description = description

@@ -1,38 +1,66 @@
-# Дефолтные разрешения для каждой роли
-from domain.permissions.enums import DefaultRole
-from domain.permissions.enums import Permission as PermissionEnum
+"""
+domain/permissions/constants.py
+
+Маппинг роль → пермишены.
+Вместе с enums.py образует полный источник правды в коде.
+
+При добавлении нового пермишена:
+1. Добавить в Permission enum (enums.py)
+2. Добавить в нужные роли здесь
+3. Создать Alembic-миграцию (см. шаблон в infrastructure/db/migrations/)
+4. Задеплоить
+
+Alembic-миграция синхронизирует БД с этим файлом.
+"""
+
+from __future__ import annotations
+
+from domain.permissions.enums import DefaultRole, Permission
 
 
-role_permissions: dict[DefaultRole, list[PermissionEnum]] = {
+# Единственное место где определяется "кто что может"
+role_permissions: dict[DefaultRole, list[Permission]] = {
     DefaultRole.GUEST: [
-        PermissionEnum.FAMILY__READ,
-        PermissionEnum.PERSON__READ,
+        Permission.FAMILY__READ,
+        Permission.PERSON__READ,
     ],
     DefaultRole.USER: [
-        PermissionEnum.FAMILY__READ,
-        PermissionEnum.FAMILY__CREATE,
-        PermissionEnum.FAMILY__UPDATE_OWN,
-        PermissionEnum.FAMILY__DELETE_OWN,
-        PermissionEnum.PERSON__READ,
-        PermissionEnum.PERSON__CREATE,
-        PermissionEnum.PERSON__UPDATE_OWN,
-        PermissionEnum.PERSON__DELETE_OWN,
-        PermissionEnum.ACCOUNT__READ_SELF,
+        # Семьи
+        Permission.FAMILY__READ,
+        Permission.FAMILY__CREATE,
+        Permission.FAMILY__UPDATE_OWN,
+        Permission.FAMILY__DELETE_OWN,
+        # Персоны
+        Permission.PERSON__READ,
+        Permission.PERSON__CREATE,
+        Permission.PERSON__UPDATE_OWN,
+        Permission.PERSON__DELETE_OWN,
+        # Связи
+        Permission.RELATION__CREATE,
+        Permission.RELATION__DELETE,
+        # Аккаунт
+        Permission.ACCOUNT__READ_SELF,
     ],
     DefaultRole.MODERATOR: [
-        PermissionEnum.FAMILY__READ,
-        PermissionEnum.FAMILY__CREATE,
-        PermissionEnum.FAMILY__UPDATE_OWN,
-        PermissionEnum.FAMILY__DELETE_OWN,
-        PermissionEnum.FAMILY__UPDATE_ANY,
-        PermissionEnum.PERSON__READ,
-        PermissionEnum.PERSON__CREATE,
-        PermissionEnum.PERSON__UPDATE_OWN,
-        PermissionEnum.PERSON__DELETE_OWN,
-        PermissionEnum.PERSON__UPDATE_ANY,
-        PermissionEnum.PERSON__DELETE_ANY,
-        PermissionEnum.ACCOUNT__READ_SELF,
-        PermissionEnum.ACCOUNT__READ_ANY,
+        # Семьи
+        Permission.FAMILY__READ,
+        Permission.FAMILY__CREATE,
+        Permission.FAMILY__UPDATE_OWN,
+        Permission.FAMILY__DELETE_OWN,
+        Permission.FAMILY__UPDATE_ANY,
+        # Персоны
+        Permission.PERSON__READ,
+        Permission.PERSON__CREATE,
+        Permission.PERSON__UPDATE_OWN,
+        Permission.PERSON__DELETE_OWN,
+        Permission.PERSON__UPDATE_ANY,
+        Permission.PERSON__DELETE_ANY,
+        # Связи
+        Permission.RELATION__CREATE,
+        Permission.RELATION__DELETE,
+        # Аккаунты
+        Permission.ACCOUNT__READ_SELF,
+        Permission.ACCOUNT__READ_ANY,
     ],
-    DefaultRole.ADMIN: list(PermissionEnum),  # все разрешения
+    DefaultRole.ADMIN: list(Permission),  # все пермишены
 }

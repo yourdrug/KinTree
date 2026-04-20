@@ -26,6 +26,7 @@ from domain.exceptions import DatabaseError
 from domain.repositories.account import AccountRepository
 from domain.repositories.family import FamilyRepository
 from domain.repositories.person import PersonRepository
+from domain.repositories.relations import ParentChildRepository, SpouseRepository
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +45,9 @@ class UnitOfWork:
 
     persons: PersonRepository
     families: FamilyRepository
+    accounts: AccountRepository
+    parent_child: ParentChildRepository
+    spouses: SpouseRepository
 
     def __init__(
         self,
@@ -51,11 +55,15 @@ class UnitOfWork:
         persons: PersonRepository,
         families: FamilyRepository,
         accounts: AccountRepository,
+        parent_child: ParentChildRepository,
+        spouses: SpouseRepository,
     ) -> None:
         self._session = session
         self.persons = persons
         self.families = families
         self.accounts = accounts
+        self.parent_child = parent_child
+        self.spouses = spouses
 
     async def __aenter__(self) -> UnitOfWork:
         await self._session.begin()

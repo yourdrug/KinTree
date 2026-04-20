@@ -28,6 +28,7 @@ from infrastructure.account.repositories import AccountRepositoryImpl
 from infrastructure.db.database import DatabaseManager
 from infrastructure.family.repositories import FamilyRepositoryImpl
 from infrastructure.person.repositories import PersonRepositoryImpl
+from infrastructure.relations.repositories import ParentChildRepositoryImpl, SpouseRepositoryImpl
 
 from application.uow import UnitOfWork
 
@@ -57,12 +58,16 @@ class UoWFactory:
         persons = PersonRepositoryImpl(session=session)
         families = FamilyRepositoryImpl(session=session)
         accounts = AccountRepositoryImpl(session=session)
+        spouses = SpouseRepositoryImpl(session=session)
+        parent_child = ParentChildRepositoryImpl(session=session)
 
         uow = UnitOfWork(
             session=session,
             persons=persons,
             families=families,
             accounts=accounts,
+            parent_child=parent_child,
+            spouses=spouses,
         )
 
         async with uow:

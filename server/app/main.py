@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 import time
 
 from api.exception_handlers import register_exception_handlers
-from api.routes import account_routes, auth_routes, family_routes, person_routes
+from api.routes import account_routes, auth_routes, family_routes, person_routes, relation_routes
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from infrastructure.db.database import database
@@ -49,6 +49,7 @@ def create_app() -> FastAPI:
     app.include_router(account_routes.router)
     app.include_router(person_routes.router)
     app.include_router(family_routes.router)
+    app.include_router(relation_routes.router)
 
     register_exception_handlers(app)
 

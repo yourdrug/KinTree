@@ -1,82 +1,83 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from typing import Protocol
 
 from domain.entities.parent_child import ParentChildRelation
 from domain.entities.spouse import SpouseRelation
 
 
-class AbstractParentChildRepository(ABC):
-    @abstractmethod
+class ParentChildRepository(Protocol):
+    """
+    Контракт репозитория родительских связей.
+
+    Принципы:
+    - Protocol вместо ABC
+    - Только доменные сущности
+    - Используется для построения графа семьи
+    """
+
     async def get_by_family(self, family_id: str) -> list[ParentChildRelation]:
         """Все родительские связи в семье."""
-        raise NotImplementedError
+        ...
 
-    @abstractmethod
     async def get_parents_of(self, person_id: str) -> list[ParentChildRelation]:
         """Все родители данной персоны."""
-        raise NotImplementedError
+        ...
 
-    @abstractmethod
     async def get_children_of(self, person_id: str) -> list[ParentChildRelation]:
         """Все дети данной персоны."""
-        raise NotImplementedError
+        ...
 
-    @abstractmethod
     async def get_all_for_persons(self, person_ids: list[str]) -> list[ParentChildRelation]:
-        """
-        Все родительские связи где участвует хотя бы одна из персон.
-        Используется для построения графа семьи.
-        """
-        raise NotImplementedError
+        """Все связи, где участвует хотя бы одна персона."""
+        ...
 
-    @abstractmethod
     async def exists(self, parent_id: str, child_id: str) -> bool:
-        """Проверяет существование конкретной связи."""
-        raise NotImplementedError
+        """Проверяет существование связи."""
+        ...
 
-    @abstractmethod
-    async def create(self, relation: ParentChildRelation) -> ParentChildRelation:
-        raise NotImplementedError
+    async def save(self, relation: ParentChildRelation) -> ParentChildRelation:
+        """
+        Создать связь.
 
-    @abstractmethod
-    async def delete(self, parent_id: str, child_id: str) -> None:
-        raise NotImplementedError
+        (Можно оставить create, но save консистентнее с PersonRepository)
+        """
+        ...
+
+    async def remove(self, parent_id: str, child_id: str) -> None:
+        """Удалить связь."""
+        ...
 
 
-class AbstractSpouseRepository(ABC):
-    @abstractmethod
+class SpouseRepository(Protocol):
+    """
+    Контракт репозитория супружеских связей.
+    """
+
     async def get_by_family(self, family_id: str) -> list[SpouseRelation]:
         """Все супружеские связи в семье."""
-        raise NotImplementedError
+        ...
 
-    @abstractmethod
     async def get_spouses_of(self, person_id: str) -> list[SpouseRelation]:
         """Все браки данной персоны."""
-        raise NotImplementedError
+        ...
 
-    @abstractmethod
     async def get_all_for_persons(self, person_ids: list[str]) -> list[SpouseRelation]:
-        """
-        Все супружеские связи где участвует хотя бы одна из персон.
-        Используется для построения графа семьи.
-        """
-        raise NotImplementedError
+        """Все связи, где участвует хотя бы одна персона."""
+        ...
 
-    @abstractmethod
     async def exists(self, person_a_id: str, person_b_id: str) -> bool:
-        """Проверяет существование связи (не зависит от порядка ID)."""
-        raise NotImplementedError
+        """Проверяет существование связи (порядок не важен)."""
+        ...
 
-    @abstractmethod
-    async def create(self, relation: SpouseRelation) -> SpouseRelation:
-        raise NotImplementedError
+    async def save(self, relation: SpouseRelation) -> SpouseRelation:
+        """
+        Upsert:
+        - create если нет
+        - update если есть
+        """
+        ...
 
-    @abstractmethod
-    async def update(self, relation: SpouseRelation) -> SpouseRelation:
-        """Обновление статуса (развод, вдовство)."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def delete(self, person_a_id: str, person_b_id: str) -> None:
-        raise NotImplementedError
+    async def remove(self, person_a_id: str, person_b_id: str) -> None:
+        """Удалить связь."""
+        ...

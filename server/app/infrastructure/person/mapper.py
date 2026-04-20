@@ -22,7 +22,8 @@ from infrastructure.db.models.person import Person as ORMPerson
 class PersonMapper:
     """Трансформирует Person между ORM-слоем и доменным слоем."""
 
-    def to_domain(self, model: ORMPerson) -> Person:
+    @staticmethod
+    def to_domain(model: ORMPerson) -> Person:
         return Person(
             id=model.id,
             name=PersonName(
@@ -31,13 +32,14 @@ class PersonMapper:
             ),
             gender=model.gender,
             family_id=model.family_id,
-            birth_date=self._build_date(model.birth_year, model.birth_month, model.birth_day),
-            death_date=self._build_date(model.death_year, model.death_month, model.death_day),
+            birth_date=PersonMapper._build_date(model.birth_year, model.birth_month, model.birth_day),
+            death_date=PersonMapper._build_date(model.death_year, model.death_month, model.death_day),
             birth_date_raw=model.birth_date_raw,
             death_date_raw=model.death_date_raw,
         )
 
-    def to_persistence(self, person: Person) -> dict:
+    @staticmethod
+    def to_persistence(person: Person) -> dict:
         return {
             "id": person.id,
             "first_name": person.first_name,

@@ -3,6 +3,7 @@ from application.account.service import AccountService
 from application.auth.service import AuthService
 from application.family.services import FamilyService
 from application.person.service import PersonService
+from application.relations.service import RelationService
 from application.uow_factory import UoWFactory
 from fastapi import Depends
 from infrastructure.db.database import database
@@ -38,3 +39,9 @@ def get_auth_service(
     uow_factory: UoWFactory = Depends(get_uow_factory),
 ) -> AuthService:
     return AuthService(uow_factory=uow_factory)
+
+
+def get_relation_service(
+    uow_factory: UoWFactory = Depends(get_uow_factory),
+) -> RelationService:
+    return RelationService(uow_factory=uow_factory)
