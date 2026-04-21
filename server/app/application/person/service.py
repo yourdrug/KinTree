@@ -16,10 +16,10 @@ from domain.entities.family import Family
 from domain.entities.person import Person, create_person
 from domain.filters.base import BaseFilterSpec
 from domain.filters.page import Page
+from infrastructure.uow_factory import UoWFactory
 
 from application.person.commands import CreatePersonCommand, PatchPersonCommand, UpdatePersonCommand
 from application.uow import UnitOfWork
-from application.uow_factory import UoWFactory
 
 
 class PersonService:

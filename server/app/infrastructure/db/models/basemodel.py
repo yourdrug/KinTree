@@ -8,8 +8,8 @@ infrastructure/db/models/basemodel.py
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import uuid4
 
-from domain.utils import generate_uuid
 from sqlalchemy import DateTime, String
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -29,7 +29,7 @@ class BaseModel(_Base):
     id: Mapped[str] = mapped_column(
         String,
         primary_key=True,
-        default=generate_uuid,
+        default=uuid4().hex,
         comment="Entity identifier (UUID hex)",
     )
     creation_date: Mapped[datetime] = mapped_column(

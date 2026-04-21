@@ -30,7 +30,6 @@ class PutFamilyCommand:
     family_id: str
 
     name: str
-    owner_id: str
 
     description: str | None
     origin_place: str | None

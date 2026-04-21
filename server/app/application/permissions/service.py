@@ -28,8 +28,7 @@ import logging
 
 from domain.entities.permission import Permission, Role
 from domain.services.permission_sync import PermissionSyncService
-
-from application.uow_factory import UoWFactory
+from infrastructure.uow_factory import UoWFactory
 
 
 logger = logging.getLogger("default")
@@ -74,7 +73,7 @@ class PermissionService:
 
             # 4. Установить пермишены для каждой роли
             for role in synced_roles:
-                codenames = self._sync_service.get_role_permission_codenames(role.name, role.description)
+                codenames = self._sync_service.get_role_permission_codenames(role.name)
                 permission_ids = [perm_by_codename[cn].id for cn in codenames if cn in perm_by_codename]
                 await uow.roles.set_permissions(role.id, permission_ids)
 

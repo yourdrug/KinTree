@@ -20,14 +20,14 @@ Usage in routes:
         ...
 """
 
-from application.uow_factory import UoWFactory
+from application.account.service import AccountService
 from domain.entities.account import Account
 from domain.exceptions import AuthenticationError
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from infrastructure.auth.jwt_service import decode_access_token
 
-from api.dependencies.dependencies import get_uow_factory
+from api.dependencies.dependencies import get_account_service
 
 
 # auto_error=False lets us raise a custom AuthenticationError instead of
@@ -63,19 +63,18 @@ async def get_current_account_id(
 
 async def get_current_account(
     account_id: str = Depends(get_current_account_id),
-    uow_factory: UoWFactory = Depends(get_uow_factory),
+    service: AccountService = Depends(get_account_service),
 ) -> Account:
     """
     Возвращает аутентифицированный аккаунт из БД.
     Бросает AuthenticationError/NotFoundError.
     """
-    async with uow_factory.create(master=False) as uow:
-        return await uow.accounts.get_by_id(account_id)
+    return await service.get_account(account_id)
 
 
 async def get_optional_account(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_optional),
-    uow_factory: UoWFactory = Depends(get_uow_factory),
+    service: AccountService = Depends(get_account_service),
 ) -> Account | None:
     """
     Необязательная аутентификация.
@@ -90,5 +89,4 @@ async def get_optional_account(
     if not account_id:
         return None
 
-    async with uow_factory.create(master=False) as uow:
-        return await uow.accounts.get_by_id(account_id)
+    return await service.get_account(account_id)

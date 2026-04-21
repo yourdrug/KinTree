@@ -59,10 +59,9 @@ class PutFamilyRequest(BaseModel):
     founded_year: int | None = Field(None, ge=1, le=9999)
     ended_year: int | None = Field(None, ge=1, le=9999)
 
-    def to_command(self, family_id: str, account_id: str) -> PutFamilyCommand:
+    def to_command(self, family_id: str) -> PutFamilyCommand:
         return PutFamilyCommand(
             family_id=family_id,
-            owner_id=account_id,
             name=self.name,
             description=self.description,
             origin_place=self.origin_place,

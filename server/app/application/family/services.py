@@ -16,9 +16,9 @@ from domain.entities.family import Family, create_family
 from domain.exceptions import NotFoundError
 from domain.filters.base import BaseFilterSpec
 from domain.filters.page import Page
+from infrastructure.uow_factory import UoWFactory
 
 from application.family.commands import CreateFamilyCommand, PatchFamilyCommand, PutFamilyCommand
-from application.uow_factory import UoWFactory
 
 
 class FamilyService:
@@ -53,7 +53,7 @@ class FamilyService:
         async with self._uow_factory.create(master=True) as uow:
             family = await uow.families.get_by_id_or_none(command.family_id)
 
-            if family is None or family.owner_id != command.owner_id:
+            if family is None:
                 raise NotFoundError(resource="Family", resource_id=command.family_id)
 
             # Delegate full replacement to the entity — it validates its own invariants

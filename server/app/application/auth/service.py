@@ -8,6 +8,7 @@ application/auth/service.py
 from __future__ import annotations
 
 from domain.entities.account import Account, create_account
+from domain.entities.permission import create_account_role
 from domain.exceptions import (
     AccountBlockedError,
     AuthenticationError,
@@ -22,9 +23,9 @@ from infrastructure.auth.jwt_service import (
     verify_password,
     verify_token_hash,
 )
+from infrastructure.uow_factory import UoWFactory
 
 from application.auth.commands import LoginCommand, RegisterCommand, TokenPair
-from application.uow_factory import UoWFactory
 
 
 class AuthService:
@@ -33,9 +34,7 @@ class AuthService:
 
     async def register(self, command: RegisterCommand) -> Account:
         async with self._uow_factory.create(master=True) as uow:
-            existing = await uow.accounts.get_by_email(
-                email=command.email,
-            )
+            existing = await uow.accounts.get_by_email(email=command.email)
 
             if existing is not None:
                 raise ConflictError(
@@ -48,7 +47,18 @@ class AuthService:
                 hashed_password=hash_password(command.password),
             )
 
-            return await uow.accounts.save(account)
+            saved_account = await uow.accounts.save(account)
+
+            # Назначение роли — ответственность сервиса, не репозитория
+            default_role = await uow.roles.get_by_name("user")
+            if default_role is not None:
+                account_role = create_account_role(
+                    account_id=saved_account.id,
+                    role_id=default_role.id,
+                )
+                await uow.account_roles.assign_role(account_role)
+
+            return saved_account
 
     async def login(self, command: LoginCommand) -> TokenPair:
         async with self._uow_factory.create(master=True) as uow:

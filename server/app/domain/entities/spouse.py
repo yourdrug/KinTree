@@ -7,7 +7,7 @@ from domain.enums import MarriageStatus
 from domain.exceptions import RelationDomainError
 
 
-@dataclass(frozen=True)
+@dataclass
 class SpouseRelation:
     """
     Value Object: супружеская связь.
@@ -30,6 +30,14 @@ class SpouseRelation:
     divorce_month: int | None = None
     divorce_day: int | None = None
     divorce_date_raw: str | None = None
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SpouseRelation):
+            return NotImplemented
+        return (self.first_person_id, self.second_person_id) == (other.first_person_id, other.second_person_id)
+
+    def __hash__(self) -> int:
+        return hash((self.first_person_id, self.second_person_id))
 
     def __post_init__(self) -> None:
         self._validate()

@@ -76,7 +76,7 @@ class PermissionSyncService:
             for role in RoleName
         ]
 
-    def get_role_permission_codenames(self, role_name: str, description: str) -> list[str]:
+    def get_role_permission_codenames(self, role_name: str) -> list[str]:
         """
         Возвращает список codename пермишенов для роли.
 
@@ -89,11 +89,10 @@ class PermissionSyncService:
             Пустой список если роль не найдена.
         """
         try:
-            role = RoleName(role_name, description)
+            role = RoleName(value=role_name)
         except ValueError:
             return []
-
-        return [p.value for p in ROLE_PERMISSIONS.get(role, [])]
+        return [p.value for p in ROLE_PERMISSIONS.get(role.value, [])]
 
     def validate_codename_exists(self, codename: str) -> bool:
         """Проверяет что codename зарегистрирован в системе."""

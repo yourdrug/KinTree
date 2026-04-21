@@ -14,8 +14,9 @@ from __future__ import annotations
 from domain.entities.parent_child import ParentChildRelation
 from domain.entities.person import Person
 from domain.entities.spouse import SpouseRelation
-from domain.exceptions import NotFoundError
+from domain.exceptions import NotFoundError, RelationDomainError
 from domain.services.relation_policy import RelationPolicy
+from infrastructure.uow_factory import UoWFactory
 
 from application.relations.commands import (
     AddParentChildCommand,
@@ -25,7 +26,6 @@ from application.relations.commands import (
     FamilyGraphResult,
     NodeDTO,
 )
-from application.uow_factory import UoWFactory
 
 
 class RelationService:
@@ -38,8 +38,14 @@ class RelationService:
     async def add_parent_child(self, command: AddParentChildCommand) -> ParentChildRelation:
         # All reads and the write share ONE transaction
         async with self._uow_factory.create(master=True) as uow:
-            await uow.persons.get_by_id(command.parent_id)  # raises NotFoundError if missing
-            await uow.persons.get_by_id(command.child_id)
+            parent = await uow.persons.get_by_id(command.parent_id)
+            child = await uow.persons.get_by_id(command.child_id)
+
+            if parent.family_id != child.family_id:
+                raise RelationDomainError(
+                    message="Ошибка валидации",
+                    errors={"relation": "Нельзя связать персон из разных семей."},
+                )
 
             existing_parent = await uow.parent_child.get_children_of(command.parent_id)
             existing_parent += await uow.parent_child.get_parents_of(command.child_id)
@@ -118,20 +124,15 @@ class RelationService:
 
     async def get_family_graph(self, family_id: str) -> FamilyGraphResult:
         async with self._uow_factory.create(master=False) as uow:
-            persons = await uow.persons.find_by_family(family_id)
-            if not persons:
-                return FamilyGraphResult(nodes=[], edges=[])
+            persons, parent_relations, spouse_relations = await uow.family_graph.get_persons_with_relations(family_id)
 
-            person_ids = [p.id for p in persons]
-            parent_relations = await uow.parent_child.get_all_for_persons(person_ids)
-            spouse_relations = await uow.spouses.get_all_for_persons(person_ids)
-
-        nodes = [_person_to_node(p) for p in persons]
-        edges = [
-            *[_parent_child_to_edge(r) for r in parent_relations],
-            *[_spouse_to_edge(r) for r in spouse_relations],
-        ]
-        return FamilyGraphResult(nodes=nodes, edges=edges)
+            # трансформация внутри контекста
+            nodes = [_person_to_node(p) for p in persons]
+            edges = [
+                *[_parent_child_to_edge(r) for r in parent_relations],
+                *[_spouse_to_edge(r) for r in spouse_relations],
+            ]
+            return FamilyGraphResult(nodes=nodes, edges=edges)
 
 
 # ── Pure conversion helpers ───────────────────────────────────────────────────

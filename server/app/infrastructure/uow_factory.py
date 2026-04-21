@@ -24,6 +24,8 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+from application.uow import UnitOfWork
+
 from infrastructure.account.repositories import AccountRepositoryImpl
 from infrastructure.db.database import DatabaseManager
 from infrastructure.family.repositories import FamilyRepositoryImpl
@@ -33,9 +35,9 @@ from infrastructure.permissions.repositories import (
     RoleRepositoryImpl,
 )
 from infrastructure.person.repositories import PersonRepositoryImpl
-from infrastructure.relations.repositories import ParentChildRepositoryImpl, SpouseRepositoryImpl
-
-from application.uow import UnitOfWork
+from infrastructure.relations.graph_repository import FamilyGraphRepositoryImpl
+from infrastructure.relations.parent_child_repository import ParentChildRepositoryImpl
+from infrastructure.relations.spouse_repository import SpouseRepositoryImpl
 
 
 class UoWFactory:
@@ -68,6 +70,7 @@ class UoWFactory:
         permissions = PermissionRepositoryImpl(session=session)
         roles = RoleRepositoryImpl(session=session)
         account_roles = AccountRoleRepositoryImpl(session=session)
+        family_graph = FamilyGraphRepositoryImpl(session=session)
 
         uow = UnitOfWork(
             session=session,
@@ -79,6 +82,7 @@ class UoWFactory:
             permissions=permissions,
             roles=roles,
             account_roles=account_roles,
+            family_graph=family_graph,
         )
 
         async with uow:

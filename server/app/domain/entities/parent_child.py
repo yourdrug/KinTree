@@ -6,7 +6,7 @@ from domain.enums import RelationType
 from domain.exceptions import RelationDomainError
 
 
-@dataclass(frozen=True)
+@dataclass
 class ParentChildRelation:
     """
     Value Object: связь родитель–ребёнок.

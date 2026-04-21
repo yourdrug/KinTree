@@ -5,9 +5,9 @@ from application.family.services import FamilyService
 from application.permissions.service import PermissionService
 from application.person.service import PersonService
 from application.relations.service import RelationService
-from application.uow_factory import UoWFactory
 from fastapi import Depends
 from infrastructure.db.database import database
+from infrastructure.uow_factory import UoWFactory
 
 
 def get_uow_factory() -> UoWFactory:

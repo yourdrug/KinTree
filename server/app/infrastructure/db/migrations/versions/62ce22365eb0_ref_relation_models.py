@@ -1,8 +1,8 @@
-"""add permission
+"""ref relation models
 
-Revision ID: bafefcffa8b3
+Revision ID: 62ce22365eb0
 Revises: dded7f72bf75
-Create Date: 2026-04-16 19:40:01.684820
+Create Date: 2026-04-21 20:06:02.789215
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'bafefcffa8b3'
+revision: str = '62ce22365eb0'
 down_revision: Union[str, Sequence[str], None] = 'dded7f72bf75'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -27,26 +27,26 @@ def upgrade() -> None:
     sa.Column('is_acc_blocked', sa.Boolean(), nullable=False, comment='Flag for account blocking'),
     sa.Column('is_verified', sa.Boolean(), nullable=False, comment='Flag for email verification'),
     sa.Column('refresh_token', sa.String(), nullable=True, comment='Hashed refresh token stored server-side for rotation validation'),
-    sa.Column('id', sa.String(), nullable=False, comment='Identifier of the entity'),
-    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='Entity creation date'),
+    sa.Column('id', sa.String(), nullable=False, comment='Entity identifier (UUID hex)'),
+    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='UTC creation timestamp'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index('idx_account_email', 'Account', ['email'], unique=True)
     op.create_index(op.f('ix_Account_email'), 'Account', ['email'], unique=True)
     op.create_table('permissions',
-    sa.Column('codename', sa.String(length=128), nullable=False, comment="Уникальный строковый ключ: 'resource:action'"),
-    sa.Column('description', sa.Text(), server_default='', nullable=False, comment='Человекочитаемое описание разрешения'),
-    sa.Column('id', sa.String(), nullable=False, comment='Identifier of the entity'),
-    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='Entity creation date'),
+    sa.Column('codename', sa.String(length=128), nullable=False, comment="Уникальный строковый ключ: 'resource:action[:scope]'"),
+    sa.Column('description', sa.Text(), server_default='', nullable=False, comment='Человекочитаемое описание пермишена'),
+    sa.Column('id', sa.String(), nullable=False, comment='Entity identifier (UUID hex)'),
+    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='UTC creation timestamp'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('codename')
     )
     op.create_index('idx_permission_codename', 'permissions', ['codename'], unique=True)
     op.create_table('roles',
     sa.Column('name', sa.String(length=64), nullable=False, comment="Уникальное имя роли: 'user', 'admin', ..."),
-    sa.Column('description', sa.Text(), server_default='', nullable=False),
-    sa.Column('id', sa.String(), nullable=False, comment='Identifier of the entity'),
-    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='Entity creation date'),
+    sa.Column('description', sa.Text(), server_default='', nullable=False, comment='Описание роли'),
+    sa.Column('id', sa.String(), nullable=False, comment='Entity identifier (UUID hex)'),
+    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='UTC creation timestamp'),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
@@ -58,8 +58,8 @@ def upgrade() -> None:
     sa.Column('origin_place', sa.String(), nullable=True, comment='Origin place of the family'),
     sa.Column('founded_year', sa.Integer(), nullable=True, comment='Approximate year when family was founded'),
     sa.Column('ended_year', sa.Integer(), nullable=True, comment='If family line ended'),
-    sa.Column('id', sa.String(), nullable=False, comment='Identifier of the entity'),
-    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='Entity creation date'),
+    sa.Column('id', sa.String(), nullable=False, comment='Entity identifier (UUID hex)'),
+    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='UTC creation timestamp'),
     sa.ForeignKeyConstraint(['owner_id'], ['Account.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -67,10 +67,10 @@ def upgrade() -> None:
     op.create_index(op.f('ix_Family_founded_year'), 'Family', ['founded_year'], unique=False)
     op.create_index(op.f('ix_Family_name'), 'Family', ['name'], unique=False)
     op.create_table('account_roles',
-    sa.Column('account_id', sa.String(), nullable=False),
-    sa.Column('role_id', sa.String(), nullable=False),
-    sa.Column('id', sa.String(), nullable=False, comment='Identifier of the entity'),
-    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='Entity creation date'),
+    sa.Column('account_id', sa.String(), nullable=False, comment='ID аккаунта (один аккаунт — одна роль)'),
+    sa.Column('role_id', sa.String(), nullable=False, comment='ID роли'),
+    sa.Column('id', sa.String(), nullable=False, comment='Entity identifier (UUID hex)'),
+    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='UTC creation timestamp'),
     sa.ForeignKeyConstraint(['account_id'], ['Account.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id'),
@@ -82,11 +82,9 @@ def upgrade() -> None:
     op.create_table('role_permissions',
     sa.Column('role_id', sa.String(), nullable=False),
     sa.Column('permission_id', sa.String(), nullable=False),
-    sa.Column('id', sa.String(), nullable=False, comment='Identifier of the entity'),
-    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='Entity creation date'),
     sa.ForeignKeyConstraint(['permission_id'], ['permissions.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id'),
+    sa.PrimaryKeyConstraint('role_id', 'permission_id'),
     sa.UniqueConstraint('role_id', 'permission_id', name='uq_role_permission')
     )
     op.create_index('idx_rp_permission', 'role_permissions', ['permission_id'], unique=False)
@@ -104,8 +102,8 @@ def upgrade() -> None:
     sa.Column('birth_date_raw', sa.String(), nullable=True, comment="Original text-date (for example: 'April 1970')"),
     sa.Column('death_date_raw', sa.String(), nullable=True, comment="Original text-date (for example: 'April 1970')"),
     sa.Column('family_id', sa.String(), nullable=False, comment='Person family ID'),
-    sa.Column('id', sa.String(), nullable=False, comment='Identifier of the entity'),
-    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='Entity creation date'),
+    sa.Column('id', sa.String(), nullable=False, comment='Entity identifier (UUID hex)'),
+    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='UTC creation timestamp'),
     sa.CheckConstraint('birth_day BETWEEN 1 AND 31 OR birth_day IS NULL'),
     sa.CheckConstraint('birth_month BETWEEN 1 AND 12 OR birth_month IS NULL'),
     sa.CheckConstraint('death_day BETWEEN 1 AND 31 OR death_day IS NULL'),
@@ -120,36 +118,40 @@ def upgrade() -> None:
     op.create_index(op.f('ix_Person_first_name'), 'Person', ['first_name'], unique=False)
     op.create_index(op.f('ix_Person_last_name'), 'Person', ['last_name'], unique=False)
     op.create_table('parent_child',
-    sa.Column('parent_id', sa.String(), nullable=False, comment='Parent person ID'),
-    sa.Column('child_id', sa.String(), nullable=False, comment='Child person ID'),
-    sa.Column('relation_type', postgresql.ENUM('BIOLOGICAL', 'ADOPTED', 'STEP', name='person_relation_type_enum'), nullable=False, comment='Type of relation for the person'),
-    sa.Column('id', sa.String(), nullable=False, comment='Identifier of the entity'),
-    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='Entity creation date'),
-    sa.CheckConstraint('parent_id <> child_id'),
+    sa.Column('parent_id', sa.String(), nullable=False, comment='ID родителя'),
+    sa.Column('child_id', sa.String(), nullable=False, comment='ID ребёнка'),
+    sa.Column('relation_type', postgresql.ENUM('BIOLOGICAL', 'ADOPTED', 'STEP', name='relation_type_enum'), nullable=False, comment='Тип родственной связи: BIOLOGICAL | ADOPTED | STEP'),
+    sa.CheckConstraint('parent_id <> child_id', name='ck_pc_no_self_relation'),
     sa.ForeignKeyConstraint(['child_id'], ['Person.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['parent_id'], ['Person.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('parent_id', 'child_id', 'id')
+    sa.PrimaryKeyConstraint('parent_id', 'child_id')
     )
     op.create_index('idx_pc_child', 'parent_child', ['child_id'], unique=False)
     op.create_index('idx_pc_parent', 'parent_child', ['parent_id'], unique=False)
     op.create_table('spouses',
-    sa.Column('first_person_id', sa.String(), nullable=False),
-    sa.Column('second_person_id', sa.String(), nullable=False),
-    sa.Column('marriage_year', sa.SmallInteger(), nullable=True),
-    sa.Column('marriage_month', sa.SmallInteger(), nullable=True),
-    sa.Column('marriage_day', sa.SmallInteger(), nullable=True),
-    sa.Column('divorce_year', sa.SmallInteger(), nullable=True),
-    sa.Column('marriage_date_raw', sa.String(), nullable=True),
-    sa.Column('id', sa.String(), nullable=False, comment='Identifier of the entity'),
-    sa.Column('creation_date', sa.DateTime(timezone=True), nullable=False, comment='Entity creation date'),
-    sa.CheckConstraint('first_person_id < second_person_id'),
-    sa.CheckConstraint('first_person_id <> second_person_id'),
+    sa.Column('first_person_id', sa.String(), nullable=False, comment='ID первого супруга (меньший из двух по значению)'),
+    sa.Column('second_person_id', sa.String(), nullable=False, comment='ID второго супруга (больший из двух по значению)'),
+    sa.Column('marriage_status', postgresql.ENUM('MARRIED', 'DIVORCED', 'WIDOWED', name='marriage_status_enum'), nullable=False, comment='Текущий статус: MARRIED | DIVORCED | WIDOWED'),
+    sa.Column('marriage_year', sa.SmallInteger(), nullable=True, comment='Год бракосочетания'),
+    sa.Column('marriage_month', sa.SmallInteger(), nullable=True, comment='Месяц бракосочетания (1–12)'),
+    sa.Column('marriage_day', sa.SmallInteger(), nullable=True, comment='День бракосочетания (1–31)'),
+    sa.Column('marriage_place', sa.String(length=255), nullable=True, comment='Место бракосочетания'),
+    sa.Column('marriage_date_raw', sa.String(length=100), nullable=True, comment="Оригинальная запись даты свадьбы: 'лето 1965', 'ок. 1940'"),
+    sa.Column('divorce_year', sa.SmallInteger(), nullable=True, comment='Год развода'),
+    sa.Column('divorce_month', sa.SmallInteger(), nullable=True, comment='Месяц развода (1–12)'),
+    sa.Column('divorce_day', sa.SmallInteger(), nullable=True, comment='День развода (1–31)'),
+    sa.Column('divorce_date_raw', sa.String(length=100), nullable=True, comment='Оригинальная запись даты развода'),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True, comment='Время последнего обновления записи'),
+    sa.CheckConstraint('divorce_year IS NULL OR marriage_year IS NULL OR divorce_year >= marriage_year', name='ck_spouse_divorce_after_marriage'),
+    sa.CheckConstraint('first_person_id < second_person_id', name='ck_spouse_canonical_order'),
+    sa.CheckConstraint('first_person_id <> second_person_id', name='ck_spouse_no_self'),
     sa.ForeignKeyConstraint(['first_person_id'], ['Person.id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['second_person_id'], ['Person.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('first_person_id', 'second_person_id', 'id')
+    sa.PrimaryKeyConstraint('first_person_id', 'second_person_id')
     )
-    op.create_index('idx_spouse_first_person', 'spouses', ['first_person_id'], unique=False)
-    op.create_index('idx_spouse_second_person', 'spouses', ['second_person_id'], unique=False)
+    op.create_index('idx_spouse_first', 'spouses', ['first_person_id'], unique=False)
+    op.create_index('idx_spouse_pair', 'spouses', ['first_person_id', 'second_person_id'], unique=True)
+    op.create_index('idx_spouse_second', 'spouses', ['second_person_id'], unique=False)
     op.create_index(op.f('ix_spouses_marriage_year'), 'spouses', ['marriage_year'], unique=False)
     # ### end Alembic commands ###
 
@@ -158,8 +160,9 @@ def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_index(op.f('ix_spouses_marriage_year'), table_name='spouses')
-    op.drop_index('idx_spouse_second_person', table_name='spouses')
-    op.drop_index('idx_spouse_first_person', table_name='spouses')
+    op.drop_index('idx_spouse_second', table_name='spouses')
+    op.drop_index('idx_spouse_pair', table_name='spouses')
+    op.drop_index('idx_spouse_first', table_name='spouses')
     op.drop_table('spouses')
     op.drop_index('idx_pc_parent', table_name='parent_child')
     op.drop_index('idx_pc_child', table_name='parent_child')

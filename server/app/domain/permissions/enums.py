@@ -71,9 +71,9 @@ class RoleName(str, Enum):
     Новые роли добавляются через Alembic-миграцию.
     """
 
-    description: str
+    description: str | None
 
-    def __new__(cls, value: str, description: str) -> RoleName:
+    def __new__(cls, value: str, description: str | None = None) -> RoleName:
         obj = str.__new__(cls, value)
         obj._value_ = value
         obj.description = description

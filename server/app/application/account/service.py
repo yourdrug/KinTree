@@ -12,8 +12,7 @@ Application-сервис для агрегата Account.
 from __future__ import annotations
 
 from domain.entities.account import Account
-
-from application.uow_factory import UoWFactory
+from infrastructure.uow_factory import UoWFactory
 
 
 class AccountService:

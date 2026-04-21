@@ -20,7 +20,7 @@ from domain.filters.base import BaseFilterSpec
 from domain.filters.page import Page
 from fastapi import APIRouter, Body, Depends, Path, Request, status
 
-from api.dependencies.auth_dependencies import get_current_account, get_current_account_id
+from api.dependencies.auth_dependencies import get_current_account
 from api.dependencies.dependencies import get_family_service
 from api.schemas.family import (
     CreateFamilyRequest,
@@ -84,14 +84,13 @@ async def create_family(
 async def update_family(
     family_id: str = Path(..., min_length=32, max_length=32),
     payload: PutFamilyRequest = Body(...),
-    account_id: str = Depends(get_current_account_id),
     service: FamilyService = Depends(get_family_service),
 ) -> FamilyResponse:
     """
     Перезаписать объект семьи для обновления.
     Если необязательный атрибут не передан, он устанавливается как None.
     """
-    command = payload.to_command(family_id=family_id, account_id=account_id)
+    command = payload.to_command(family_id=family_id)
     updated_family: Family = await service.update_family(command)
     return FamilyResponse.from_domain(family=updated_family)
 
