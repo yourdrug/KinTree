@@ -5,15 +5,20 @@ Family aggregate root.
 
 Family is the consistency boundary for its members.
 assert_can_add_member() enforces all cross-person invariants before persistence.
+
+Изменение (decoupling):
+  Раньше assert_can_add_member() принимал Person — объект другого агрегата.
+  Теперь принимает FamilyMemberSpec — VO из своего bounded context.
+  Family больше не импортирует Person. Зависимость разорвана.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from domain.entities.person import Person
 from domain.exceptions import FamilyDomainError
 from domain.utils import generate_uuid
+from domain.value_objects.family_member_spec import FamilyMemberSpec
 from domain.value_objects.unset import UNSET, UnsetType
 
 
@@ -32,7 +37,10 @@ class Family:
     id: str
     name: str
     owner_id: str
-    members: list[Person] = field(default_factory=list)
+
+    # Список FamilyMemberSpec загружается сервисом перед проверкой дублирования.
+    # Хранится в памяти только во время use-case, не персистируется здесь.
+    _member_specs: list[FamilyMemberSpec] = field(default_factory=list, repr=False)
 
     description: str | None = None
     origin_place: str | None = None
@@ -46,15 +54,33 @@ class Family:
 
     @property
     def members_count(self) -> int:
-        return len(self.members)
+        return len(self._member_specs)
 
     # ── Commands ──────────────────────────────────────────────────────────────
 
-    def assert_can_add_member(self, candidate: Person) -> None:
+    def load_member_specs(self, specs: list[FamilyMemberSpec]) -> None:
         """
-        Validates all invariants before a new member is added.
-        Called by PersonService before persisting — never by the repository.
+        Загружает спецификации существующих членов семьи для последующей
+        проверки дублирования.
+
+        Вызывается в PersonService ДО assert_can_add_member().
+        Не персистируется — только для проверки инвариантов в рамках use-case.
         """
+        self._member_specs = specs
+
+    def assert_can_add_member(self, candidate: FamilyMemberSpec) -> None:
+        """
+        Проверяет инварианты перед добавлением нового члена семьи.
+
+        Принимает FamilyMemberSpec, а не Person — Family не знает о Person.
+        Вызывается PersonService перед персистированием.
+
+        Raises:
+            FamilyDomainError: если кандидат является дубликатом.
+        """
+        if not candidate.has_identity():
+            # Нет имени — проверка дублирования невозможна, пропускаем.
+            return
         self._assert_no_duplicate(candidate)
 
     def apply_put(
@@ -112,22 +138,20 @@ class Family:
                 message="Founded year cannot be greater than ended year.",
             )
 
-    def _assert_no_duplicate(self, candidate: Person) -> None:
-        for member in self.members:
-            if _is_duplicate(member, candidate):
+    def _assert_no_duplicate(self, candidate: FamilyMemberSpec) -> None:
+        for existing in self._member_specs:
+            if _is_duplicate(existing, candidate):
+                name = " ".join(filter(None, [candidate.first_name, candidate.last_name]))
                 raise FamilyDomainError(
                     field="person",
-                    message=(
-                        f"A person named «{candidate.full_name()}» with the same "
-                        f"birth date already exists in this family."
-                    ),
+                    message=(f"A person named «{name}» with the same birth date already exists in this family."),
                 )
 
 
-def _is_duplicate(existing: Person, candidate: Person) -> bool:
+def _is_duplicate(existing: FamilyMemberSpec, candidate: FamilyMemberSpec) -> bool:
     """
-    Duplicate = same (first_name + last_name + birth_date).
-    None != None in business terms — not a duplicate.
+    Дубликат = совпадение (first_name + last_name + birth_date).
+    None != None в бизнес-терминах — не является дубликатом.
     """
     names_match = (
         existing.first_name is not None

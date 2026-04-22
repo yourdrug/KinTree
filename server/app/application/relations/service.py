@@ -5,7 +5,7 @@ Application service for Person relations (parent-child and spouse).
 
 Rules:
 - All reads AND writes for a single use-case happen inside ONE UoW context.
-- Domain invariants are checked by RelationPolicy (domain service) — not here.
+- Domain invariants are checked by dedicated policy services — not here.
 - This service only orchestrates: load data → check policy → persist.
 """
 
@@ -15,7 +15,8 @@ from domain.entities.parent_child import ParentChildRelation
 from domain.entities.person import Person
 from domain.entities.spouse import SpouseRelation
 from domain.exceptions import NotFoundError, RelationDomainError
-from domain.services.relation_policy import RelationPolicy
+from domain.services.parent_child_policy import ParentChildPolicy
+from domain.services.spouse_policy import SpousePolicy
 from infrastructure.uow_factory import UoWFactory
 
 from application.relations.commands import (
@@ -31,12 +32,12 @@ from application.relations.commands import (
 class RelationService:
     def __init__(self, uow_factory: UoWFactory) -> None:
         self._uow_factory = uow_factory
-        self._policy = RelationPolicy()
+        self._parent_child_policy = ParentChildPolicy()
+        self._spouse_policy = SpousePolicy()
 
     # ── ParentChild ───────────────────────────────────────────────────────────
 
     async def add_parent_child(self, command: AddParentChildCommand) -> ParentChildRelation:
-        # All reads and the write share ONE transaction
         async with self._uow_factory.create(master=True) as uow:
             parent = await uow.persons.get_by_id(command.parent_id)
             child = await uow.persons.get_by_id(command.child_id)
@@ -53,7 +54,8 @@ class RelationService:
             existing_spouse = await uow.spouses.get_spouses_of(command.parent_id)
             existing_spouse += await uow.spouses.get_spouses_of(command.child_id)
 
-            relation = self._policy.assert_can_add_parent_child(
+            # Проверка через выделенный policy-сервис
+            relation = self._parent_child_policy.assert_can_add(
                 parent_id=command.parent_id,
                 child_id=command.child_id,
                 relation_type=command.relation_type,
@@ -73,9 +75,11 @@ class RelationService:
 
     async def add_spouse(self, command: AddSpouseCommand) -> SpouseRelation:
         async with self._uow_factory.create(master=True) as uow:
+            # Убеждаемся что обе персоны существуют
             await uow.persons.get_by_id(command.person_a_id)
             await uow.persons.get_by_id(command.person_b_id)
 
+            # Загружаем связи, необходимые для проверки инвариантов
             existing_spouse = await uow.spouses.get_spouses_of(command.person_a_id)
             existing_spouse += await uow.spouses.get_spouses_of(command.person_b_id)
 
@@ -84,7 +88,8 @@ class RelationService:
             existing_parent += await uow.parent_child.get_children_of(command.person_b_id)
             existing_parent += await uow.parent_child.get_parents_of(command.person_a_id)
 
-            relation = self._policy.assert_can_add_spouse(
+            # Проверка через выделенный policy-сервис
+            relation = self._spouse_policy.assert_can_add(
                 person_a_id=command.person_a_id,
                 person_b_id=command.person_b_id,
                 existing_spouse_relations=existing_spouse,

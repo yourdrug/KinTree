@@ -6,16 +6,16 @@ Application service for the Person aggregate.
 Rules:
 - Never constructs PersonName or PartialDate directly — those are domain concerns.
 - Mutation is delegated to Person.apply_put() / Person.apply_patch().
-- Family-level duplicate check is delegated to Family.assert_can_add_member().
+- Family-level duplicate check uses FamilyMemberSpec — Family does not know about Person.
 - Each use-case opens exactly one UoW context.
 """
 
 from __future__ import annotations
 
-from domain.entities.family import Family
 from domain.entities.person import Person, create_person
 from domain.filters.base import BaseFilterSpec
 from domain.filters.page import Page
+from domain.value_objects.family_member_spec import FamilyMemberSpec
 from infrastructure.uow_factory import UoWFactory
 
 from application.person.commands import CreatePersonCommand, PatchPersonCommand, UpdatePersonCommand
@@ -40,8 +40,7 @@ class PersonService:
 
     async def create_person(self, command: CreatePersonCommand) -> Person:
         async with self._uow_factory.create(master=True) as uow:
-            family = await self._load_family_with_members(uow, command.family_id)
-
+            # Строим кандидата
             person = create_person(
                 gender=command.gender,
                 family_id=command.family_id,
@@ -53,15 +52,25 @@ class PersonService:
                 death_date_raw=command.death_date_raw,
             )
 
-            # Domain invariant: family decides whether the member can be added
-            family.assert_can_add_member(person)
+            # Проверяем инвариант дублирования через Family + FamilyMemberSpec
+            await self._check_family_duplicate(
+                uow=uow,
+                family_id=command.family_id,
+                candidate=FamilyMemberSpec(
+                    first_name=command.first_name,
+                    last_name=command.last_name,
+                    birth_date=command.birth_date,
+                ),
+                exclude_id=None,
+            )
+
             return await uow.persons.save(person)
 
     async def update_person(self, command: UpdatePersonCommand) -> Person:
         async with self._uow_factory.create(master=True) as uow:
             person = await uow.persons.get_by_id(command.person_id)
 
-            # Delegate mutation to the entity — it owns its invariants
+            # Делегируем мутацию сущности — она владеет своими инвариантами
             person.apply_put(
                 gender=command.gender,
                 first_name=command.first_name,
@@ -72,9 +81,17 @@ class PersonService:
                 death_date_raw=command.death_date_raw,
             )
 
-            # Check family-level duplicate invariant (exclude self)
-            family = await self._load_family_with_members(uow, person.family_id, exclude_id=person.id)
-            family.assert_can_add_member(person)
+            # Проверяем family-level инвариант, исключая саму персону
+            await self._check_family_duplicate(
+                uow=uow,
+                family_id=person.family_id,
+                candidate=FamilyMemberSpec(
+                    first_name=command.first_name,
+                    last_name=command.last_name,
+                    birth_date=command.birth_date,
+                ),
+                exclude_id=person.id,
+            )
 
             return await uow.persons.save(person)
 
@@ -88,7 +105,7 @@ class PersonService:
                 birth_date=command.birth_date,
             )
 
-            # Delegate mutation to the entity
+            # Делегируем мутацию сущности
             person.apply_patch(
                 first_name=command.first_name,
                 last_name=command.last_name,
@@ -99,9 +116,18 @@ class PersonService:
                 death_date_raw=command.death_date_raw,
             )
 
+            # Проверяем только если изменились identity-поля
             if needs_duplicate_check:
-                family = await self._load_family_with_members(uow, person.family_id, exclude_id=person.id)
-                family.assert_can_add_member(person)
+                await self._check_family_duplicate(
+                    uow=uow,
+                    family_id=person.family_id,
+                    candidate=FamilyMemberSpec(
+                        first_name=person.first_name,
+                        last_name=person.last_name,
+                        birth_date=person.birth_date,
+                    ),
+                    exclude_id=person.id,
+                )
 
             return await uow.persons.save(person)
 
@@ -112,17 +138,33 @@ class PersonService:
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     @staticmethod
-    async def _load_family_with_members(
+    async def _check_family_duplicate(
         uow: UnitOfWork,
         family_id: str,
-        exclude_id: str | None = None,
-    ) -> Family:
+        candidate: FamilyMemberSpec,
+        exclude_id: str | None,
+    ) -> None:
         """
-        Loads the Family aggregate populated with its current members.
-        exclude_id: omit one person from the member list (used during update
-        so the person isn't compared against itself).
+        Загружает Family, наполняет спецификациями существующих членов
+        и проверяет инвариант дублирования.
+
+        Family не знает о Person — получает только FamilyMemberSpec.
+        exclude_id: исключить одну персону из проверки (используется при
+        обновлении, чтобы персона не сравнивалась сама с собой).
         """
         family = await uow.families.get_by_id(family_id)
-        members = await uow.persons.find_by_family(family_id)
-        family.members = [m for m in members if m.id != exclude_id] if exclude_id else members
-        return family
+        existing_persons = await uow.persons.find_by_family(family_id)
+
+        # Строим список спецификаций, исключая обновляемую персону
+        specs = [
+            FamilyMemberSpec(
+                first_name=p.first_name,
+                last_name=p.last_name,
+                birth_date=p.birth_date,
+            )
+            for p in existing_persons
+            if p.id != exclude_id
+        ]
+
+        family.load_member_specs(specs)
+        family.assert_can_add_member(candidate)
