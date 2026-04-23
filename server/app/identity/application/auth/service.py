@@ -1,0 +1,136 @@
+"""
+application/auth/service.py
+
+Сервис аутентификации.
+При логине/рефреше возвращает TokenPair вместе с разрешениями аккаунта.
+"""
+
+from __future__ import annotations
+
+from shared.domain.exceptions import (
+    AccountBlockedError,
+    AuthenticationError,
+    ConflictError,
+)
+
+from identity.application.auth.commands import LoginCommand, RegisterCommand, TokenPair
+from identity.domain.entities.account import Account, create_account
+from identity.domain.entities.permission import create_account_role
+from identity.infrastructure.auth.jwt_service import (
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    hash_password,
+    hash_token,
+    verify_password,
+    verify_token_hash,
+)
+from identity.infrastructure.uow_factory import IdentityUoWFactory
+
+
+class AuthService:
+    def __init__(self, uow_factory: IdentityUoWFactory) -> None:
+        self._uow_factory = uow_factory
+
+    async def register(self, command: RegisterCommand) -> Account:
+        async with self._uow_factory.create(master=True) as uow:
+            existing = await uow.accounts.get_by_email(email=command.email)
+
+            if existing is not None:
+                raise ConflictError(
+                    message="Аккаунт уже существует",
+                    errors={"email": "Этот email уже зарегистрирован"},
+                )
+
+            account = create_account(
+                email=command.email,
+                hashed_password=hash_password(command.password),
+            )
+
+            saved_account = await uow.accounts.save(account)
+
+            # Назначение роли — ответственность сервиса, не репозитория
+            default_role = await uow.roles.get_by_name("user")
+            if default_role is not None:
+                account_role = create_account_role(
+                    account_id=saved_account.id,
+                    role_id=default_role.id,
+                )
+                await uow.account_roles.assign_role(account_role)
+
+            return saved_account
+
+    async def login(self, command: LoginCommand) -> TokenPair:
+        async with self._uow_factory.create(master=True) as uow:
+            account = await uow.accounts.get_by_email(
+                email=command.email,
+            )
+
+            if account is None or not verify_password(command.password, account.hashed_password):
+                raise AuthenticationError(message="Неверный email или пароль")
+
+            if account.is_acc_blocked:
+                raise AccountBlockedError
+
+            access_token = create_access_token(
+                account_id=account.id,
+                email=account.email,
+                role=account.role_name,
+            )
+            refresh_token = create_refresh_token(account_id=account.id)
+
+            await uow.accounts.update_refresh_token(
+                account_id=account.id,
+                hashed_refresh_token=hash_token(refresh_token),
+            )
+
+            return TokenPair(
+                access_token=access_token,
+                refresh_token=refresh_token,
+                permissions=sorted(account.permissions),
+                role=account.role_name,
+            )
+
+    async def refresh(self, refresh_token: str) -> TokenPair:
+        payload = decode_refresh_token(refresh_token)
+        account_id: str = payload["sub"]
+
+        async with self._uow_factory.create(master=True) as uow:
+            account = await uow.accounts.get_by_id(
+                account_id=account_id,
+            )
+
+            if account.is_acc_blocked:
+                raise AccountBlockedError
+
+            if account.refresh_token is None or not verify_token_hash(refresh_token, account.refresh_token):
+                raise AuthenticationError(
+                    message="Refresh-токен недействителен",
+                    errors={"token": "revoked_or_invalid"},
+                )
+
+            new_access = create_access_token(
+                account_id=account.id,
+                email=account.email,
+                role=account.role_name,
+            )
+            new_refresh = create_refresh_token(account_id=account.id)
+
+            await uow.accounts.update_refresh_token(
+                account_id=account.id,
+                hashed_refresh_token=hash_token(new_refresh),
+            )
+
+            return TokenPair(
+                access_token=new_access,
+                refresh_token=new_refresh,
+                permissions=sorted(account.permissions),
+                role=account.role_name,
+            )
+
+    async def logout(self, account_id: str) -> None:
+        async with self._uow_factory.create(master=True) as uow:
+            await uow.accounts.update_refresh_token(
+                account_id=account_id,
+                hashed_refresh_token=None,
+            )
