@@ -2,12 +2,13 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 import time
 
-from api.exception_handlers import register_exception_handlers
-from api.routes import account_routes, auth_routes, family_routes, person_routes, relation_routes
-from cli.cli import cli
+from presentation.rest.exception_handlers import register_exception_handlers
+from genealogy.api.routes import family_routes, person_routes, relation_routes
+from identity.api.routes import auth_routes, account_routes
+from presentation.cli.cli import cli
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from infrastructure.db.database import database
+from shared.infrastructure.db.database import database
 
 
 @asynccontextmanager
