@@ -91,12 +91,7 @@ class ParentChildPolicy:
             if rel.involves(person_a) and rel.involves(person_b):
                 raise RelationDomainError(
                     message="Ошибка валидации",
-                    errors={
-                        "relation": (
-                            "Нельзя добавить родительскую связь: "
-                            "эти люди уже состоят в браке."
-                        )
-                    },
+                    errors={"relation": ("Нельзя добавить родительскую связь: эти люди уже состоят в браке.")},
                 )
 
     def _check_biological_parent_limit(
@@ -112,18 +107,10 @@ class ParentChildPolicy:
         if new_relation_type != RelationType.BIOLOGICAL:
             return
 
-        bio_parents = [
-            r for r in existing
-            if r.child_id == child_id and r.relation_type == RelationType.BIOLOGICAL
-        ]
+        bio_parents = [r for r in existing if r.child_id == child_id and r.relation_type == RelationType.BIOLOGICAL]
 
         if len(bio_parents) >= 2:
             raise RelationDomainError(
                 message="Ошибка валидации",
-                errors={
-                    "relation": (
-                        "У ребёнка уже есть 2 биологических родителя. "
-                        "Используйте тип ADOPTED или STEP."
-                    )
-                },
+                errors={"relation": ("У ребёнка уже есть 2 биологических родителя. Используйте тип ADOPTED или STEP.")},
             )

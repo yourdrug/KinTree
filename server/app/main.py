@@ -4,6 +4,7 @@ import time
 
 from api.exception_handlers import register_exception_handlers
 from api.routes import account_routes, auth_routes, family_routes, person_routes, relation_routes
+from cli.cli import cli
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from infrastructure.db.database import database
@@ -67,3 +68,6 @@ def create_app() -> FastAPI:
 
 # Экземпляр приложения для uvicorn/gunicorn
 app = create_app()
+
+if __name__ == "__main__":
+    cli.execute_command()

@@ -50,7 +50,7 @@ _CLIENT_STATUS_MAP: dict[type[ClientException], int] = {
     AccountBlockedError: status.HTTP_403_FORBIDDEN,
     NotFoundError: status.HTTP_404_NOT_FOUND,
     ConflictError: status.HTTP_409_CONFLICT,
-    FilterValidationError: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    FilterValidationError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     ClientException: status.HTTP_400_BAD_REQUEST,  # fallback
 }
 
@@ -144,7 +144,7 @@ async def handle_validation_exception(request: Request, exc: Exception) -> JSONR
         errors[field] = tmpl.format(**error.get("ctx", {}))
 
     content = _error("Ошибка валидации", errors) if errors else _error("Ошибка валидации")
-    return _json(content, status.HTTP_422_UNPROCESSABLE_ENTITY)
+    return _json(content, status.HTTP_422_UNPROCESSABLE_CONTENT)
 
 
 async def handle_http_exception(request: Request, exc: Exception) -> JSONResponse:

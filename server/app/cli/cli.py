@@ -103,6 +103,3 @@ class CLI:
 
 
 cli: CLI = CLI()
-
-if __name__ == "__main__":
-    cli.execute_command()
