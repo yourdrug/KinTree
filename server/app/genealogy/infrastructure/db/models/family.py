@@ -1,7 +1,6 @@
+from shared.infrastructure.db.basemodel import BaseModel
 from sqlalchemy import ForeignKey, Index, Text
 from sqlalchemy.orm import Mapped, mapped_column
-
-from shared.infrastructure.db.basemodel import BaseModel
 
 
 class Family(BaseModel):

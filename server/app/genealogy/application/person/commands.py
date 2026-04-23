@@ -14,9 +14,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from shared.domain.value_objects.unset import UNSET, UnsetType
+
 from genealogy.domain.enums import PersonGender
 from genealogy.domain.value_objects.partial_date import PartialDate
-from shared.domain.value_objects.unset import UNSET, UnsetType
 
 
 @dataclass(frozen=True)

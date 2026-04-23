@@ -7,11 +7,11 @@ infrastructure/account/repositories.py
 
 from __future__ import annotations
 
-from identity.domain.entities.account import Account as DomainAccount
 from sqlalchemy import exists, insert, select, update
 from sqlalchemy.engine.result import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from identity.domain.entities.account import Account as DomainAccount
 from identity.domain.permissions.enums import RoleName
 from identity.infrastructure.account.mapper import AccountMapper
 from identity.infrastructure.db.models.account import Account as ORMAccount

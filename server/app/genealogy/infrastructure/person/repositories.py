@@ -13,19 +13,19 @@ infrastructure/person/repositories.py
 
 from __future__ import annotations
 
-from genealogy.domain.entities.person import Person
 from shared.domain.exceptions import NotFoundError
-from genealogy.domain.repositories.person import Page
+from shared.domain.value_objects.pagination import BaseFilterSpec
+from shared.infrastructure.db.filters.translator import FilterTranslator
 from sqlalchemy import delete, exists, func, insert, select, update
 from sqlalchemy.engine.result import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
+from genealogy.domain.entities.person import Person
+from genealogy.domain.repositories.person import Page
 from genealogy.infrastructure.db.models.person import Person as ORMPerson
 from genealogy.infrastructure.person.filters import person_filter_translator
 from genealogy.infrastructure.person.mapper import PersonMapper
-from shared.domain.value_objects.pagination import BaseFilterSpec
-from shared.infrastructure.db.filters.translator import FilterTranslator
 
 
 class PersonRepositoryImpl:

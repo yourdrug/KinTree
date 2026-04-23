@@ -13,9 +13,9 @@ infrastructure/person/mapper.py
 from __future__ import annotations
 
 from genealogy.domain.entities.person import Person
-from genealogy.domain.value_objects.person_name import PersonName
+from genealogy.domain.value_objects.family_ref import FamilyRef
 from genealogy.domain.value_objects.partial_date import PartialDate
-
+from genealogy.domain.value_objects.person_name import PersonName
 from genealogy.infrastructure.db.models.person import Person as ORMPerson
 
 
@@ -31,7 +31,7 @@ class PersonMapper:
                 last_name=model.last_name,
             ),
             gender=model.gender,
-            family_id=model.family_id,
+            family_ref=FamilyRef(family_id=model.family_id),
             birth_date=PersonMapper._build_date(model.birth_year, model.birth_month, model.birth_day),
             death_date=PersonMapper._build_date(model.death_year, model.death_month, model.death_day),
             birth_date_raw=model.birth_date_raw,

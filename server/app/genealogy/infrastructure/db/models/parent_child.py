@@ -12,12 +12,12 @@ ParentChild: связь родитель–ребёнок между двумя 
 - birth_date, gender и т.д. — это данные персоны, не связи
 """
 
-from genealogy.domain.enums import RelationType
+from shared.infrastructure.db.basemodel import LinkedBaseModel
 from sqlalchemy import CheckConstraint, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import Mapped, mapped_column
 
-from shared.infrastructure.db.basemodel import LinkedBaseModel
+from genealogy.domain.enums import RelationType
 
 
 class ParentChild(LinkedBaseModel):

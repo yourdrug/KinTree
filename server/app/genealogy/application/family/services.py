@@ -11,13 +11,13 @@ Rules:
 
 from __future__ import annotations
 
-from genealogy.domain.entities.family import Family, create_family
-from genealogy.infrastructure.uow_factory import GenealogyUoWFactory
 from identity.domain.entities.account import Account
+from shared.domain.exceptions import NotFoundError
+from shared.domain.value_objects.pagination import BaseFilterSpec, Page
 
 from genealogy.application.family.commands import CreateFamilyCommand, PatchFamilyCommand, PutFamilyCommand
-from shared.domain.exceptions import NotFoundError
-from shared.domain.value_objects.pagination import Page, BaseFilterSpec
+from genealogy.domain.entities.family import Family, create_family
+from genealogy.infrastructure.uow_factory import GenealogyUoWFactory
 
 
 class FamilyService:

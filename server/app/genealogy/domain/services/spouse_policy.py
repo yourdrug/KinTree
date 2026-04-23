@@ -13,10 +13,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from shared.domain.exceptions import RelationDomainError
+
 from genealogy.domain.entities.parent_child import ParentChildRelation
 from genealogy.domain.entities.spouse import SpouseRelation, create_spouse_relation
 from genealogy.domain.enums import MarriageStatus
-from shared.domain.exceptions import RelationDomainError
 
 
 class SpousePolicy:

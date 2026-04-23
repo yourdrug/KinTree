@@ -17,16 +17,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated, ClassVar
 
-from genealogy.application.family.commands import CreateFamilyCommand, PatchFamilyCommand, PutFamilyCommand
-from genealogy.domain.entities.family import Family
-from shared.domain.exceptions import FilterValidationError
-from genealogy.domain.filters.specs import FamilyFilterSpec
-from shared.domain.value_objects.pagination import Page, SortDirection, SortField
-from shared.domain.value_objects.unset import UNSET
 from fastapi import Query, Request
 from pydantic import BaseModel, Field
-
 from shared.api.schemas.base import BasePageResponse, BasePaginationParams, BasePatchSchema
+from shared.domain.exceptions import FilterValidationError
+from shared.domain.value_objects.pagination import Page, SortDirection, SortField
+from shared.domain.value_objects.unset import UNSET
+
+from genealogy.application.family.commands import CreateFamilyCommand, PatchFamilyCommand, PutFamilyCommand
+from genealogy.domain.entities.family import Family
+from genealogy.domain.filters.specs import FamilyFilterSpec
 
 
 # ── Request schemas ───────────────────────────────────────────────────────────

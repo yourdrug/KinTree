@@ -53,6 +53,7 @@ class Page(Generic[T]):
 
 class FilterOperator(str, Enum):
     """Доступные операции для фильтрации"""
+
     EXACT = "exact"
     GT = "gt"
     GTE = "gte"
@@ -66,6 +67,7 @@ class FilterOperator(str, Enum):
 
 class SortDirection(str, Enum):
     """Параметры сортировки по убыванию или возрастанию"""
+
     ASC = "asc"
     DESC = "desc"
 
@@ -73,6 +75,7 @@ class SortDirection(str, Enum):
 @dataclass(frozen=True)
 class FilterField:
     """Поле для фильтрации"""
+
     field_name: str
     operator: FilterOperator
     value: Any
@@ -90,6 +93,7 @@ class FilterField:
 @dataclass(frozen=True)
 class SortField:
     """Поле для сортировки"""
+
     field_name: str
     direction: SortDirection = SortDirection.ASC
 
@@ -97,6 +101,7 @@ class SortField:
 @dataclass(frozen=True)
 class BaseFilterSpec:
     """Совокупность полей для фильтраций и полей для сортировок"""
+
     filters: tuple[FilterField, ...] = field(default_factory=tuple)
     sort: tuple[SortField, ...] = field(default_factory=tuple)
     limit: int = 20

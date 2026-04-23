@@ -12,9 +12,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from shared.domain.utils import generate_uuid
+
 from identity.domain.value_objects.account_role import AccountRole
 from identity.domain.value_objects.permission import Permission
-from shared.domain.utils import generate_uuid
 
 
 # ── Role (Entity) ─────────────────────────────────────────────────────────────

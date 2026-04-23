@@ -12,10 +12,9 @@ HTTP-роуты для агрегата Person.
 
 from __future__ import annotations
 
-from genealogy.application.person.service import PersonService
 from fastapi import APIRouter, Body, Depends, Path, Request, status
-
 from presentation.rest.dependencies.dependencies import get_person_service
+
 from genealogy.api.schemas.person import (
     CreatePersonRequest,
     PatchPersonRequest,
@@ -24,6 +23,7 @@ from genealogy.api.schemas.person import (
     PersonResponse,
     UpdatePersonRequest,
 )
+from genealogy.application.person.service import PersonService
 
 
 router = APIRouter(prefix="/persons", tags=["Persons"])

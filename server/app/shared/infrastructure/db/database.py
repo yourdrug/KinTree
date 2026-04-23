@@ -7,7 +7,6 @@ from logging import (
     getLogger,
 )
 
-from shared.domain.exceptions import DatabaseError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -15,6 +14,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from shared.domain.exceptions import DatabaseError
 from shared.infrastructure.db.dataclasses import DatabaseURL
 from shared.infrastructure.db.enums import DatabaseNodeRole
 from shared.infrastructure.db.settings import settings

@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from genealogy.application.relations.service import RelationService
 from fastapi import APIRouter, Body, Depends, Path, status
-
-from genealogy.domain.entities.parent_child import ParentChildRelation
-from genealogy.domain.entities.spouse import SpouseRelation
 from presentation.rest.dependencies.dependencies import get_relation_service
+
 from genealogy.api.schemas.relations import (
     AddParentChildRequest,
     AddSpouseRequest,
@@ -14,6 +11,9 @@ from genealogy.api.schemas.relations import (
     ParentChildResponse,
     SpouseResponse,
 )
+from genealogy.application.relations.service import RelationService
+from genealogy.domain.entities.parent_child import ParentChildRelation
+from genealogy.domain.entities.spouse import SpouseRelation
 
 
 router: APIRouter = APIRouter(prefix="/relations", tags=["Relations"])

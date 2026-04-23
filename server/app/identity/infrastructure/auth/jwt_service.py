@@ -11,10 +11,9 @@ import hashlib
 import secrets
 
 import bcrypt
-from shared.domain.exceptions import AuthenticationError
 import jwt
 from jwt import DecodeError, ExpiredSignatureError, InvalidTokenError
-
+from shared.domain.exceptions import AuthenticationError
 from shared.infrastructure.db.settings import settings
 
 

@@ -13,11 +13,11 @@ SQLAlchemy-реализации репозиториев системы разр
 
 from __future__ import annotations
 
-from identity.domain.entities.permission import AccountRole, Permission, Role
 from sqlalchemy import Result, delete, insert, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from identity.domain.entities.permission import AccountRole, Permission, Role
 from identity.infrastructure.db.models.permission import (
     AccountRole as AccountRoleORM,
 )

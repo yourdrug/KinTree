@@ -21,9 +21,10 @@ from shared.domain.value_objects.pagination import (
     BaseFilterSpec,
     FilterField,
     FilterOperator,
-    SortField,
     SortDirection,
+    SortField,
 )
+
 
 # Маппинг: имя поля агрегата → атрибут ORM-модели
 FieldMap = dict[str, InstrumentedAttribute]

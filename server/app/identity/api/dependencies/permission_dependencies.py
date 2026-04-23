@@ -30,12 +30,12 @@ Account.permissions — frozenset[str] codename'ов.
 
 from __future__ import annotations
 
-from identity.domain.entities.account import Account
-from identity.domain.permissions.enums import PermissionCodename
-from shared.domain.exceptions import AuthenticationError
 from fastapi import Depends
+from shared.domain.exceptions import AuthenticationError
 
 from identity.api.dependencies.auth_dependencies import get_current_account
+from identity.domain.entities.account import Account
+from identity.domain.permissions.enums import PermissionCodename
 
 
 class _RequirePermission:

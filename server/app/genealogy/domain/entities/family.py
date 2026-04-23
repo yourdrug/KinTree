@@ -18,8 +18,9 @@ from dataclasses import dataclass, field
 
 from shared.domain.exceptions import FamilyDomainError
 from shared.domain.utils import generate_uuid
-from genealogy.domain.value_objects.family_member_spec import FamilyMemberSpec
 from shared.domain.value_objects.unset import UNSET, UnsetType
+
+from genealogy.domain.value_objects.family_member_spec import FamilyMemberSpec
 
 
 @dataclass

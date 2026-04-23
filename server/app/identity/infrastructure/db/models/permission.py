@@ -15,10 +15,9 @@ ORM-модели для системы разрешений.
 - Все уникальные ограничения явные, с именами — для читаемых ошибок и миграций.
 """
 
+from shared.infrastructure.db.basemodel import BaseModel, LinkedBaseModel
 from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
-
-from shared.infrastructure.db.basemodel import BaseModel, LinkedBaseModel
 
 
 class Permission(BaseModel):

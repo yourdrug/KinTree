@@ -12,19 +12,19 @@ Rules:
 
 from __future__ import annotations
 
-from genealogy.domain.entities.family import Family as DomainFamily
 from shared.domain.exceptions import NotFoundError
+from shared.domain.value_objects.pagination import BaseFilterSpec, Page
+from shared.infrastructure.db.filters.translator import FilterTranslator
 from sqlalchemy import Delete, delete, exists, func, insert, select, update
 from sqlalchemy.engine.result import Result
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
 
-from shared.domain.value_objects.pagination import BaseFilterSpec, Page
+from genealogy.domain.entities.family import Family as DomainFamily
 from genealogy.infrastructure.db.models.family import Family as ORMFamily
 from genealogy.infrastructure.family.filters import family_filter_translator
 from genealogy.infrastructure.family.mapper import FamilyMapper
-from shared.infrastructure.db.filters.translator import FilterTranslator
 
 
 class FamilyRepositoryImpl:

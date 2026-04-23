@@ -1,9 +1,16 @@
 from __future__ import annotations
 
-from genealogy.application.relations.commands import AddParentChildCommand, AddSpouseCommand, DivorceCommand, \
-    FamilyGraphResult, EdgeDTO, NodeDTO
-from genealogy.domain.enums import MarriageStatus, RelationType
 from pydantic import BaseModel, Field
+
+from genealogy.application.relations.commands import (
+    AddParentChildCommand,
+    AddSpouseCommand,
+    DivorceCommand,
+    EdgeDTO,
+    FamilyGraphResult,
+    NodeDTO,
+)
+from genealogy.domain.enums import MarriageStatus, RelationType
 
 
 # ── Request схемы ─────────────────────────────────────────────────────────────

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from genealogy.domain.entities.family import Family
 from shared.domain.value_objects.pagination import BaseFilterSpec, Page
+
+from genealogy.domain.entities.family import Family
 
 
 class FamilyRepository(Protocol):

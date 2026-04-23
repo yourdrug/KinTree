@@ -15,13 +15,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from genealogy.domain.enums import PersonGender
-from genealogy.domain.value_objects.family_ref import FamilyRef
 from shared.domain.exceptions import PersonDomainError
 from shared.domain.utils import generate_uuid
-from genealogy.domain.value_objects.person_name import PersonName
-from genealogy.domain.value_objects.partial_date import PartialDate
 from shared.domain.value_objects.unset import UNSET, UnsetType
+
+from genealogy.domain.enums import PersonGender
+from genealogy.domain.value_objects.family_ref import FamilyRef
+from genealogy.domain.value_objects.partial_date import PartialDate
+from genealogy.domain.value_objects.person_name import PersonName
 
 
 @dataclass
@@ -212,7 +213,7 @@ def reconstruct_person(
     person.id = id
     person.name = PersonName(first_name=first_name, last_name=last_name)
     person.gender = gender
-    person.family_id = family_id
+    person.family_ref = FamilyRef(family_id=family_id)
     person.birth_date = birth_date
     person.death_date = death_date
     person.birth_date_raw = birth_date_raw

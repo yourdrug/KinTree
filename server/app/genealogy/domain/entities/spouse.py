@@ -3,8 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
-from genealogy.domain.enums import MarriageStatus
 from shared.domain.exceptions import RelationDomainError
+
+from genealogy.domain.enums import MarriageStatus
 
 
 @dataclass

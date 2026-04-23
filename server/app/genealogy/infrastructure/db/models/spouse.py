@@ -24,12 +24,12 @@ Spouse: супружеская связь между двумя персонам
 
 from datetime import datetime
 
-from genealogy.domain.enums import MarriageStatus
+from shared.infrastructure.db.basemodel import LinkedBaseModel
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, SmallInteger, String
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import Mapped, mapped_column
 
-from shared.infrastructure.db.basemodel import LinkedBaseModel
+from genealogy.domain.enums import MarriageStatus
 
 
 class Spouse(LinkedBaseModel):

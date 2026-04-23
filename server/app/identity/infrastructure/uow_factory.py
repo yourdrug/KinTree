@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from shared.infrastructure.db.database import DatabaseManager
+
 from identity.application.uow import IdentityUoW
 from identity.infrastructure.account.repositories import AccountRepositoryImpl
 from identity.infrastructure.permissions.repositories import (
@@ -18,9 +19,7 @@ class IdentityUoWFactory:
         self._database = database
 
     @asynccontextmanager
-    async def create(
-        self, master: bool = False
-    ) -> AsyncGenerator[IdentityUoW, None]:
+    async def create(self, master: bool = False) -> AsyncGenerator[IdentityUoW, None]:
         session = self._database.get_session(master=master)
         uow = IdentityUoW(
             session=session,

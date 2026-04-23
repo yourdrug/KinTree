@@ -11,8 +11,10 @@ infrastructure/family/filters.py
 
 from __future__ import annotations
 
-from genealogy.infrastructure.db.models.family import Family as ORMFamily
 from shared.infrastructure.db.filters.translator import FilterTranslator
+
+from genealogy.infrastructure.db.models.family import Family as ORMFamily
+
 
 family_filter_translator = FilterTranslator(
     field_map={

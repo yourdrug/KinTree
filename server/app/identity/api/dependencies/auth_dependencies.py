@@ -19,14 +19,15 @@ Usage in routes:
     async def public(account: Account | None = Depends(get_optional_account)):
         ...
 """
-from identity.application.account.service import AccountService
-from identity.domain.entities.account import Account
-from shared.domain.exceptions import AuthenticationError
+
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from identity.infrastructure.auth.jwt_service import decode_access_token
-
 from presentation.rest.dependencies.dependencies import get_account_service
+from shared.domain.exceptions import AuthenticationError
+
+from identity.application.account.service import AccountService
+from identity.domain.entities.account import Account
+from identity.infrastructure.auth.jwt_service import decode_access_token
 
 
 # auto_error=False lets us raise a custom AuthenticationError instead of

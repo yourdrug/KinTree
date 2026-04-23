@@ -14,8 +14,9 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from genealogy.domain.entities.person import Person
 from shared.domain.value_objects.pagination import BaseFilterSpec, Page
+
+from genealogy.domain.entities.person import Person
 
 
 class PersonRepository(Protocol):

@@ -12,14 +12,12 @@ HTTP-роуты для агрегата Family.
 
 from __future__ import annotations
 
-from genealogy.application.family.commands import CreateFamilyCommand
-from genealogy.application.family.services import FamilyService
-from identity.domain.entities.account import Account
-from genealogy.domain.entities.family import Family
 from fastapi import APIRouter, Body, Depends, Path, Request, status
-
 from identity.api.dependencies.auth_dependencies import get_current_account
+from identity.domain.entities.account import Account
 from presentation.rest.dependencies.dependencies import get_family_service
+from shared.domain.value_objects.pagination import BaseFilterSpec, Page
+
 from genealogy.api.schemas.family import (
     CreateFamilyRequest,
     FamilyFilterSchema,
@@ -28,7 +26,10 @@ from genealogy.api.schemas.family import (
     PatchFamilyRequest,
     PutFamilyRequest,
 )
-from shared.domain.value_objects.pagination import BaseFilterSpec, Page
+from genealogy.application.family.commands import CreateFamilyCommand
+from genealogy.application.family.services import FamilyService
+from genealogy.domain.entities.family import Family
+
 
 router: APIRouter = APIRouter(prefix="/families", tags=["Families"])
 

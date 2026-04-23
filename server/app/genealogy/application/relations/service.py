@@ -11,13 +11,7 @@ Rules:
 
 from __future__ import annotations
 
-from genealogy.domain.entities.parent_child import ParentChildRelation
-from genealogy.domain.entities.person import Person
-from genealogy.domain.entities.spouse import SpouseRelation
-from genealogy.domain.services.spouse_policy import SpousePolicy
 from shared.domain.exceptions import NotFoundError, RelationDomainError
-from genealogy.domain.services.parent_child_policy import ParentChildPolicy
-from genealogy.infrastructure.uow_factory import GenealogyUoWFactory
 
 from genealogy.application.relations.commands import (
     AddParentChildCommand,
@@ -27,6 +21,12 @@ from genealogy.application.relations.commands import (
     FamilyGraphResult,
     NodeDTO,
 )
+from genealogy.domain.entities.parent_child import ParentChildRelation
+from genealogy.domain.entities.person import Person
+from genealogy.domain.entities.spouse import SpouseRelation
+from genealogy.domain.services.parent_child_policy import ParentChildPolicy
+from genealogy.domain.services.spouse_policy import SpousePolicy
+from genealogy.infrastructure.uow_factory import GenealogyUoWFactory
 
 
 class RelationService:

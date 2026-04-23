@@ -2,10 +2,9 @@
 infrastructure/db/models/account.py
 """
 
+from shared.infrastructure.db.basemodel import BaseModel
 from sqlalchemy import Index
 from sqlalchemy.orm import Mapped, mapped_column
-
-from shared.infrastructure.db.basemodel import BaseModel
 
 
 class Account(BaseModel):

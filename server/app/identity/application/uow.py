@@ -4,14 +4,15 @@ from contextlib import suppress
 from types import TracebackType
 
 from shared.domain.exceptions import DatabaseError
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from identity.domain.repositories.account import AccountRepository
 from identity.domain.repositories.permission import (
     AccountRoleRepository,
     PermissionRepository,
     RoleRepository,
 )
-from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class IdentityUoW:
@@ -41,7 +42,7 @@ class IdentityUoW:
         self.roles = roles
         self.account_roles = account_roles
 
-    async def __aenter__(self) -> "IdentityUoW":
+    async def __aenter__(self) -> IdentityUoW:
         await self._session.begin()
         return self
 

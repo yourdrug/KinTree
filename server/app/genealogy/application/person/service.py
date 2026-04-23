@@ -12,13 +12,13 @@ Rules:
 
 from __future__ import annotations
 
+from shared.domain.value_objects.pagination import BaseFilterSpec, Page
+
+from genealogy.application.person.commands import CreatePersonCommand, PatchPersonCommand, UpdatePersonCommand
 from genealogy.application.uow import GenealogyUoW
 from genealogy.domain.entities.person import Person, create_person
 from genealogy.domain.value_objects.family_member_spec import FamilyMemberSpec
 from genealogy.infrastructure.uow_factory import GenealogyUoWFactory
-
-from genealogy.application.person.commands import CreatePersonCommand, PatchPersonCommand, UpdatePersonCommand
-from shared.domain.value_objects.pagination import BaseFilterSpec, Page
 
 
 class PersonService:

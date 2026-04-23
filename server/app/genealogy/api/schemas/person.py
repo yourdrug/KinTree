@@ -16,18 +16,18 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Annotated, Any, ClassVar
 
+from fastapi import Query, Request
+from pydantic import BaseModel, Field
+from shared.api.schemas.base import BasePageResponse, BasePaginationParams, BasePatchSchema
+from shared.domain.exceptions import FilterValidationError
+from shared.domain.value_objects.pagination import Page, SortDirection, SortField
+from shared.domain.value_objects.unset import UNSET
+
 from genealogy.application.person.commands import CreatePersonCommand, PatchPersonCommand, UpdatePersonCommand
 from genealogy.domain.entities.person import Person
 from genealogy.domain.enums import PersonGender
-from shared.domain.exceptions import FilterValidationError
 from genealogy.domain.filters.specs import PersonFilterSpec
 from genealogy.domain.value_objects.partial_date import PartialDate
-from shared.domain.value_objects.pagination import Page, SortDirection, SortField
-from shared.domain.value_objects.unset import UNSET
-from fastapi import Query, Request
-from pydantic import BaseModel, Field
-
-from shared.api.schemas.base import BasePageResponse, BasePaginationParams, BasePatchSchema
 
 
 # ── Value object schemas ──────────────────────────────────────────────────────

@@ -7,13 +7,15 @@ application/auth/service.py
 
 from __future__ import annotations
 
-from identity.domain.entities.account import Account, create_account
-from identity.domain.entities.permission import create_account_role
 from shared.domain.exceptions import (
     AccountBlockedError,
     AuthenticationError,
     ConflictError,
 )
+
+from identity.application.auth.commands import LoginCommand, RegisterCommand, TokenPair
+from identity.domain.entities.account import Account, create_account
+from identity.domain.entities.permission import create_account_role
 from identity.infrastructure.auth.jwt_service import (
     create_access_token,
     create_refresh_token,
@@ -24,8 +26,6 @@ from identity.infrastructure.auth.jwt_service import (
     verify_token_hash,
 )
 from identity.infrastructure.uow_factory import IdentityUoWFactory
-
-from identity.application.auth.commands import LoginCommand, RegisterCommand, TokenPair
 
 
 class AuthService:

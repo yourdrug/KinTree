@@ -1,12 +1,11 @@
 """
 api/routes/auth_routes.py
 """
-from identity.application.auth.service import AuthService
-from identity.domain.entities.account import Account
+
 from fastapi import APIRouter, Body, Depends, status
+from presentation.rest.dependencies.dependencies import get_auth_service
 
 from identity.api.dependencies.auth_dependencies import get_current_account, get_current_account_id
-from presentation.rest.dependencies.dependencies import get_auth_service
 from identity.api.schemas.auth import (
     AccountResponse,
     LoginRequest,
@@ -14,6 +13,8 @@ from identity.api.schemas.auth import (
     RegisterRequest,
     TokenResponse,
 )
+from identity.application.auth.service import AuthService
+from identity.domain.entities.account import Account
 
 
 router: APIRouter = APIRouter(prefix="/auth", tags=["Auth"])

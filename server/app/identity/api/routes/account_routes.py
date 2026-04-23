@@ -1,13 +1,13 @@
-from identity.application.account.service import AccountService
-from identity.domain.entities.account import Account
 from fastapi import (
     APIRouter,
     Depends,
     Path,
     status,
 )
-
 from presentation.rest.dependencies.dependencies import get_account_service
+
+from identity.application.account.service import AccountService
+from identity.domain.entities.account import Account
 
 
 router: APIRouter = APIRouter(prefix="/account", tags=["Accounts"])

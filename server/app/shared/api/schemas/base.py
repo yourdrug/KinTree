@@ -16,9 +16,10 @@ from dataclasses import dataclass
 from typing import Annotated, Any, ClassVar
 from urllib.parse import urlencode
 
-from shared.domain.exceptions import DomainValidationError
 from fastapi import Query
 from pydantic import BaseModel, Field, model_validator
+
+from shared.domain.exceptions import DomainValidationError
 
 
 class ErrorResponse(BaseModel):

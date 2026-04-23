@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from identity.application.auth.commands import RegisterCommand, LoginCommand
+from identity.application.auth.commands import LoginCommand, RegisterCommand
 
 
 class RegisterRequest(BaseModel):

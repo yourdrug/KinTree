@@ -22,8 +22,8 @@ import logging
 import sys
 
 from identity.application.permissions.service import PermissionService
-from shared.infrastructure.db.database import database
 from identity.infrastructure.uow_factory import IdentityUoWFactory
+from shared.infrastructure.db.database import database
 
 
 logger = logging.getLogger("default")

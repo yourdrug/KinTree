@@ -14,6 +14,10 @@ from __future__ import annotations
 
 from logging import Logger, getLogger
 
+from fastapi import FastAPI, status
+from fastapi.exceptions import HTTPException, RequestValidationError
+from fastapi.requests import Request
+from fastapi.responses import JSONResponse
 from shared.domain.exceptions import (
     AccountBlockedError,
     AuthenticationError,
@@ -29,10 +33,6 @@ from shared.domain.exceptions import (
     RelationDomainError,
     ServerException,
 )
-from fastapi import FastAPI, status
-from fastapi.exceptions import HTTPException, RequestValidationError
-from fastapi.requests import Request
-from fastapi.responses import JSONResponse
 
 
 logger: Logger = getLogger("default")

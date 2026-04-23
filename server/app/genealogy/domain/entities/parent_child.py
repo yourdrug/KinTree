@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from genealogy.domain.enums import RelationType
 from shared.domain.exceptions import RelationDomainError
+
+from genealogy.domain.enums import RelationType
 
 
 @dataclass

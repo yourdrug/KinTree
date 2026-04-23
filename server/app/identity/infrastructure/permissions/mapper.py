@@ -13,7 +13,6 @@ infrastructure/permissions/mapper.py
 from __future__ import annotations
 
 from identity.domain.entities.permission import AccountRole, Permission, Role
-
 from identity.infrastructure.db.models.permission import AccountRole as AccountRoleORM
 from identity.infrastructure.db.models.permission import Permission as PermissionORM
 from identity.infrastructure.db.models.permission import Role as RoleORM

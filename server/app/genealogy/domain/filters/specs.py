@@ -14,8 +14,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from shared.domain.value_objects.pagination import BaseFilterSpec, FilterField, FilterOperator, SortDirection, SortField
+
 from genealogy.domain.enums import PersonGender
-from shared.domain.value_objects.pagination import BaseFilterSpec, FilterField, FilterOperator, SortField, SortDirection
 
 
 @dataclass(frozen=True)

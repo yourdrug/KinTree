@@ -1,9 +1,9 @@
-from genealogy.domain.enums import PersonGender
+from shared.infrastructure.db.basemodel import BaseModel
 from sqlalchemy import CheckConstraint, ForeignKey, Index, SmallInteger, String
 from sqlalchemy.dialects.postgresql import ENUM
 from sqlalchemy.orm import Mapped, mapped_column
 
-from shared.infrastructure.db.basemodel import BaseModel
+from genealogy.domain.enums import PersonGender
 
 
 class Person(BaseModel):

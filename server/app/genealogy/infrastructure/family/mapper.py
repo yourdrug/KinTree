@@ -1,5 +1,4 @@
 from genealogy.domain.entities.family import Family as DomainFamily
-
 from genealogy.infrastructure.db.models.family import Family as ORMFamily
 
 
