@@ -29,7 +29,7 @@ class BaseModel(_Base):
     id: Mapped[str] = mapped_column(
         String,
         primary_key=True,
-        default=uuid4().hex,
+        default=lambda: uuid4().hex,
         comment="Entity identifier (UUID hex)",
     )
     creation_date: Mapped[datetime] = mapped_column(

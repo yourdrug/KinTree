@@ -9,6 +9,7 @@ from identity.api.routes import account_routes, auth_routes
 from presentation.cli.cli import cli
 from presentation.rest.exception_handlers import register_exception_handlers
 from shared.infrastructure.db.database import database
+from shared.infrastructure.db.settings import settings
 
 
 @asynccontextmanager
@@ -41,7 +42,7 @@ def create_app() -> FastAPI:
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.BACKEND_CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
