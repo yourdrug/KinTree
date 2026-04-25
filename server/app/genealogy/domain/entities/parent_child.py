@@ -7,17 +7,17 @@ from shared.domain.exceptions import RelationDomainError
 from genealogy.domain.enums import RelationType
 
 
-@dataclass
+@dataclass(frozen=True)
 class ParentChildRelation:
     """
     Value Object: связь родитель–ребёнок.
 
-    Frozen=True — связь неизменяема после создания.
+    frozen=True — связь неизменяема после создания.
     Для смены типа (BIOLOGICAL→ADOPTED) — удаляем старую, создаём новую.
 
     Инварианты:
     - parent_id != child_id
-    - оба ID непустые
+    - оба ID непустые строки длиной >= 32
     """
 
     parent_id: str
@@ -25,24 +25,29 @@ class ParentChildRelation:
     relation_type: RelationType
 
     def __post_init__(self) -> None:
-        if not self.parent_id or not self.child_id:
+        if not self.parent_id or not self.parent_id.strip():
             raise RelationDomainError(
                 message="Ошибка валидации",
-                errors={"ids": "ID родителя и ребёнка не могут быть пустыми."},
+                errors={"parent_id": "ID родителя не может быть пустым."},
             )
+
+        if not self.child_id or not self.child_id.strip():
+            raise RelationDomainError(
+                message="Ошибка валидации",
+                errors={"child_id": "ID ребёнка не может быть пустым."},
+            )
+
         if self.parent_id == self.child_id:
             raise RelationDomainError(
                 message="Ошибка валидации",
                 errors={"ids": "Человек не может быть родителем самого себя."},
             )
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, ParentChildRelation):
-            return NotImplemented
-        return self.parent_id == other.parent_id and self.child_id == other.child_id
-
-    def __hash__(self) -> int:
-        return hash((self.parent_id, self.child_id))
+        if not isinstance(self.relation_type, RelationType):
+            raise RelationDomainError(
+                message="Ошибка валидации",
+                errors={"relation_type": "Некорректный тип связи."},
+            )
 
     def involves(self, person_id: str) -> bool:
         """Участвует ли персона в этой связи."""
@@ -54,6 +59,13 @@ class ParentChildRelation:
     def is_child_of(self, parent_id: str) -> bool:
         return self.parent_id == parent_id
 
-    def change_type(self, new_type: RelationType) -> None:
-        """Mutation method — изменение типа связи."""
-        self.relation_type = new_type
+    def with_type(self, new_type: RelationType) -> ParentChildRelation:
+        """
+        Возвращает новую связь с изменённым типом.
+        Иммутабельная альтернатива change_type().
+        """
+        return ParentChildRelation(
+            parent_id=self.parent_id,
+            child_id=self.child_id,
+            relation_type=new_type,
+        )

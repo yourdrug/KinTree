@@ -22,43 +22,14 @@ Usage in routes:
 
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from presentation.rest.dependencies.dependencies import get_account_service
-from shared.domain.exceptions import AuthenticationError
+from presentation.rest.dependencies.dependencies import get_account_service, get_current_account_id
 
 from identity.application.account.service import AccountService
 from identity.domain.entities.account import Account
 from identity.infrastructure.auth.jwt_service import decode_access_token
 
 
-# auto_error=False lets us raise a custom AuthenticationError instead of
-# FastAPI's generic 403, which keeps our error format consistent.
-_bearer = HTTPBearer(auto_error=False)
 _bearer_optional = HTTPBearer(auto_error=False)
-
-
-async def get_current_account_id(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-) -> str:
-    """
-    Декодирует Bearer-токен и возвращает account_id.
-    Бросает AuthenticationError если токен отсутствует или невалиден.
-    """
-    if credentials is None:
-        raise AuthenticationError(
-            message="Требуется авторизация",
-            errors={"Authorization": "Заголовок отсутствует"},
-        )
-
-    payload = decode_access_token(credentials.credentials)
-    account_id: str | None = payload.get("sub")
-
-    if not account_id:
-        raise AuthenticationError(
-            message="Недействительный токен",
-            errors={"sub": "Отсутствует идентификатор аккаунта"},
-        )
-
-    return account_id
 
 
 async def get_current_account(

@@ -8,14 +8,17 @@ HTTP-роуты для агрегата Family.
 - Никакой бизнес-логики в роутере.
 - Зависимости инжектируются через Depends.
 - Пагинация и фильтры — через FilterSchema.
+- Нет импортов из identity контекста: auth получается через presentation слой,
+  в сервис передаётся только owner_id: str, не объект Account.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, Path, Request, status
-from identity.api.dependencies.auth_dependencies import get_current_account
-from identity.domain.entities.account import Account
-from presentation.rest.dependencies.dependencies import get_family_service
+from presentation.rest.dependencies.dependencies import (
+    get_current_account_id,
+    get_family_service,
+)
 from shared.domain.value_objects.pagination import BaseFilterSpec, Page
 
 from genealogy.api.schemas.family import (
@@ -70,12 +73,12 @@ async def get_family(
 @router.post(path="/", status_code=status.HTTP_201_CREATED)
 async def create_family(
     payload: CreateFamilyRequest = Body(...),
-    account: Account = Depends(get_current_account),
+    owner_id: str = Depends(get_current_account_id),
     service: FamilyService = Depends(get_family_service),
 ) -> FamilyResponse:
     """Создание семьи по введенным данным."""
     command: CreateFamilyCommand = payload.to_command()
-    created_family: Family = await service.create_family(command=command, account=account)
+    created_family: Family = await service.create_family(command=command, owner_id=owner_id)
     return FamilyResponse.from_domain(family=created_family)
 
 

@@ -11,7 +11,6 @@ Rules:
 
 from __future__ import annotations
 
-from identity.domain.entities.account import Account
 from shared.domain.exceptions import NotFoundError
 from shared.domain.value_objects.pagination import BaseFilterSpec, Page
 
@@ -36,11 +35,17 @@ class FamilyService:
 
     # ── Commands ──────────────────────────────────────────────────────────────
 
-    async def create_family(self, command: CreateFamilyCommand, account: Account) -> Family:
+    async def create_family(self, command: CreateFamilyCommand, owner_id: str) -> Family:
+        """
+        Создать семью.
+
+        owner_id — ID владельца (account.id), передаётся как str из роутера.
+        Сервис не знает об Account — это ответственность presentation слоя.
+        """
         async with self._uow_factory.create(master=True) as uow:
             family = create_family(
                 name=command.name,
-                owner_id=account.id,
+                owner_id=owner_id,
                 description=command.description,
                 origin_place=command.origin_place,
                 founded_year=command.founded_year,
@@ -55,7 +60,6 @@ class FamilyService:
             if family is None:
                 raise NotFoundError(resource="Family", resource_id=command.family_id)
 
-            # Delegate full replacement to the entity — it validates its own invariants
             family.apply_put(
                 name=command.name,
                 description=command.description,
@@ -69,7 +73,6 @@ class FamilyService:
         async with self._uow_factory.create(master=True) as uow:
             family = await uow.families.get_by_id(command.family_id)
 
-            # Delegate partial update to the entity
             family.apply_patch(
                 name=command.name,
                 description=command.description,

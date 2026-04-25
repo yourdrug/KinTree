@@ -21,6 +21,7 @@ from genealogy.application.relations.commands import (
     FamilyGraphResult,
     NodeDTO,
 )
+from genealogy.application.uow import GenealogyUoW
 from genealogy.domain.entities.parent_child import ParentChildRelation
 from genealogy.domain.entities.person import Person
 from genealogy.domain.entities.spouse import SpouseRelation
@@ -48,13 +49,9 @@ class RelationService:
                     errors={"relation": "Нельзя связать персон из разных семей."},
                 )
 
-            existing_parent = await uow.parent_child.get_children_of(command.parent_id)
-            existing_parent += await uow.parent_child.get_parents_of(command.child_id)
+            existing_parent = await _load_parent_relations(uow, command.parent_id, command.child_id)
+            existing_spouse = await _load_spouse_relations(uow, command.parent_id, command.child_id)
 
-            existing_spouse = await uow.spouses.get_spouses_of(command.parent_id)
-            existing_spouse += await uow.spouses.get_spouses_of(command.child_id)
-
-            # Проверка через выделенный policy-сервис
             relation = self._parent_child_policy.assert_can_add(
                 parent_id=command.parent_id,
                 child_id=command.child_id,
@@ -75,20 +72,18 @@ class RelationService:
 
     async def add_spouse(self, command: AddSpouseCommand) -> SpouseRelation:
         async with self._uow_factory.create(master=True) as uow:
-            # Убеждаемся что обе персоны существуют
-            await uow.persons.get_by_id(command.person_a_id)
-            await uow.persons.get_by_id(command.person_b_id)
+            person_a = await uow.persons.get_by_id(command.person_a_id)
+            person_b = await uow.persons.get_by_id(command.person_b_id)
 
-            # Загружаем связи, необходимые для проверки инвариантов
-            existing_spouse = await uow.spouses.get_spouses_of(command.person_a_id)
-            existing_spouse += await uow.spouses.get_spouses_of(command.person_b_id)
+            if person_a.family_id != person_b.family_id:
+                raise RelationDomainError(
+                    message="Ошибка валидации",
+                    errors={"relation": "Нельзя создать супружескую связь между персонами из разных семей."},
+                )
 
-            existing_parent = await uow.parent_child.get_children_of(command.person_a_id)
-            existing_parent += await uow.parent_child.get_parents_of(command.person_b_id)
-            existing_parent += await uow.parent_child.get_children_of(command.person_b_id)
-            existing_parent += await uow.parent_child.get_parents_of(command.person_a_id)
+            existing_spouse = await _load_spouse_relations(uow, command.person_a_id, command.person_b_id)
+            existing_parent = await _load_parent_relations(uow, command.person_a_id, command.person_b_id)
 
-            # Проверка через выделенный policy-сервис
             relation = self._spouse_policy.assert_can_add(
                 person_a_id=command.person_a_id,
                 person_b_id=command.person_b_id,
@@ -131,13 +126,52 @@ class RelationService:
         async with self._uow_factory.create(master=False) as uow:
             persons, parent_relations, spouse_relations = await uow.family_graph.get_persons_with_relations(family_id)
 
-            # трансформация внутри контекста
             nodes = [_person_to_node(p) for p in persons]
             edges = [
                 *[_parent_child_to_edge(r) for r in parent_relations],
                 *[_spouse_to_edge(r) for r in spouse_relations],
             ]
             return FamilyGraphResult(nodes=nodes, edges=edges)
+
+
+# ── Relation loading helpers ──────────────────────────────────────────────────
+
+
+async def _load_parent_relations(uow: GenealogyUoW, person_a_id: str, person_b_id: str) -> list[ParentChildRelation]:
+    """
+    Загружает все родительские связи, где участвует хотя бы одна из двух персон.
+    Дедупликация через set по (parent_id, child_id).
+    """
+    seen: set[tuple[str, str]] = set()
+    result: list[ParentChildRelation] = []
+    raw = (
+        await uow.parent_child.get_children_of(person_a_id)
+        + await uow.parent_child.get_parents_of(person_a_id)
+        + await uow.parent_child.get_children_of(person_b_id)
+        + await uow.parent_child.get_parents_of(person_b_id)
+    )
+    for rel in raw:
+        key = (rel.parent_id, rel.child_id)
+        if key not in seen:
+            seen.add(key)
+            result.append(rel)
+    return result
+
+
+async def _load_spouse_relations(uow: GenealogyUoW, person_a_id: str, person_b_id: str) -> list[SpouseRelation]:
+    """
+    Загружает все супружеские связи, где участвует хотя бы одна из двух персон.
+    Дедупликация через set по (first_person_id, second_person_id).
+    """
+    seen: set[tuple[str, str]] = set()
+    result: list[SpouseRelation] = []
+    raw = await uow.spouses.get_spouses_of(person_a_id) + await uow.spouses.get_spouses_of(person_b_id)
+    for rel in raw:
+        key = (rel.first_person_id, rel.second_person_id)
+        if key not in seen:
+            seen.add(key)
+            result.append(rel)
+    return result
 
 
 # ── Pure conversion helpers ───────────────────────────────────────────────────

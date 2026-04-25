@@ -10,11 +10,15 @@ assert_can_add_member() enforces all cross-person invariants before persistence.
   Раньше assert_can_add_member() принимал Person — объект другого агрегата.
   Теперь принимает FamilyMemberSpec — VO из своего bounded context.
   Family больше не импортирует Person. Зависимость разорвана.
+
+Исправление порядка полей dataclass:
+  _member_specs вынесен из полей dataclass в __post_init__ через object.__setattr__,
+  чтобы избежать проблем с порядком полей (non-default после default).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from shared.domain.exceptions import FamilyDomainError
 from shared.domain.utils import generate_uuid
@@ -23,39 +27,46 @@ from shared.domain.value_objects.unset import UNSET, UnsetType
 from genealogy.domain.value_objects.family_member_spec import FamilyMemberSpec
 
 
+_MAX_NAME_LENGTH = 255
+_MIN_YEAR = 1
+_MAX_YEAR = 9999
+
+
 @dataclass
 class Family:
     """
     Family aggregate root.
 
     Invariants:
-    - name is non-empty
+    - name is non-empty and <= 255 chars
     - owner_id is non-empty
     - founded_year <= ended_year (when both set)
+    - both years in range [1, 9999]
     - No duplicate members (same name + birth_date)
+
+    _member_specs is NOT a dataclass field — it is set in __post_init__
+    to avoid MRO / field-ordering issues with defaults.
     """
 
     id: str
     name: str
     owner_id: str
-
-    # Список FamilyMemberSpec загружается сервисом перед проверкой дублирования.
-    # Хранится в памяти только во время use-case, не персистируется здесь.
-    _member_specs: list[FamilyMemberSpec] = field(default_factory=list, repr=False)
-
     description: str | None = None
     origin_place: str | None = None
     founded_year: int | None = None
     ended_year: int | None = None
 
     def __post_init__(self) -> None:
+        # Not a dataclass field — managed manually to avoid ordering issues.
+        # Private; only mutated via load_member_specs().
+        object.__setattr__(self, "_member_specs", [])
         self._validate()
 
     # ── Queries ───────────────────────────────────────────────────────────────
 
     @property
     def members_count(self) -> int:
-        return len(self._member_specs)
+        return len(self._member_specs)  # type: ignore[attr-defined]
 
     # ── Commands ──────────────────────────────────────────────────────────────
 
@@ -67,7 +78,7 @@ class Family:
         Вызывается в PersonService ДО assert_can_add_member().
         Не персистируется — только для проверки инвариантов в рамках use-case.
         """
-        self._member_specs = specs
+        object.__setattr__(self, "_member_specs", list(specs))
 
     def assert_can_add_member(self, candidate: FamilyMemberSpec) -> None:
         """
@@ -80,7 +91,6 @@ class Family:
             FamilyDomainError: если кандидат является дубликатом.
         """
         if not candidate.has_identity():
-            # Нет имени — проверка дублирования невозможна, пропускаем.
             return
         self._assert_no_duplicate(candidate)
 
@@ -128,11 +138,48 @@ class Family:
     def _validate(self) -> None:
         if not self.name or not self.name.strip():
             raise FamilyDomainError(field="name", message="Family name cannot be empty.")
-        if not self.owner_id:
+
+        if len(self.name) > _MAX_NAME_LENGTH:
+            raise FamilyDomainError(
+                field="name",
+                message=f"Family name cannot exceed {_MAX_NAME_LENGTH} characters.",
+            )
+
+        if not self.owner_id or not self.owner_id.strip():
             raise FamilyDomainError(field="owner_id", message="Family must have an owner.")
+
+        if not self.id or not self.id.strip():
+            raise FamilyDomainError(field="id", message="Family ID cannot be empty.")
+
+        self._validate_optional_strings()
         self._validate_years()
 
+    def _validate_optional_strings(self) -> None:
+        if self.description is not None and not self.description.strip():
+            raise FamilyDomainError(
+                field="description",
+                message="Description cannot be an empty string; use null to clear it.",
+            )
+
+        if self.origin_place is not None and not self.origin_place.strip():
+            raise FamilyDomainError(
+                field="origin_place",
+                message="Origin place cannot be an empty string; use null to clear it.",
+            )
+
     def _validate_years(self) -> None:
+        if self.founded_year is not None and not (_MIN_YEAR <= self.founded_year <= _MAX_YEAR):
+            raise FamilyDomainError(
+                field="founded_year",
+                message=f"Founded year must be between {_MIN_YEAR} and {_MAX_YEAR}.",
+            )
+
+        if self.ended_year is not None and not (_MIN_YEAR <= self.ended_year <= _MAX_YEAR):
+            raise FamilyDomainError(
+                field="ended_year",
+                message=f"Ended year must be between {_MIN_YEAR} and {_MAX_YEAR}.",
+            )
+
         if self.founded_year is not None and self.ended_year is not None and self.founded_year > self.ended_year:
             raise FamilyDomainError(
                 field="founded_year",
@@ -140,7 +187,7 @@ class Family:
             )
 
     def _assert_no_duplicate(self, candidate: FamilyMemberSpec) -> None:
-        for existing in self._member_specs:
+        for existing in self._member_specs:  # type: ignore[attr-defined]
             if _is_duplicate(existing, candidate):
                 name = " ".join(filter(None, [candidate.first_name, candidate.last_name]))
                 raise FamilyDomainError(
@@ -178,6 +225,9 @@ def create_family(
     ended_year: int | None = None,
 ) -> Family:
     """Factory for brand-new families. Generates ID and validates."""
+    if not owner_id or not owner_id.strip():
+        raise FamilyDomainError(field="owner_id", message="owner_id cannot be empty.")
+
     return Family(
         id=generate_uuid(),
         name=name,

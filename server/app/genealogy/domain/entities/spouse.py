@@ -8,6 +8,14 @@ from shared.domain.exceptions import RelationDomainError
 from genealogy.domain.enums import MarriageStatus
 
 
+_MIN_YEAR = 1
+_MAX_YEAR = 9999
+_MIN_MONTH = 1
+_MAX_MONTH = 12
+_MIN_DAY = 1
+_MAX_DAY = 31
+
+
 @dataclass
 class SpouseRelation:
     """
@@ -64,6 +72,11 @@ class SpouseRelation:
         divorce_day: int | None = None,
         divorce_date_raw: str | None = None,
     ) -> SpouseRelation:
+        if self.marriage_status == MarriageStatus.DIVORCED:
+            raise RelationDomainError(
+                message="Ошибка валидации",
+                errors={"marriage_status": "Эта пара уже разведена."},
+            )
         return replace(
             self,
             marriage_status=MarriageStatus.DIVORCED,
@@ -74,8 +87,10 @@ class SpouseRelation:
         )
 
     def _validate(self) -> None:
-        if not self.first_person_id or not self.second_person_id:
-            raise RelationDomainError(field="ids", message="ID супругов не могут быть пустыми.")
+        if not self.first_person_id or not self.first_person_id.strip():
+            raise RelationDomainError(field="first_person_id", message="ID первого супруга не может быть пустым.")
+        if not self.second_person_id or not self.second_person_id.strip():
+            raise RelationDomainError(field="second_person_id", message="ID второго супруга не может быть пустым.")
         if self.first_person_id == self.second_person_id:
             raise RelationDomainError(field="ids", message="Человек не может состоять в браке с самим собой.")
         if self.first_person_id > self.second_person_id:
@@ -83,10 +98,65 @@ class SpouseRelation:
                 field="ids",
                 message="Используйте фабрику create_spouse_relation() для создания.",
             )
+        self._validate_year_field("marriage_year", self.marriage_year)
+        self._validate_year_field("divorce_year", self.divorce_year)
+        self._validate_month_field("marriage_month", self.marriage_month)
+        self._validate_month_field("divorce_month", self.divorce_month)
+        self._validate_day_field("marriage_day", self.marriage_day)
+        self._validate_day_field("divorce_day", self.divorce_day)
+        self._validate_day_requires_month("marriage_day", self.marriage_day, self.marriage_month)
+        self._validate_day_requires_month("divorce_day", self.divorce_day, self.divorce_month)
         if self.marriage_year is not None and self.divorce_year is not None and self.divorce_year < self.marriage_year:
             raise RelationDomainError(
                 field="divorce_year",
                 message="Дата развода не может быть раньше даты свадьбы.",
+            )
+        if self.marriage_place is not None and len(self.marriage_place.strip()) == 0:
+            raise RelationDomainError(
+                field="marriage_place",
+                message="Место свадьбы не может быть пустой строкой.",
+            )
+        if self.marriage_date_raw is not None and len(self.marriage_date_raw.strip()) == 0:
+            raise RelationDomainError(
+                field="marriage_date_raw",
+                message="Текстовая дата свадьбы не может быть пустой строкой.",
+            )
+        if self.divorce_date_raw is not None and len(self.divorce_date_raw.strip()) == 0:
+            raise RelationDomainError(
+                field="divorce_date_raw",
+                message="Текстовая дата развода не может быть пустой строкой.",
+            )
+
+    @staticmethod
+    def _validate_year_field(field_name: str, value: int | None) -> None:
+        if value is not None and not (_MIN_YEAR <= value <= _MAX_YEAR):
+            raise RelationDomainError(
+                field=field_name,
+                message=f"Год должен быть в диапазоне {_MIN_YEAR}–{_MAX_YEAR}.",
+            )
+
+    @staticmethod
+    def _validate_month_field(field_name: str, value: int | None) -> None:
+        if value is not None and not (_MIN_MONTH <= value <= _MAX_MONTH):
+            raise RelationDomainError(
+                field=field_name,
+                message=f"Месяц должен быть в диапазоне {_MIN_MONTH}–{_MAX_MONTH}.",
+            )
+
+    @staticmethod
+    def _validate_day_field(field_name: str, value: int | None) -> None:
+        if value is not None and not (_MIN_DAY <= value <= _MAX_DAY):
+            raise RelationDomainError(
+                field=field_name,
+                message=f"День должен быть в диапазоне {_MIN_DAY}–{_MAX_DAY}.",
+            )
+
+    @staticmethod
+    def _validate_day_requires_month(day_field: str, day: int | None, month: int | None) -> None:
+        if day is not None and month is None:
+            raise RelationDomainError(
+                field=day_field,
+                message="День нельзя указать без месяца.",
             )
 
 

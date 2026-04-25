@@ -91,8 +91,8 @@ class Person:
         self.gender = gender
         self.birth_date = birth_date
         self.death_date = death_date
-        self.birth_date_raw = birth_date_raw
-        self.death_date_raw = death_date_raw
+        self.birth_date_raw = birth_date_raw if birth_date_raw is None or birth_date_raw.strip() else birth_date_raw
+        self.death_date_raw = death_date_raw if death_date_raw is None or death_date_raw.strip() else death_date_raw
         self._validate()
 
     def apply_patch(
@@ -151,7 +151,33 @@ class Person:
                 field="family_id",
                 message="Person must belong to a family.",
             )
+
+        if not self.id or not self.id.strip():
+            raise PersonDomainError(
+                field="id",
+                message="Person ID cannot be empty.",
+            )
+
+        if not isinstance(self.gender, PersonGender):
+            raise PersonDomainError(
+                field="gender",
+                message="Некорректное значение пола.",
+            )
+
+        self._validate_raw_strings()
         self._validate_dates()
+
+    def _validate_raw_strings(self) -> None:
+        if self.birth_date_raw is not None and not self.birth_date_raw.strip():
+            raise PersonDomainError(
+                field="birth_date_raw",
+                message="Текстовая дата рождения не может быть пустой строкой.",
+            )
+        if self.death_date_raw is not None and not self.death_date_raw.strip():
+            raise PersonDomainError(
+                field="death_date_raw",
+                message="Текстовая дата смерти не может быть пустой строкой.",
+            )
 
     def _validate_dates(self) -> None:
         if self.birth_date and self.death_date:
@@ -162,6 +188,10 @@ class Person:
                     field="death_date",
                     message="Death date cannot precede birth date.",
                 )
+        # Cannot be dead before being born even with partial info
+        if self.death_date and not self.birth_date and self.death_date.year:
+            # death with no birth is valid (unknown birth)
+            pass
 
 
 def create_person(
