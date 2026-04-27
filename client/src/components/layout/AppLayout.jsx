@@ -2,7 +2,6 @@ import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { TreePine, LayoutDashboard, Globe, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,7 +62,10 @@ export default function AppLayout() {
                 {user?.email}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => base44.auth.logout()}>
+              <DropdownMenuItem onClick={() => {
+                localStorage.removeItem('user');
+                window.location.href = '/';
+              }}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Выйти
               </DropdownMenuItem>

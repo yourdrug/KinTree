@@ -1,7 +1,6 @@
 import { motion } from "framer-motion";
 import { Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { base44 } from "@/api/base44Client";
 
 export default function Navbar() {
   return (
@@ -30,14 +29,14 @@ export default function Navbar() {
           variant="ghost"
           size="sm"
           className="text-muted-foreground hover:text-foreground"
-          onClick={() => base44.auth.redirectToLogin()}
+          onClick={() => {window.location.href = '/login';}}
         >
           Войти
         </Button>
         <Button
           size="sm"
           className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl px-5"
-          onClick={() => base44.auth.redirectToLogin()}
+          onClick={() => {window.location.href = '/login';}}
         >
           Начать
         </Button>

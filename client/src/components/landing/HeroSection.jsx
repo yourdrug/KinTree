@@ -2,7 +2,6 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import HeroTreeVisual from './HeroTreeVisual';
 
@@ -50,7 +49,7 @@ export default function HeroSection() {
               <Button
                 size="lg"
                 className="rounded-full px-8 h-13 text-base gap-2 shadow-lg shadow-primary/20"
-                onClick={() => base44.auth.redirectToLogin()}
+                onClick={() => {window.location.href = '/login';}}
               >
                 Создать фамильное дерево
                 <ArrowRight className="w-4 h-4" />

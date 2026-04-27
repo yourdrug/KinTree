@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { Search, Globe, Leaf, ArrowLeft, TreePine, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
 
 export default function Explore() {
@@ -13,7 +12,7 @@ export default function Explore() {
 
   useEffect(() => {
     const load = async () => {
-      const all = await base44.entities.FamilyTree.filter({ is_public: true }, "-created_date", 50);
+      const all = []
       setTrees(all || []);
       setLoading(false);
     };
@@ -44,7 +43,7 @@ export default function Explore() {
         <Button
           size="sm"
           className="rounded-xl gap-2 bg-primary text-primary-foreground"
-          onClick={() => base44.auth.redirectToLogin()}
+          onClick={() => {window.location.href = '/login';}}
         >
           Войти и создать дерево
         </Button>
@@ -88,7 +87,7 @@ export default function Explore() {
           <Lock className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "hsl(30,50%,50%)" }} />
           <div className="text-sm" style={{ color: "hsl(30,20%,35%)" }}>
             <strong>Режим гостя:</strong> вы можете просматривать публичные деревья, но не можете их редактировать.{" "}
-            <button onClick={() => base44.auth.redirectToLogin()}
+            <button onClick={() => {window.location.href = '/login';}}
               className="underline font-medium hover:no-underline" style={{ color: "hsl(145,35%,38%)" }}>
               Войдите
             </button>{" "}

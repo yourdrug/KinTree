@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { base44 } from "@/api/base44Client";
 
 const RELATION_TYPES = [
   { value: "child", label: "Ребёнок" },
@@ -75,7 +74,7 @@ export default function AddPersonModal({ open, onClose, onSave, treeId, relative
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      // Upload Photo (will implement in future)
       set("photo_url", file_url);
     } finally {
       setUploading(false);

@@ -1,7 +1,6 @@
 import { motion } from "framer-motion";
 import { Leaf, ArrowRight, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { base44 } from "@/api/base44Client";
 import Navbar from "../components/landing/Navbar";
 import HeroTree from "../components/landing/HeroTree";
 import FeatureCards from "../components/landing/FeatureCards";
@@ -62,7 +61,7 @@ export default function Landing() {
                   size="lg"
                   className="rounded-2xl px-8 py-6 text-base font-semibold shadow-lg gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
                   style={{ boxShadow: "0 8px 30px hsla(145,35%,38%,0.3)" }}
-                  onClick={() => base44.auth.redirectToLogin()}
+                  onClick={() => {window.location.href = '/login';}}
                 >
                   Создать фамильное дерево
                   <ArrowRight className="w-5 h-5" />
@@ -73,7 +72,7 @@ export default function Landing() {
                   variant="outline"
                   className="rounded-2xl px-8 py-6 text-base font-medium gap-2"
                   style={{ borderColor: "hsl(35,20%,82%)", color: "hsl(30,10%,30%)" }}
-                  onClick={() => base44.auth.redirectToLogin()}
+                  onClick={() => {window.location.href = '/login';}}
                 >
                   Войти
                 </Button>
@@ -181,7 +180,7 @@ export default function Landing() {
               size="lg"
               className="rounded-2xl px-10 py-6 text-base font-semibold gap-2"
               style={{ background: "hsl(145,35%,38%)", color: "white", boxShadow: "0 8px 30px hsla(145,35%,38%,0.35)" }}
-              onClick={() => base44.auth.redirectToLogin()}
+              onClick={() => {window.location.href = '/login';}}
             >
               Создать бесплатно
               <ArrowRight className="w-5 h-5" />
