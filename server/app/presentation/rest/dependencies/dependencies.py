@@ -6,7 +6,7 @@
 #
 # Composition root: здесь разрешено смешивать identity и genealogy.
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from genealogy.application.family.services import FamilyService
 from genealogy.application.person.service import PersonService
@@ -74,33 +74,53 @@ def get_relation_service(
     return RelationService(uow_factory=uow_factory)
 
 
-# ── Auth Helpers ────────────────────────────────────────────────────────
+# ── Auth helpers ──────────────────────────────────────────────────────────────
+#
+# HTTPBearer с auto_error=False — не бросает 403 при отсутствии заголовка,
+# позволяя нашему коду кидать AuthenticationError с единым форматом ошибок.
 
-# auto_error=False lets us raise a custom AuthenticationError instead of
-# FastAPI's generic 403, which keeps our error format consistent.
-_bearer = HTTPBearer(auto_error=False)
+_bearer_optional = HTTPBearer(auto_error=False)
+
+
+def extract_token(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None,
+) -> str | None:
+    """
+    Извлекает raw JWT.
+
+    Порядок приоритета:
+      1. httpOnly-кука ``access_token``  (браузерные клиенты)
+      2. Authorization: Bearer <token>   (Swagger UI / API-клиенты)
+
+    Возвращает None если токен не найден ни там, ни там.
+    """
+    return request.cookies.get("access_token") or (
+        credentials.credentials if credentials else None
+    )
 
 
 async def get_current_account_id(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_optional),
 ) -> str:
     """
-    Декодирует Bearer-токен и возвращает account_id.
+    Dependency: возвращает account_id из валидного access_token.
+
+    Используется как в identity-роутах, так и в cookie-роутах —
+    через единую точку разрешения токена.
+
     Бросает AuthenticationError если токен отсутствует или невалиден.
     """
-    if credentials is None:
-        raise AuthenticationError(
-            message="Требуется авторизация",
-            errors={"Authorization": "Заголовок отсутствует"},
-        )
+    token = extract_token(request, credentials)
 
-    payload = decode_access_token(credentials.credentials)
+    if not token:
+        raise AuthenticationError(message="Not authenticated")
+
+    payload = decode_access_token(token)  # бросает AuthenticationError при невалидном токене
     account_id: str | None = payload.get("sub")
 
     if not account_id:
-        raise AuthenticationError(
-            message="Недействительный токен",
-            errors={"sub": "Отсутствует идентификатор аккаунта"},
-        )
+        raise AuthenticationError(message="Invalid token payload")
 
     return account_id

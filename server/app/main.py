@@ -5,10 +5,11 @@ import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from genealogy.api.routes import family_routes, person_routes, relation_routes
-from identity.api.routes import account_routes, auth_routes
+from identity.api.routes import account_routes, auth_routes, auth_cookie_routes
 from presentation.cli.cli import cli
 from presentation.rest.exception_handlers import register_exception_handlers
 from shared.infrastructure.db.database import database
+from shared.infrastructure.db.settings import settings
 
 
 @asynccontextmanager
@@ -41,13 +42,15 @@ def create_app() -> FastAPI:
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.BACKEND_CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["Set-Cookie"],
     )
 
     app.include_router(auth_routes.router)
+    app.include_router(auth_cookie_routes.router)
     app.include_router(account_routes.router)
     app.include_router(person_routes.router)
     app.include_router(family_routes.router)
