@@ -1,3 +1,6 @@
+// client/src/pages/Dashboard.jsx
+// Uses the new API layer instead of raw axios calls.
+
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Plus, TreePine, Leaf, Search, LogOut } from "lucide-react";
@@ -5,21 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import TreeCard from "../components/dashboard/TreeCard";
 import { Link } from "react-router-dom";
-import axios from "axios";
-import { appParams } from "@/lib/app-params";
+import { familiesApi } from "@/api";
 import { useAuth } from "@/lib/AuthContext";
-
-const api = axios.create({
-  baseURL: appParams.apiUrl,
-});
-
-api.interceptors.request.use((config) => {
-  const token = appParams.getToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -37,10 +27,11 @@ export default function Dashboard() {
   const loadTrees = async () => {
     try {
       setLoading(true);
-      const res = await api.get("/trees");
-      setTrees(res.data);
-    } catch (error) {
-      console.error("Failed to load trees:", error);
+      // Fetch families owned by the current user
+      const page = await familiesApi.list({ owner_id: user?.id, limit: 100 });
+      setTrees(page.result ?? []);
+    } catch (err) {
+      console.error("Failed to load families:", err.message);
     } finally {
       setLoading(false);
     }
@@ -48,18 +39,13 @@ export default function Dashboard() {
 
   const createTree = async () => {
     if (!newTreeName.trim()) return;
-
     try {
-      const res = await api.post("/trees", {
-        name: newTreeName.trim(),
-        is_public: false,
-      });
-
-      setTrees((prev) => [res.data, ...prev]);
+      const family = await familiesApi.create({ name: newTreeName.trim() });
+      setTrees((prev) => [family, ...prev]);
       setNewTreeName("");
       setCreating(false);
-    } catch (error) {
-      console.error("Create tree failed:", error);
+    } catch (err) {
+      console.error("Create family failed:", err.message);
     }
   };
 
@@ -99,13 +85,7 @@ export default function Dashboard() {
               {user.full_name || user.email}
             </div>
           )}
-
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-muted-foreground gap-2"
-            onClick={logout}
-          >
+          <Button variant="ghost" size="sm" className="text-muted-foreground gap-2" onClick={logout}>
             <LogOut className="w-4 h-4" />
             <span className="hidden sm:inline">Выйти</span>
           </Button>
@@ -113,22 +93,15 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 md:px-10 py-10">
-        {/* Welcome */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-10"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
           <h1 className="font-serif text-3xl md:text-4xl font-semibold text-foreground mb-2">
             Мои деревья 🌳
           </h1>
           <p className="text-muted-foreground">
-            Добро пожаловать
-            {user?.full_name ? `, ${user.full_name}` : ""}! Управляйте вашими семейными историями
+            Добро пожаловать{user?.full_name ? `, ${user.full_name}` : ""}! Управляйте вашими семейными историями
           </p>
         </motion.div>
 
-        {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-4 mb-8">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -139,17 +112,11 @@ export default function Dashboard() {
               className="pl-10 rounded-xl"
             />
           </div>
-
-          <Button
-            className="rounded-xl gap-2"
-            onClick={() => setCreating(true)}
-          >
-            <Plus className="w-4 h-4" />
-            Новое дерево
+          <Button className="rounded-xl gap-2" onClick={() => setCreating(true)}>
+            <Plus className="w-4 h-4" /> Новое дерево
           </Button>
         </div>
 
-        {/* Create */}
         {creating && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -166,13 +133,10 @@ export default function Dashboard() {
               className="flex-1"
             />
             <Button onClick={createTree}>Создать</Button>
-            <Button variant="outline" onClick={() => setCreating(false)}>
-              Отмена
-            </Button>
+            <Button variant="outline" onClick={() => setCreating(false)}>Отмена</Button>
           </motion.div>
         )}
 
-        {/* List */}
         {loading ? (
           <div>Загрузка...</div>
         ) : filtered.length === 0 ? (
@@ -182,6 +146,7 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {filtered.map((tree, i) => (
+              // TreeCard ожидает объект с id, name, description — Family их имеет
               <TreeCard key={tree.id} tree={tree} index={i} />
             ))}
           </div>
