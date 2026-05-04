@@ -32,9 +32,3 @@ class Account(BaseModel):
         default=False,
         comment="Flag for email verification",
     )
-
-    refresh_token: Mapped[str] = mapped_column(
-        nullable=True,
-        default=None,
-        comment="Hashed refresh token stored server-side for rotation validation",
-    )

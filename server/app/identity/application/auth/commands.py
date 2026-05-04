@@ -5,21 +5,23 @@ application/auth/commands.py
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
+@dataclass
 class RegisterCommand:
     email: str
     password: str
 
 
-@dataclass(frozen=True)
+@dataclass
 class LoginCommand:
     email: str
     password: str
+    user_agent: str | None = None
+    ip_address: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class TokenPair:
     access_token: str
     refresh_token: str
-    permissions: list[str]  # отсортированный список codename
-    role: str  # имя роли
+    role: str
+    permissions: list[str]

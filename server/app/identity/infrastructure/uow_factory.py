@@ -12,6 +12,7 @@ from identity.infrastructure.permissions.repositories import (
     PermissionRepositoryImpl,
     RoleRepositoryImpl,
 )
+from identity.infrastructure.refresh_token.repositories import RefreshTokenRepositoryImpl
 
 
 class IdentityUoWFactory:
@@ -27,6 +28,7 @@ class IdentityUoWFactory:
             permissions=PermissionRepositoryImpl(session=session),
             roles=RoleRepositoryImpl(session=session),
             account_roles=AccountRoleRepositoryImpl(session=session),
+            refresh_tokens=RefreshTokenRepositoryImpl(session=session),
         )
 
         async with uow:

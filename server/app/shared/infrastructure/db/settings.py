@@ -29,9 +29,11 @@ class Settings(BaseSettings):
     DB_SLAVE_HOSTS: list[str] | None = Field(default=None)
     DB_SLAVE_PORTS: list[str] | None = Field(default=None)
 
+    REDIS_URL: str
+
     SECRET_KEY: str
-    JWT_TOKEN_ACCESS_LIFETIME_MINUTES: int = Field(default=15)
-    JWT_TOKEN_REFRESH_LIFETIME_DAYS: int = Field(default=1)
+    JWT_TOKEN_ACCESS_LIFETIME_MINUTES: int = Field(default=10)
+    JWT_TOKEN_REFRESH_LIFETIME_DAYS: int = Field(default=30)
 
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         case_sensitive=True,

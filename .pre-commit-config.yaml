@@ -34,6 +34,7 @@ repos:
         additional_dependencies:
           - pydantic==2.6.4
           - types-pytz==2025.2.0.20250326
+          - types-redis
 
   # ESLINT (frontend)
   - repo: https://github.com/pre-commit/mirrors-eslint
