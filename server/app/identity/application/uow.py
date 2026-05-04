@@ -13,6 +13,7 @@ from identity.domain.repositories.permission import (
     PermissionRepository,
     RoleRepository,
 )
+from identity.domain.repositories.refresh_tokens import RefreshTokenRepository
 
 
 class IdentityUoW:
@@ -35,12 +36,14 @@ class IdentityUoW:
         permissions: PermissionRepository,
         roles: RoleRepository,
         account_roles: AccountRoleRepository,
+        refresh_tokens: RefreshTokenRepository,
     ) -> None:
         self._session = session
         self.accounts = accounts
         self.permissions = permissions
         self.roles = roles
         self.account_roles = account_roles
+        self.refresh_tokens = refresh_tokens
 
     async def __aenter__(self) -> IdentityUoW:
         await self._session.begin()

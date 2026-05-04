@@ -88,6 +88,10 @@ services:
         restart: true
         condition: service_healthy
         required: true
+      redis:
+        restart: true
+        condition: service_healthy
+        required: true
     pull_policy: missing
     restart: always
 
@@ -163,6 +167,41 @@ services:
     networks:
       kintree-network:
         ipv4_address: 192.168.55.2
+    pull_policy: missing
+    restart: always
+
+  redis:
+    image: redis:7.2-alpine
+    hostname: redis
+    container_name: redis-kintree
+    command: [ "redis-server", "--appendonly", "yes" ]
+    expose:
+      - "6379/tcp"
+    volumes:
+      - type: bind
+        source: .data/redis
+        target: /data
+        read_only: false
+        bind:
+          propagation: rprivate
+          create_host_path: true
+          selinux: Z
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      kintree-network:
+        ipv4_address: 192.168.55.3
+    deploy:
+      resources:
+        limits:
+          cpus: 0.5
+          memory: 1G
+        reservations:
+          cpus: 0.25
+          memory: 128M
     pull_policy: missing
     restart: always
 

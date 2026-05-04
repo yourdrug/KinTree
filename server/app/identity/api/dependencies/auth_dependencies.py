@@ -3,25 +3,8 @@ identity/api/dependencies/auth_dependencies.py
 
 Зависимости для получения аккаунта из запроса.
 
-Логика извлечения и валидации токена живёт в одном месте —
-presentation/rest/dependencies/dependencies.py (get_current_account_id, extract_token).
-Здесь только доменный слой: превращаем account_id → Account.
-
-Usage in routes:
-
-    # Требует аутентификацию — возвращает полный объект Account из БД
-    @router.get("/protected")
-    async def protected(account: Account = Depends(get_current_account)):
-        ...
-
-    # Необязательная аутентификация — None для гостей
-    @router.get("/public")
-    async def public(account: Account | None = Depends(get_optional_account)):
-        ...
-
-    # Только account_id — без лишнего запроса в БД
-    # Импортируйте get_current_account_id напрямую из dependencies.py
-    from presentation.rest.dependencies.dependencies import get_current_account_id
+Добавлен реэкспорт get_current_token_payload — роуты импортируют
+всё из этого модуля, не напрямую из dependencies.py.
 """
 
 from fastapi import Depends, Request
@@ -30,11 +13,13 @@ from presentation.rest.dependencies.dependencies import (
     extract_token,
     get_account_service,
     get_current_account_id,
+    get_current_token_payload,
 )
 
 from identity.application.account.service import AccountService
 from identity.domain.entities.account import Account
 from identity.infrastructure.auth.jwt_service import decode_access_token
+
 
 _bearer_optional = HTTPBearer(auto_error=False)
 
@@ -45,9 +30,7 @@ async def get_current_account(
 ) -> Account:
     """
     Dependency: возвращает аутентифицированный Account из БД.
-
-    Бросает AuthenticationError если токен невалиден,
-    NotFoundError если аккаунт не найден.
+    Бросает AuthenticationError если токен невалиден или в blacklist.
     """
     return await service.get_account(account_id)
 
@@ -59,10 +42,8 @@ async def get_optional_account(
 ) -> Account | None:
     """
     Dependency: необязательная аутентификация.
-
-    - Нет токена  → возвращает None (гость)
-    - Токен есть, но невалиден → бросает AuthenticationError
-    - Токен валиден → возвращает Account из БД
+    None для гостей, Account для аутентифицированных.
+    Blacklist не проверяется для optional — оптимизация для публичных эндпоинтов.
     """
     token = extract_token(request, credentials)
     if not token:
@@ -74,3 +55,12 @@ async def get_optional_account(
         return None
 
     return await service.get_account(account_id)
+
+
+# Реэкспорт для удобства импорта в роутах
+__all__ = [
+    "get_current_account",
+    "get_optional_account",
+    "get_current_account_id",
+    "get_current_token_payload",
+]
