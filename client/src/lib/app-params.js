@@ -1,22 +1,10 @@
-const isBrowser = typeof window !== 'undefined';
-
-const storage = isBrowser ? window.localStorage : null;
+/**
+ * lib/app-params.js
+ *
+ * Параметры приложения.
+ * Токены не хранятся нигде на клиенте — только httpOnly-куки на сервере.
+ */
 
 export const appParams = {
-  apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:8000',
-
-  getToken: () => {
-    if (!isBrowser) return null;
-    return storage.getItem('access_token');
-  },
-
-  setToken: (token) => {
-    if (!isBrowser) return;
-    storage.setItem('access_token', token);
-  },
-
-  removeToken: () => {
-    if (!isBrowser) return;
-    storage.removeItem('access_token');
-  }
+  apiUrl: import.meta.env.VITE_API_URL || "http://localhost:8000",
 };

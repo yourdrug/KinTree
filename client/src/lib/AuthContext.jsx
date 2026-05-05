@@ -1,12 +1,15 @@
 /**
- * client/src/lib/AuthContext.jsx
+ * lib/AuthContext.jsx
  *
- * Cookie-based авторизация.
- * - Токены хранятся в httpOnly-куках (бэкенд их ставит / удаляет)
- * - Фронт НИКОГДА не видит и не хранит access/refresh токены
- * - При старте: GET /auth/cookie/me — если кука жива, юзер восстанавливается
- * - axios автоматически отправляет куки при withCredentials: true
- * - При 401 — один тихий retry через POST /auth/cookie/refresh
+ * Cookie-based аутентификация.
+ * Axios instance и интерцептор живут в api/client.js — не здесь.
+ * URL эндпоинтов — в api/endpoints.js — не здесь.
+ *
+ * Этот файл отвечает только за:
+ *  - React-состояние аутентификации (user, isAuthenticated, ...)
+ *  - Методы login / register / logout / logoutAll
+ *  - Управление сессиями через useSession()
+ *  - Регистрацию _logoutRef для интерцептора
  */
 
 import React, {
@@ -14,106 +17,49 @@ import React, {
   useState,
   useContext,
   useEffect,
-  useRef,
   useCallback,
 } from "react";
-import axios from "axios";
-import { appParams } from "@/lib/app-params";
+import { http, _logoutRef } from "@/api/client";
+import { ENDPOINTS as EP } from "@/api/endpoints";
+import { ROUTES } from "@/lib/routes";
 
-// ─── Axios instance ────────────────────────────────────────────────────────────
+// ─── Contexts ──────────────────────────────────────────────────────────────────
 
-const api = axios.create({
-  baseURL: appParams.apiUrl,
-  withCredentials: true, // ← куки идут с каждым запросом автоматически
-});
+const AuthContext    = createContext(null);
+const SessionContext = createContext(null);
 
-// ─── Silent refresh ────────────────────────────────────────────────────────────
-// Если бэкенд вернул 401 — один раз пробуем обновить токен через куку.
-// Если refresh тоже упал — разлогиниваем.
-
-let _isRefreshing = false;
-let _refreshQueue = []; // очередь запросов, ждущих пока refresh завершится
-
-function _processQueue(error) {
-  _refreshQueue.forEach((p) => (error ? p.reject(error) : p.resolve()));
-  _refreshQueue = [];
-}
-
-// authLogout хранится в ref чтобы интерцептор мог его вызвать
-// без захвата устаревшего closure
-const _logoutRef = { current: null };
-
-api.interceptors.response.use(
-  (res) => res,
-  async (err) => {
-    const original = err.config;
-
-    if (
-      err.response?.status === 401 &&
-      !original._retry &&
-      !original.url?.includes("/auth/cookie/refresh") &&
-      !original.url?.includes("/auth/cookie/login")
-    ) {
-      original._retry = true;
-
-      if (_isRefreshing) {
-        // Уже рефрешим — ставим в очередь
-        return new Promise((resolve, reject) => {
-          _refreshQueue.push({ resolve, reject });
-        }).then(() => api(original));
-      }
-
-      _isRefreshing = true;
-
-      try {
-        await api.post("/auth/cookie/refresh");
-        _processQueue(null);
-        return api(original); // повторяем исходный запрос
-      } catch (refreshErr) {
-        _processQueue(refreshErr);
-        _logoutRef.current?.(); // разлогиниваем
-        return Promise.reject(refreshErr);
-      } finally {
-        _isRefreshing = false;
-      }
-    }
-
-    return Promise.reject(err);
-  }
-);
-
-// ─── Context ───────────────────────────────────────────────────────────────────
-
-const AuthContext = createContext();
+// ─── Provider ──────────────────────────────────────────────────────────────────
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);          // AccountResponse | null
+  const [user,            setUser]            = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
-  const [authError, setAuthError] = useState(null);
+  const [isLoadingAuth,   setIsLoadingAuth]   = useState(true);
+  const [authError,       setAuthError]       = useState(null);
 
-  // ── Внутренний logout (без редиректа) ─────────────────────────────────────
+  const [sessions,          setSessions]          = useState([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [sessionsError,     setSessionsError]     = useState(null);
+
+  // ── Internal clear ─────────────────────────────────────────────────────────
   const _clearSession = useCallback(() => {
     setUser(null);
     setIsAuthenticated(false);
+    setSessions([]);
   }, []);
 
-  // Регистрируем в ref для интерцептора
+  // Регистрируем callback для интерцептора в api/client.js
   useEffect(() => {
     _logoutRef.current = _clearSession;
   }, [_clearSession]);
 
-  // ── Автологин при старте / рефреше страницы ───────────────────────────────
+  // ── Restore on mount ───────────────────────────────────────────────────────
   const checkUserAuth = useCallback(async () => {
     try {
       setIsLoadingAuth(true);
-      // access_token кука жива → получаем профиль
-      const res = await api.get("/auth/cookie/me");
+      const res = await http.get(EP.auth.me());
       setUser(res.data);
       setIsAuthenticated(true);
     } catch {
-      // access_token протух → интерцептор уже попробовал refresh
-      // Если и refresh упал — _clearSession вызван из интерцептора
       _clearSession();
     } finally {
       setIsLoadingAuth(false);
@@ -129,16 +75,12 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsLoadingAuth(true);
       setAuthError(null);
-
-      // Бэкенд ставит куки и возвращает AccountResponse (без токенов)
-      const res = await api.post("/auth/cookie/login", { email, password });
-
+      const res = await http.post(EP.auth.login(), { email, password });
       setUser(res.data);
       setIsAuthenticated(true);
       return { ok: true };
     } catch (err) {
-      const message =
-        err.response?.data?.detail || err.message || "Login failed";
+      const message = _extractError(err, "Login failed");
       setAuthError(message);
       return { ok: false, message };
     } finally {
@@ -151,19 +93,10 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsLoadingAuth(true);
       setAuthError(null);
-
-      await api.post("/auth/cookie/register", { email, password });
-      // После регистрации сразу логиним
+      await http.post(EP.auth.register(), { email, password });
       return await login(email, password);
     } catch (err) {
-      const detail = err.response?.data?.detail;
-      const message =
-        typeof detail === "string"
-          ? detail
-          : Array.isArray(detail)
-          ? detail.map((d) => d.msg).join("; ")
-          : "Registration failed";
-
+      const message = _extractError(err, "Registration failed");
       setAuthError(message);
       return { ok: false, message };
     } finally {
@@ -172,66 +105,109 @@ export const AuthProvider = ({ children }) => {
   }, [login]);
 
   // ── Logout ─────────────────────────────────────────────────────────────────
+  // window.location.href — сознательный выбор: полный сброс React + query cache
   const logout = useCallback(async () => {
     try {
-      // Бэкенд инвалидирует refresh-токен и удаляет куки
-      await api.post("/auth/cookie/logout");
-    } catch {
-      // Даже если запрос упал — чистим состояние на фронте
-    } finally {
+      await http.post(EP.auth.logout());
+    } catch { /* ignore */ } finally {
       _clearSession();
-      window.location.href = "/";
+      window.location.href = ROUTES.home();
     }
   }, [_clearSession]);
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  const navigateToLogin = useCallback(() => {
-    window.location.href = "/login";
+  // ── Logout all devices ─────────────────────────────────────────────────────
+  const logoutAll = useCallback(async () => {
+    try {
+      await http.post(EP.auth.logoutAll());
+    } catch { /* ignore */ } finally {
+      _clearSession();
+      window.location.href = ROUTES.home();
+    }
+  }, [_clearSession]);
+
+  // ── Sessions ───────────────────────────────────────────────────────────────
+  const fetchSessions = useCallback(async () => {
+    try {
+      setIsLoadingSessions(true);
+      setSessionsError(null);
+      const res = await http.get(EP.auth.sessions());
+      setSessions(res.data);
+    } catch (err) {
+      setSessionsError(_extractError(err, "Failed to load sessions"));
+    } finally {
+      setIsLoadingSessions(false);
+    }
   }, []);
 
-  /**
-   * Проверить, есть ли у пользователя право.
-   * Permissions приходят в TokenResponse и хранятся в user.permissions.
-   * @param {string} codename  напр. "family:create"
-   */
+  const revokeSession = useCallback(async (sessionId) => {
+    try {
+      await http.delete(EP.auth.session(sessionId));
+      setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: _extractError(err, "Failed to revoke session") };
+    }
+  }, []);
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
   const hasPermission = useCallback(
     (codename) => user?.permissions?.includes(codename) ?? false,
     [user]
   );
 
+  // ── Values ─────────────────────────────────────────────────────────────────
+  const authValue = {
+    user,
+    isAuthenticated,
+    isLoadingAuth,
+    authError,
+    login,
+    register,
+    logout,
+    logoutAll,
+    checkUserAuth,
+    hasPermission,
+  };
+
+  const sessionValue = {
+    sessions,
+    isLoadingSessions,
+    sessionsError,
+    fetchSessions,
+    revokeSession,
+  };
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated,
-        isLoadingAuth,
-        authError,
-        login,
-        register,
-        logout,
-        navigateToLogin,
-        checkUserAuth,
-        hasPermission,
-        // Экспортируем api-инстанс чтобы другие модули могли его переиспользовать
-        api,
-      }}
-    >
-      {children}
+    <AuthContext.Provider value={authValue}>
+      <SessionContext.Provider value={sessionValue}>
+        {children}
+      </SessionContext.Provider>
     </AuthContext.Provider>
   );
 };
 
+// ─── Hooks ─────────────────────────────────────────────────────────────────────
+
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
 };
 
-/**
- * Экспортируем api отдельно — для использования в api/index.js
- * вместо создания нового инстанса там.
- * Так интерцептор с auto-refresh будет работать для всех запросов.
- */
-export { api as authApi };
+export const useSession = () => {
+  const ctx = useContext(SessionContext);
+  if (!ctx) throw new Error("useSession must be used within AuthProvider");
+  return ctx;
+};
+
+// ─── Re-export http для обратной совместимости (api/index.js использует его) ──
+export { http as authApi };
+
+// ─── Internal ──────────────────────────────────────────────────────────────────
+
+function _extractError(err, fallback) {
+  const detail = err.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) return detail.map((d) => d.msg).join("; ");
+  return err.message || fallback;
+}

@@ -1,63 +1,77 @@
-import { Toaster } from "@/components/ui/toaster"
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import PageNotFound from './lib/PageNotFound';
-import { AuthProvider, useAuth } from '@/lib/AuthContext';
-import UserNotRegisteredError from '@/components/UserNotRegisteredError';
-// Add page imports here
-import Landing from './pages/Landing';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import TreeView from './pages/TreeView';
-import Explore from './pages/Explore';
+/**
+ * App.jsx  (или router.jsx — в зависимости от вашей структуры)
+ *
+ * Весь роутинг приложения в одном месте.
+ * Маршруты берутся из ROUTES — нет ни одной строки URL вручную.
+ *
+ * Структура:
+ *   Public  — доступны всем
+ *   Protected — требуют авторизации, оборачиваются ProtectedRoute
+ *   Fallback  — 404
+ */
 
-const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-  if (isLoadingPublicSettings || isLoadingAuth) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center" style={{ background: "hsl(40,33%,98%)" }}>
-        <div className="text-center">
-          <div className="text-4xl mb-3">🌳</div>
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
-        </div>
-      </div>
-    );
-  }
+import { AuthProvider } from "@/lib/AuthContext";
+import ProtectedRoute   from "@/lib/ProtectedRoute";
+import { ROUTES }       from "@/lib/routes";
 
-  if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      navigateToLogin();
-      return null;
-    }
-  }
+// Pages — public
+import Landing      from "@/pages/Landing";
+import Login        from "@/pages/Login";
+import Explore      from "@/pages/Explore";
+import PageNotFound from "@/lib/PageNotFound";
 
+// Pages — protected
+import Dashboard from "@/pages/Dashboard";
+import TreeView  from "@/pages/TreeView";
+import Sessions  from "@/pages/Sessions";
+
+// QueryClient (если используете react-query)
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClientInstance } from "@/lib/query-client";
+
+export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/tree/:id" element={<TreeView />} />
-      <Route path="/explore" element={<Explore />} />
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+    <QueryClientProvider client={queryClientInstance}>
+      <BrowserRouter>
+        <AuthProvider>
+          <Routes>
+
+            {/* ── Public ──────────────────────────────────────────────── */}
+            <Route path={ROUTES.home()}    element={<Landing />} />
+            <Route path={ROUTES.login()}   element={<Login />} />
+            <Route path={ROUTES.explore()} element={<Explore />} />
+
+            {/* ── Protected ────────────────────────────────────────────── */}
+            <Route
+              path={ROUTES.dashboard()}
+              element={<ProtectedRoute><Dashboard /></ProtectedRoute>}
+            />
+            <Route
+              path={ROUTES.tree(":id")}
+              element={<ProtectedRoute><TreeView /></ProtectedRoute>}
+            />
+
+            {/* Settings — группируем под /settings/* */}
+            <Route
+              path={ROUTES.settings.sessions()}
+              element={<ProtectedRoute><Sessions /></ProtectedRoute>}
+            />
+
+            {/* Редирект /settings → /settings/sessions как index */}
+            <Route
+              path={ROUTES.settings.root()}
+              element={<Navigate to={ROUTES.settings.sessions()} replace />}
+            />
+
+            {/* ── 404 ─────────────────────────────────────────────────── */}
+            <Route path="*" element={<PageNotFound />} />
+
+          </Routes>
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
-};
-
-function App() {
-  return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <AuthenticatedApp />
-        </Router>
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
-  )
 }
-
-export default App
