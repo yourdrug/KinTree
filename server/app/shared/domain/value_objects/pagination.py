@@ -12,7 +12,7 @@ BaseFilterSpec — совокупность условий + пагинация.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Generic, TypeVar
 
 
@@ -51,7 +51,7 @@ class Page(Generic[T]):
         return max(0, self.offset - self.limit) if self.has_prev else None
 
 
-class FilterOperator(str, Enum):
+class FilterOperator(StrEnum):
     """Доступные операции для фильтрации"""
 
     EXACT = "exact"
@@ -65,7 +65,7 @@ class FilterOperator(str, Enum):
     IS_NULL = "is_null"
 
 
-class SortDirection(str, Enum):
+class SortDirection(StrEnum):
     """Параметры сортировки по убыванию или возрастанию"""
 
     ASC = "asc"

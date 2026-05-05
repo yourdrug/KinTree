@@ -15,10 +15,10 @@ DDD-принципы:
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class PermissionCodename(str, Enum):
+class PermissionCodename(StrEnum):
     """
     Все пермишены приложения.
 
@@ -65,7 +65,7 @@ class PermissionCodename(str, Enum):
     ADMIN__MANAGE_ROLES = ("admin:manage_roles", "Управление ролями пользователей")
 
 
-class RoleName(str, Enum):
+class RoleName(StrEnum):
     """
     Системные роли. Создаются один раз при инициализации БД.
     Новые роли добавляются через Alembic-миграцию.
