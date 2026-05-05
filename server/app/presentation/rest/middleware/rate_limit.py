@@ -1,34 +1,23 @@
 """
 presentation/rest/middleware/rate_limit.py
 
-Rate limiting для auth эндпоинтов через Redis.
-
-Реализация: sliding window counter.
-Ключ: ratelimit:{action}:{identifier}
-TTL автоматически сбрасывается при каждом hit — это fixed window, не sliding.
-Для genealogy app этого достаточно.
-
-Лимиты (настроены консервативно для auth):
-  login:   5 попыток / 1 минуту на IP
-  refresh: 10 попыток / 1 минуту на IP
-  register: 3 попытки / 10 минут на IP
-
-Fail-open: если Redis недоступен — пропускаем rate limiting, логируем.
+Rate limiting через Redis namespace "ratelimit".
 """
 
 from __future__ import annotations
 
 import logging
 
-from fastapi import Request
+from fastapi import Request, status
 from fastapi.responses import JSONResponse
-from shared.infrastructure.cache.redis_client import get_redis
+from shared.infrastructure.cache.redis_client import RedisClient
 
 
 logger = logging.getLogger(__name__)
 
+_cache = RedisClient.namespace("ratelimit")
+
 _LIMITS: dict[str, tuple[int, int]] = {
-    # action: (max_requests, window_seconds)
     "login": (5, 60),
     "refresh": (10, 60),
     "register": (3, 600),
@@ -36,7 +25,6 @@ _LIMITS: dict[str, tuple[int, int]] = {
 
 
 def _get_client_ip(request: Request) -> str:
-    """Извлекает реальный IP с учётом reverse proxy."""
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
@@ -45,12 +33,8 @@ def _get_client_ip(request: Request) -> str:
 
 async def check_rate_limit(request: Request, action: str) -> JSONResponse | None:
     """
-    Проверяет rate limit для действия.
-    Возвращает JSONResponse 429 если лимит превышен, иначе None.
-
-    Использование в роуте:
-        if resp := await check_rate_limit(request, "login"):
-            return resp
+    Проверяет rate limit. Возвращает JSONResponse 429 или None.
+    Fail-open: при недоступности Redis пропускает.
     """
     limit_cfg = _LIMITS.get(action)
     if not limit_cfg:
@@ -58,32 +42,26 @@ async def check_rate_limit(request: Request, action: str) -> JSONResponse | None
 
     max_requests, window_seconds = limit_cfg
     ip = _get_client_ip(request)
-    key = f"ratelimit:{action}:{ip}"
+    key = f"{action}:{ip}"
 
-    try:
-        r = get_redis()
-        count = await r.incr(key)
-        if count == 1:
-            # Первый хит — устанавливаем TTL
-            await r.expire(key, window_seconds)
-        if count > max_requests:
-            ttl = await r.ttl(key)
-            logger.warning(
-                "Rate limit exceeded: action=%s ip=%s count=%d",
-                action,
-                ip,
-                count,
-            )
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "detail": f"Слишком много попыток. Попробуйте через {ttl} сек.",
-                    "retry_after": ttl,
-                },
-                headers={"Retry-After": str(ttl)},
-            )
-    except Exception as exc:
-        # Fail-open: Redis недоступен — пропускаем rate limit
-        logger.warning("Rate limit Redis error for %s: %s", action, exc)
+    count = await _cache.incr(key)
+    if count is None:
+        logger.warning("Rate limit skipped (Redis unavailable): action=%s ip=%s", action, ip)
+        return None
+
+    if count == 1:
+        await _cache.expire(key, window_seconds)
+
+    if count > max_requests:
+        retry_after = max(await _cache.ttl(key), 0)
+        logger.warning("Rate limit exceeded: action=%s ip=%s count=%d", action, ip, count)
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "message": "Слишком много попыток",
+                "errors": {"retry_after": retry_after},
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
 
     return None

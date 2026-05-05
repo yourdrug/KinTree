@@ -1,18 +1,17 @@
 """
-infrastructure/account/repositories.py
+identity/infrastructure/account/repositories.py
 
-Репозиторий аккаунтов.
-При загрузке аккаунта сразу достаёт разрешения одним запросом.
+SQLAlchemy-реализация AccountRepository.
 """
 
 from __future__ import annotations
 
+from shared.domain.exceptions import NotFoundError
 from sqlalchemy import exists, insert, select, update
 from sqlalchemy.engine.result import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from identity.domain.entities.account import Account as DomainAccount
-from identity.domain.permissions.enums import RoleName
 from identity.infrastructure.account.mapper import AccountMapper
 from identity.infrastructure.db.models.account import Account as ORMAccount
 from identity.infrastructure.db.models.permission import (
@@ -34,18 +33,26 @@ class AccountRepositoryImpl:
         return result.scalar() or False
 
     async def get_by_id(self, account_id: str) -> DomainAccount:
+        """
+        Возвращает аккаунт или бросает NotFoundError.
+        Никогда не возвращает None — контракт репозитория.
+        """
         result: Result = await self._session.execute(select(ORMAccount).where(ORMAccount.id == account_id))
-        account: ORMAccount = result.scalar_one()
+        orm: ORMAccount | None = result.scalar_one_or_none()
+        if orm is None:
+            raise NotFoundError(resource="Account", resource_id=account_id)
+
         role_name, permissions = await self._load_role_and_permissions(account_id)
-        return self._mapper.to_domain(account, permissions=permissions, role_name=role_name)
+        return self._mapper.to_domain(orm, permissions=permissions, role_name=role_name)
 
     async def get_by_email(self, email: str) -> DomainAccount | None:
         result: Result = await self._session.execute(select(ORMAccount).where(ORMAccount.email == email))
-        account: ORMAccount | None = result.scalar_one_or_none()
-        if account is None:
+        orm: ORMAccount | None = result.scalar_one_or_none()
+        if orm is None:
             return None
-        role_name, permissions = await self._load_role_and_permissions(account.id)
-        return self._mapper.to_domain(account, permissions=permissions, role_name=role_name)
+
+        role_name, permissions = await self._load_role_and_permissions(orm.id)
+        return self._mapper.to_domain(orm, permissions=permissions, role_name=role_name)
 
     async def save(self, account: DomainAccount) -> DomainAccount:
         """Upsert: INSERT если новый, UPDATE если существует."""
@@ -53,22 +60,14 @@ class AccountRepositoryImpl:
             return await self._update(account)
         return await self._create(account)
 
-    async def update_refresh_token(
-        self,
-        account_id: str,
-        hashed_refresh_token: str | None,
-    ) -> None:
-        statement = update(ORMAccount).where(ORMAccount.id == account_id).values(refresh_token=hashed_refresh_token)
-        await self._session.execute(statement)
-
-    # ── Private helpers ────────────────────────────────────────────────────
-
     async def _create(self, account: DomainAccount) -> DomainAccount:
         data = self._mapper.to_persistence(account)
         stmt = insert(ORMAccount).values(**data).returning(ORMAccount)
         result: Result = await self._session.execute(stmt)
         orm: ORMAccount = result.scalar_one()
-        return self._mapper.to_domain(orm, permissions=frozenset(), role_name=RoleName.USER.value)
+        # Новый аккаунт — роль ещё не назначена, возвращаем с пустыми правами.
+        # AccountRole назначается отдельно после регистрации.
+        return self._mapper.to_domain(orm, permissions=frozenset(), role_name="user")
 
     async def _update(self, account: DomainAccount) -> DomainAccount:
         data = self._mapper.to_persistence(account)
@@ -79,9 +78,10 @@ class AccountRepositoryImpl:
         return self._mapper.to_domain(orm, permissions=permissions, role_name=role_name)
 
     async def _load_role_and_permissions(self, account_id: str) -> tuple[str, frozenset[str]]:
-        """One query: role name + all permission codenames."""
-
-        # Step 1: get role
+        """
+        Загружает роль и разрешения двумя запросами.
+        Возвращает ("user", frozenset()) если роль не назначена.
+        """
         role_result = await self._session.execute(
             select(Role.id, Role.name)
             .join(AccountRole, AccountRole.role_id == Role.id)
@@ -93,7 +93,6 @@ class AccountRepositoryImpl:
 
         role_id, role_name = row
 
-        # Step 2: get permissions for that role_id
         perm_result = await self._session.execute(
             select(Permission.codename)
             .join(RolePermission, RolePermission.permission_id == Permission.id)

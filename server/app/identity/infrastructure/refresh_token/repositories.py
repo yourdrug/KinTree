@@ -1,7 +1,7 @@
 """
 identity/infrastructure/refresh_token/repositories.py
 
-Репозиторий для работы с refresh_tokens.
+SQLAlchemy-реализация RefreshTokenRepository.
 """
 
 from __future__ import annotations
@@ -12,7 +12,9 @@ from shared.infrastructure.db.settings import settings
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from identity.infrastructure.db.models.refresh_token import RefreshToken
+from identity.domain.entities.refresh_token import RefreshToken as DomainRefreshToken
+from identity.infrastructure.db.models.refresh_token import RefreshToken as RefreshTokenORM
+from identity.infrastructure.refresh_token.mapper import RefreshTokenMapper
 
 
 class RefreshTokenRepositoryImpl:
@@ -26,10 +28,10 @@ class RefreshTokenRepositoryImpl:
         token_hash: str,
         user_agent: str | None = None,
         ip_address: str | None = None,
-    ) -> RefreshToken:
-        """Создаёт новую запись refresh token."""
+    ) -> DomainRefreshToken:
+        """Создаёт новую запись refresh token, возвращает доменный объект."""
         expires_at = datetime.now(tz=UTC) + timedelta(days=settings.JWT_TOKEN_REFRESH_LIFETIME_DAYS)
-        rt = RefreshToken(
+        orm = RefreshTokenORM(
             account_id=account_id,
             session_id=session_id,
             token_hash=token_hash,
@@ -38,43 +40,40 @@ class RefreshTokenRepositoryImpl:
             user_agent=user_agent,
             ip_address=ip_address,
         )
-        self._session.add(rt)
+        self._session.add(orm)
         await self._session.flush()
-        return rt
+        return RefreshTokenMapper.to_domain(orm)
 
-    async def get_by_session_id(self, session_id: str) -> RefreshToken | None:
-        result = await self._session.execute(select(RefreshToken).where(RefreshToken.session_id == session_id))
-        return result.scalar_one_or_none()
+    async def get_by_session_id(self, session_id: str) -> DomainRefreshToken | None:
+        result = await self._session.execute(select(RefreshTokenORM).where(RefreshTokenORM.session_id == session_id))
+        orm = result.scalar_one_or_none()
+        return RefreshTokenMapper.to_domain(orm) if orm else None
 
-    async def get_active_by_account(self, account_id: str) -> list[RefreshToken]:
+    async def get_active_by_account(self, account_id: str) -> list[DomainRefreshToken]:
         """Все активные (не отозванные, не истёкшие) сессии аккаунта."""
         now = datetime.now(tz=UTC)
         result = await self._session.execute(
-            select(RefreshToken).where(
-                RefreshToken.account_id == account_id,
-                RefreshToken.revoked.is_(False),
-                RefreshToken.expires_at > now,
+            select(RefreshTokenORM).where(
+                RefreshTokenORM.account_id == account_id,
+                RefreshTokenORM.revoked.is_(False),
+                RefreshTokenORM.expires_at > now,
             )
         )
-        return list(result.scalars().all())
+        return [RefreshTokenMapper.to_domain(orm) for orm in result.scalars().all()]
 
     async def revoke_by_session_id(self, session_id: str) -> None:
-        """Отзывает одну сессию."""
         await self._session.execute(
-            update(RefreshToken).where(RefreshToken.session_id == session_id).values(revoked=True)
+            update(RefreshTokenORM).where(RefreshTokenORM.session_id == session_id).values(revoked=True)
         )
 
     async def revoke_all_by_account(self, account_id: str) -> None:
-        """
-        Отзывает все сессии аккаунта.
-        Вызывается при детекте компрометации (token reuse).
-        """
+        """Отзывает все сессии аккаунта. Вызывается при детекте token reuse."""
         await self._session.execute(
-            update(RefreshToken).where(RefreshToken.account_id == account_id).values(revoked=True)
+            update(RefreshTokenORM).where(RefreshTokenORM.account_id == account_id).values(revoked=True)
         )
 
     async def delete_expired(self) -> int:
-        """Очистка истёкших токенов. Вызывается из background job."""
+        """Удаляет истёкшие токены. Вызывается из background job."""
         now = datetime.now(tz=UTC)
-        result = await self._session.execute(delete(RefreshToken).where(RefreshToken.expires_at <= now))
+        result = await self._session.execute(delete(RefreshTokenORM).where(RefreshTokenORM.expires_at <= now))
         return result.rowcount

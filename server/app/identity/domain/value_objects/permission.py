@@ -1,3 +1,11 @@
+"""
+identity/domain/value_objects/permission.py
+
+Permission — Value Object.
+"""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 
@@ -6,8 +14,8 @@ class Permission:
     """
     Value Object: атомарное право на действие.
 
-    Идентичность определяется исключительно codename.
-    Два объекта с одинаковым codename — один и тот же пермишен.
+    Идентичность — по codename (не id).
+    Immutable: frozen=True.
     """
 
     id: str

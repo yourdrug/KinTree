@@ -1,8 +1,14 @@
+"""
+identity/domain/repositories/refresh_tokens.py
+
+Контракт репозитория RefreshToken.
+"""
+
 from __future__ import annotations
 
 from typing import Protocol
 
-from identity.infrastructure.db.models.refresh_token import RefreshToken
+from identity.domain.entities.refresh_token import RefreshToken
 
 
 class RefreshTokenRepository(Protocol):
@@ -20,21 +26,21 @@ class RefreshTokenRepository(Protocol):
         ...
 
     async def get_by_session_id(self, session_id: str) -> RefreshToken | None:
-        """Найти refresh token по session_id."""
+        """Найти по session_id. None если не существует."""
         ...
 
     async def get_active_by_account(self, account_id: str) -> list[RefreshToken]:
-        """Получить все активные токены аккаунта."""
+        """Все активные (не отозванные, не истёкшие) токены аккаунта."""
         ...
 
     async def revoke_by_session_id(self, session_id: str) -> None:
-        """Отозвать один refresh token."""
+        """Отозвать одну сессию."""
         ...
 
     async def revoke_all_by_account(self, account_id: str) -> None:
-        """Отозвать все refresh token'ы аккаунта."""
+        """Отозвать все сессии аккаунта (при детекте компрометации)."""
         ...
 
     async def delete_expired(self) -> int:
-        """Удалить все истёкшие токены."""
+        """Удалить истёкшие токены. Возвращает количество удалённых."""
         ...

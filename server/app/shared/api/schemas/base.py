@@ -56,7 +56,7 @@ class BasePatchSchema(BaseModel):
 class BasePaginationParams:
     """Базовые параметры пагинации для Filter-схем."""
 
-    limit: Annotated[int, Query(ge=1, le=100, description="Записей на странице")] = 20
+    limit: Annotated[int, Query(ge=1, le=1000, description="Записей на странице")] = 20
     offset: Annotated[int, Query(ge=0, description="Смещение")] = 0
 
 

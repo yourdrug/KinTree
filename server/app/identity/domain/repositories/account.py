@@ -18,14 +18,6 @@ class AccountRepository(Protocol):
         """Создать или обновить. Возвращает сохранённый объект."""
         ...
 
-    async def update_refresh_token(
-        self,
-        account_id: str,
-        hashed_refresh_token: str | None,
-    ) -> None:
-        """Обновить хэш refresh-токена (или очистить при logout)."""
-        ...
-
     async def exists(self, account_id: str) -> bool:
         """Проверить существование."""
         ...

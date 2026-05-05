@@ -29,6 +29,7 @@ def load_model_modules() -> None:
         "genealogy.infrastructure.db.models.spouse",
         "identity.infrastructure.db.models.account",
         "identity.infrastructure.db.models.permission",
+        "identity.infrastructure.db.models.refresh_token",
     )
 
     for model_module in model_modules:

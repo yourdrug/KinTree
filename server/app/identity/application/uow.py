@@ -1,3 +1,10 @@
+"""
+identity/application/uow.py
+
+Unit of Work для Identity bounded context.
+
+"""
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -20,14 +27,14 @@ class IdentityUoW:
     """
     Unit of Work для Identity контекста.
 
-    Содержит только то, что относится к Identity.
-    Не знает о Genealogy.
+    Содержит только репозитории Identity. Не знает о Genealogy.
     """
 
     accounts: AccountRepository
     permissions: PermissionRepository
     roles: RoleRepository
     account_roles: AccountRoleRepository
+    refresh_tokens: RefreshTokenRepository
 
     def __init__(
         self,
@@ -46,7 +53,7 @@ class IdentityUoW:
         self.refresh_tokens = refresh_tokens
 
     async def __aenter__(self) -> IdentityUoW:
-        await self._session.begin()
+        # Не вызываем session.begin() — SQLAlchemy 2.x autobegin включён по умолчанию.
         return self
 
     async def __aexit__(

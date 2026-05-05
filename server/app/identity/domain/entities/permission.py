@@ -1,11 +1,10 @@
 """
 identity/domain/entities/permission.py
 
-Доменные сущности системы разрешений.
+Role — Entity системы разрешений.
 
-DDD-принципы:
-- Role — Entity (имеет идентификатор, содержит Permission'ы)
-
+Permission остаётся в value_objects/permission.py.
+Фабрики здесь — для удобства импорта в тестах и application-слое.
 """
 
 from __future__ import annotations
@@ -14,20 +13,20 @@ from dataclasses import dataclass, field
 
 from shared.domain.utils import generate_uuid
 
-from identity.domain.value_objects.account_role import AccountRole
 from identity.domain.value_objects.permission import Permission
 
 
-# ── Role (Entity) ─────────────────────────────────────────────────────────────
-
-
-@dataclass
+@dataclass(frozen=True)
 class Role:
     """
     Entity: именованная группа разрешений.
 
-    Идентичность определяется id.
-    Содержит набор Permission'ов — неизменяемый frozenset для O(1) проверки.
+    frozen=True:
+      - Гарантирует, что permissions не изменится после создания.
+      - Делает Role hashable по умолчанию (через __hash__ ниже).
+      - Устраняет класс ошибок "изменили permissions, кэш устарел".
+
+    Идентичность — по id (не по набору permissions).
     """
 
     id: str
@@ -35,12 +34,14 @@ class Role:
     description: str = ""
     permissions: frozenset[Permission] = field(default_factory=frozenset)
 
-    def has_permission(self, codename: str) -> bool:
-        """O(1) проверка через frozenset."""
-        return any(p.codename == codename for p in self.permissions)
-
-    def get_codenames(self) -> frozenset[str]:
+    @property
+    def codenames(self) -> frozenset[str]:
+        """O(1) set для проверки has_permission. Вычисляется из permissions."""
         return frozenset(p.codename for p in self.permissions)
+
+    def has_permission(self, codename: str) -> bool:
+        """Проверка пермишена по codename."""
+        return codename in self.codenames
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Role):
@@ -54,16 +55,9 @@ class Role:
 # ── Фабрики ───────────────────────────────────────────────────────────────────
 
 
-def create_permission(
-    codename: str,
-    description: str = "",
-) -> Permission:
+def create_permission(codename: str, description: str = "") -> Permission:
     """Фабрика Permission. Генерирует id."""
-    return Permission(
-        id=generate_uuid(),
-        codename=codename,
-        description=description,
-    )
+    return Permission(id=generate_uuid(), codename=codename, description=description)
 
 
 def create_role(
@@ -77,16 +71,4 @@ def create_role(
         name=name,
         description=description,
         permissions=frozenset(permissions or []),
-    )
-
-
-def create_account_role(
-    account_id: str,
-    role_id: str,
-) -> AccountRole:
-    """Фабрика AccountRole. Генерирует id."""
-    return AccountRole(
-        id=generate_uuid(),
-        account_id=account_id,
-        role_id=role_id,
     )

@@ -1,18 +1,15 @@
 """
-infrastructure/permissions/mapper.py
+identity/infrastructure/permissions/mapper.py
 
 Маппер: ORM-модели ↔ доменные объекты системы разрешений.
 
-Принципы:
-- Маппер — чистый объект без состояния (staticmethod).
-- to_domain() строит Value Object / Entity через их фабрики/конструкторы.
-- to_persistence() возвращает dict — нет прямой зависимости от ORM-методов.
-- Нет бизнес-логики — только трансформация данных.
 """
 
 from __future__ import annotations
 
-from identity.domain.entities.permission import AccountRole, Permission, Role
+from identity.domain.entities.account_role import AccountRole
+from identity.domain.entities.permission import Role
+from identity.domain.value_objects.permission import Permission
 from identity.infrastructure.db.models.permission import AccountRole as AccountRoleORM
 from identity.infrastructure.db.models.permission import Permission as PermissionORM
 from identity.infrastructure.db.models.permission import Role as RoleORM

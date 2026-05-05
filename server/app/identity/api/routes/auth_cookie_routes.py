@@ -1,25 +1,7 @@
 """
 identity/api/routes/auth_cookie_routes.py
 
-Cookie-based аутентификация для KinTree.
-
-Что изменилось относительно оригинала:
-  - login передаёт user_agent и ip для мета-данных сессии
-  - logout читает payload из access token → blacklist jti + revoke session
-  - logout-all — новый эндпоинт (выход со всех устройств)
-  - /sessions — список активных сессий
-  - /sessions/{session_id} DELETE — revoke конкретной сессии
-  - Rate limiting на login, refresh, register
-
-Куки:
-  access_token   httpOnly, Secure*, SameSite=lax, path=/
-  refresh_token  httpOnly, Secure*, SameSite=lax, path=/auth/cookie/refresh
-
-* Secure=False в ENVIRONMENT=DEV.
-
-SameSite=lax выбран вместо strict потому что KinTree может открываться
-по ссылкам (например, поделиться деревом) — strict блокирует куки при
-переходе с внешнего сайта, lax разрешает GET-переходы.
+Cookie-based аутентификация.
 """
 
 from __future__ import annotations
@@ -30,6 +12,7 @@ from presentation.rest.dependencies.dependencies import (
     get_auth_service,
     get_current_token_payload,
 )
+from presentation.rest.dependencies.request_meta import RequestMeta, get_request_meta
 from presentation.rest.middleware.rate_limit import check_rate_limit
 from shared.infrastructure.db.settings import settings
 
@@ -39,6 +22,8 @@ from identity.api.schemas.session import SessionResponse
 from identity.application.account.service import AccountService
 from identity.application.auth.service import AuthService
 from identity.domain.entities.account import Account
+from identity.domain.ports.token_service import AccessTokenPayload, ITokenService
+from identity.infrastructure.auth.token_service import get_token_service
 
 
 router: APIRouter = APIRouter(prefix="/auth/cookie", tags=["Auth · Cookie"])
@@ -77,13 +62,6 @@ def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(_COOKIE_REFRESH, path="/auth/cookie/refresh")
 
 
-def _get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 
@@ -93,61 +71,33 @@ async def cookie_register(
     payload: RegisterRequest = Body(...),
     service: AuthService = Depends(get_auth_service),
 ) -> AccountResponse:
-    """Регистрация. Куки не выдаёт — требует отдельного /login."""
     if resp := await check_rate_limit(request, "register"):
         return resp
 
     account = await service.register(payload.to_command())
-    return AccountResponse(
-        id=account.id,
-        email=account.email,
-        is_verified=account.is_verified,
-        is_acc_blocked=account.is_acc_blocked,
-        role=account.role_name,
-        permissions=sorted(account.permissions),
-    )
+    return _account_response(account)
 
 
 @router.post("/login", status_code=status.HTTP_200_OK)
 async def cookie_login(
     request: Request,
     response: Response,
+    meta: RequestMeta = Depends(get_request_meta),
     payload: LoginRequest = Body(...),
     auth_service: AuthService = Depends(get_auth_service),
     account_service: AccountService = Depends(get_account_service),
 ) -> AccountResponse:
-    """
-    Логин. Устанавливает httpOnly-куки.
-    Возвращает AccountResponse (токены клиент не видит).
-    """
     if resp := await check_rate_limit(request, "login"):
         return resp
 
-    from identity.application.auth.service import LoginCommand
-
-    cmd = LoginCommand(
-        email=payload.email,
-        password=payload.password,
-        user_agent=request.headers.get("User-Agent"),
-        ip_address=_get_client_ip(request),
-    )
+    cmd = payload.to_command(meta=meta)
     token_pair = await auth_service.login(cmd)
     _set_auth_cookies(response, token_pair.access_token, token_pair.refresh_token)
 
-    from identity.infrastructure.auth.jwt_service import decode_access_token
-
-    token_payload = decode_access_token(token_pair.access_token)
-    account_id: str = token_payload["sub"]
-
-    account = await account_service.get_account(account_id)
-    return AccountResponse(
-        id=account.id,
-        email=account.email,
-        is_verified=account.is_verified,
-        is_acc_blocked=account.is_acc_blocked,
-        role=account.role_name,
-        permissions=sorted(account.permissions),
-    )
+    ts: ITokenService = get_token_service()
+    access_payload = ts.decode_access_token(token_pair.access_token)
+    account = await account_service.get_account(access_payload.account_id)
+    return _account_response(account)
 
 
 @router.post("/refresh", status_code=status.HTTP_200_OK)
@@ -156,10 +106,6 @@ async def cookie_refresh(
     response: Response,
     service: AuthService = Depends(get_auth_service),
 ) -> dict:
-    """
-    Обновляет пару токенов через refresh_token из куки.
-    Token rotation: старый refresh revoke, выдаётся новый.
-    """
     if resp := await check_rate_limit(request, "refresh"):
         return resp
 
@@ -179,44 +125,33 @@ async def cookie_refresh(
 async def cookie_logout(
     request: Request,
     response: Response,
-    token_payload: dict = Depends(get_current_token_payload),
+    token_payload: AccessTokenPayload = Depends(get_current_token_payload),
     service: AuthService = Depends(get_auth_service),
 ) -> None:
     """
     Logout из текущей сессии.
-
-    - jti access token → Redis blacklist (токен становится невалидным немедленно)
-    - session_id → revoke refresh token в БД
-    - Куки удаляются
-
-    Работает даже если access token уже протух: get_current_token_payload
-    поймает ошибку, и мы чистим куки без blacklist.
+    access_token передаётся сервису для самостоятельного blacklist.
     """
-    account_id: str = token_payload.get("sub", "")
-    session_id: str | None = token_payload.get("sid")
-
+    raw_token = request.cookies.get("access_token") or ""
     await service.logout(
-        account_id=account_id,
-        session_id=session_id,
-        access_token_payload=token_payload,
+        account_id=token_payload.account_id,
+        session_id=token_payload.session_id,
+        access_token=raw_token or None,
     )
     _clear_auth_cookies(response)
 
 
 @router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
 async def cookie_logout_all(
+    request: Request,
     response: Response,
-    token_payload: dict = Depends(get_current_token_payload),
+    token_payload: AccessTokenPayload = Depends(get_current_token_payload),
     service: AuthService = Depends(get_auth_service),
 ) -> None:
-    """
-    Logout со всех устройств.
-    Отзывает все refresh tokens аккаунта, текущий access → blacklist.
-    """
-    account_id: str = token_payload.get("sub", "")
+    raw_token = request.cookies.get("access_token") or ""
     await service.logout_all(
-        account_id=account_id,
-        access_token_payload=token_payload,
+        account_id=token_payload.account_id,
+        access_token=raw_token or None,
     )
     _clear_auth_cookies(response)
 
@@ -225,30 +160,15 @@ async def cookie_logout_all(
 async def cookie_me(
     account: Account = Depends(get_current_account),
 ) -> AccountResponse:
-    """Профиль текущего пользователя."""
-    return AccountResponse(
-        id=account.id,
-        email=account.email,
-        is_verified=account.is_verified,
-        is_acc_blocked=account.is_acc_blocked,
-        role=account.role_name,
-        permissions=sorted(account.permissions),
-    )
+    return _account_response(account)
 
 
 @router.get("/sessions", status_code=status.HTTP_200_OK)
 async def cookie_sessions(
-    token_payload: dict = Depends(get_current_token_payload),
+    token_payload: AccessTokenPayload = Depends(get_current_token_payload),
     service: AuthService = Depends(get_auth_service),
 ) -> list[SessionResponse]:
-    """
-    Список активных сессий аккаунта.
-    Позволяет пользователю видеть, с каких устройств он залогинен.
-    """
-    account_id: str = token_payload.get("sub", "")
-    current_sid: str = token_payload.get("sid", "")
-    sessions = await service.get_sessions(account_id)
-
+    sessions = await service.get_sessions(token_payload.account_id)
     return [
         SessionResponse(
             session_id=s.session_id,
@@ -256,7 +176,7 @@ async def cookie_sessions(
             ip_address=s.ip_address,
             created_at=s.created_at,
             expires_at=s.expires_at,
-            is_current=(s.session_id == current_sid),
+            is_current=(s.session_id == token_payload.session_id),
         )
         for s in sessions
     ]
@@ -265,12 +185,24 @@ async def cookie_sessions(
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def cookie_revoke_session(
     session_id: str,
-    token_payload: dict = Depends(get_current_token_payload),
+    token_payload: AccessTokenPayload = Depends(get_current_token_payload),
     service: AuthService = Depends(get_auth_service),
 ) -> None:
-    """
-    Отзывает конкретную сессию (например, выйти с телефона).
-    Нельзя удалить чужую сессию — проверяется account_id.
-    """
-    account_id: str = token_payload.get("sub", "")
-    await service.revoke_session(account_id=account_id, session_id=session_id)
+    await service.revoke_session(
+        account_id=token_payload.account_id,
+        session_id=session_id,
+    )
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _account_response(account: Account) -> AccountResponse:
+    return AccountResponse(
+        id=account.id,
+        email=account.email_str,
+        is_verified=account.is_verified,
+        is_acc_blocked=account.is_acc_blocked,
+        role=account.role_str,
+        permissions=sorted(account.permissions),
+    )

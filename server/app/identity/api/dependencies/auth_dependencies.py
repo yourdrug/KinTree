@@ -3,25 +3,26 @@ identity/api/dependencies/auth_dependencies.py
 
 Зависимости для получения аккаунта из запроса.
 
-Добавлен реэкспорт get_current_token_payload — роуты импортируют
-всё из этого модуля, не напрямую из dependencies.py.
+_bearer_optional объявлен один раз в presentation/rest/dependencies/dependencies.py
+и реэкспортируется здесь для удобства. Дублирование устранено.
 """
 
+from __future__ import annotations
+
 from fastapi import Depends, Request
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.security import HTTPAuthorizationCredentials
 from presentation.rest.dependencies.dependencies import (
+    bearer,
     extract_token,
     get_account_service,
     get_current_account_id,
     get_current_token_payload,
+    get_token_service_dep,
 )
 
 from identity.application.account.service import AccountService
 from identity.domain.entities.account import Account
-from identity.infrastructure.auth.jwt_service import decode_access_token
-
-
-_bearer_optional = HTTPBearer(auto_error=False)
+from identity.domain.ports.token_service import ITokenService
 
 
 async def get_current_account(
@@ -31,33 +32,32 @@ async def get_current_account(
     """
     Dependency: возвращает аутентифицированный Account из БД.
     Бросает AuthenticationError если токен невалиден или в blacklist.
+    Бросает NotFoundError если аккаунт не найден (аномалия).
     """
     return await service.get_account(account_id)
 
 
 async def get_optional_account(
     request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_optional),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     service: AccountService = Depends(get_account_service),
+    token_service: ITokenService = Depends(get_token_service_dep),
 ) -> Account | None:
     """
     Dependency: необязательная аутентификация.
     None для гостей, Account для аутентифицированных.
-    Blacklist не проверяется для optional — оптимизация для публичных эндпоинтов.
+    Blacklist не проверяется — оптимизация для публичных эндпоинтов.
     """
     token = extract_token(request, credentials)
     if not token:
         return None
 
-    payload = decode_access_token(token)
-    account_id: str | None = payload.get("sub")
-    if not account_id:
-        return None
+    payload = token_service.decode_access_token(token)
+    account_id: str = payload.account_id
 
     return await service.get_account(account_id)
 
 
-# Реэкспорт для удобства импорта в роутах
 __all__ = [
     "get_current_account",
     "get_optional_account",

@@ -3,9 +3,10 @@ api/routes/auth_routes.py
 """
 
 from fastapi import APIRouter, Body, Depends, status
-from presentation.rest.dependencies.dependencies import get_auth_service
+from presentation.rest.dependencies.dependencies import get_auth_service, get_current_token_payload
+from presentation.rest.dependencies.request_meta import RequestMeta, get_request_meta
 
-from identity.api.dependencies.auth_dependencies import get_current_account, get_current_account_id
+from identity.api.dependencies.auth_dependencies import get_current_account
 from identity.api.schemas.auth import (
     AccountResponse,
     LoginRequest,
@@ -15,6 +16,7 @@ from identity.api.schemas.auth import (
 )
 from identity.application.auth.service import AuthService
 from identity.domain.entities.account import Account
+from identity.domain.ports.token_service import AccessTokenPayload
 
 
 router: APIRouter = APIRouter(prefix="/auth", tags=["Auth"])
@@ -28,7 +30,7 @@ async def register(
     account = await service.register(payload.to_command())
     return AccountResponse(
         id=account.id,
-        email=account.email,
+        email=account.email_str,
         is_verified=account.is_verified,
         is_acc_blocked=account.is_acc_blocked,
         role=account.role_name,
@@ -38,10 +40,11 @@ async def register(
 
 @router.post("/login", status_code=status.HTTP_200_OK)
 async def login(
+    meta: RequestMeta = Depends(get_request_meta),
     payload: LoginRequest = Body(...),
     service: AuthService = Depends(get_auth_service),
 ) -> TokenResponse:
-    token_pair = await service.login(payload.to_command())
+    token_pair = await service.login(payload.to_command(meta=meta))
     return TokenResponse(
         access_token=token_pair.access_token,
         refresh_token=token_pair.refresh_token,
@@ -66,10 +69,13 @@ async def refresh(
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
-    account_id: str = Depends(get_current_account_id),
+    token_payload: AccessTokenPayload = Depends(get_current_token_payload),
     service: AuthService = Depends(get_auth_service),
 ) -> None:
-    await service.logout(account_id=account_id)
+    await service.logout(
+        account_id=token_payload.account_id,
+        session_id=token_payload.session_id,
+    )
 
 
 @router.get("/me", status_code=status.HTTP_200_OK)
@@ -78,7 +84,7 @@ async def me(
 ) -> AccountResponse:
     return AccountResponse(
         id=account.id,
-        email=account.email,
+        email=account.email_str,
         is_verified=account.is_verified,
         is_acc_blocked=account.is_acc_blocked,
         role=account.role_name,

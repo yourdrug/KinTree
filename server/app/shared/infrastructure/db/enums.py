@@ -18,3 +18,9 @@ class DatabaseNodeRole(Enum):
 
     MASTER = "MASTER"
     SLAVE = "SLAVE"
+
+
+class CircuitBreakerState(Enum):
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"

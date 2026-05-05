@@ -1,57 +1,45 @@
 """
-domain/entities/account.py
+identity/domain/entities/account.py
+
+Account — корневой агрегат Identity bounded context.
+
+Изменения относительно предыдущей версии:
+- email хранится как Email VO (нормализация и валидация в домене)
+- hashed_password хранится как HashedPassword VO (инварианты хэша в домене)
+- role_name типизирован как RoleName (не сырая строка)
+- Убрана _validate() — инварианты теперь в VO через __post_init__
+- create_account принимает уже готовые VO — фабрика не дублирует валидацию
+- permissions остаётся frozenset[str] — O(1) поиск важнее типизации здесь
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import re
 
 from shared.domain.utils import generate_uuid
 
-
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-_MIN_PASSWORD_HASH_LENGTH = 20  # bcrypt hashes are 60 chars; anything shorter is suspicious
+from identity.domain.permissions.enums import RoleName
+from identity.domain.value_objects.email import Email
+from identity.domain.value_objects.hashed_password import HashedPassword
 
 
 @dataclass
 class Account:
     id: str
-    email: str
-    hashed_password: str
+    email: Email
+    hashed_password: HashedPassword
+    role_name: RoleName
     is_acc_blocked: bool = False
     is_verified: bool = False
-    refresh_token: str | None = None
-
-    # Роль хранится как строка (name из таблицы roles)
-    role_name: str = "user"
-
-    # Разрешения загружаются вместе с аккаунтом через JOIN
-    # Хранятся как frozenset для быстрой O(1) проверки
+    # frozenset[str] — codenames для O(1) has_permission. Загружаются JOIN-ом.
     permissions: frozenset[str] = field(default_factory=frozenset)
 
-    def __post_init__(self) -> None:
-        self._validate()
-
-    def _validate(self) -> None:
-        if not self.id or not self.id.strip():
-            raise ValueError("Account id cannot be empty.")
-        if not self.email or not self.email.strip():
-            raise ValueError("Account email cannot be empty.")
-        if not _EMAIL_RE.match(self.email):
-            raise ValueError(f"Account email {self.email!r} is not a valid email address.")
-        if not self.hashed_password:
-            raise ValueError("Account hashed_password cannot be empty.")
-        if len(self.hashed_password) < _MIN_PASSWORD_HASH_LENGTH:
-            raise ValueError("Account hashed_password appears too short to be a valid hash.")
-        if not self.role_name or not self.role_name.strip():
-            raise ValueError("Account role_name cannot be empty.")
+    # ── Queries ───────────────────────────────────────────────────────────────
 
     def is_active(self) -> bool:
         return not self.is_acc_blocked
 
     def has_permission(self, codename: str) -> bool:
-        """O(1) проверка разрешения."""
         return codename in self.permissions
 
     def has_any_permission(self, codenames: list[str]) -> bool:
@@ -60,18 +48,31 @@ class Account:
     def has_all_permissions(self, codenames: list[str]) -> bool:
         return all(c in self.permissions for c in codenames)
 
+    # ── Convenience properties ────────────────────────────────────────────────
 
-def create_account(email: str, hashed_password: str) -> Account:
-    if not email or not email.strip():
-        raise ValueError("email cannot be empty.")
+    @property
+    def email_str(self) -> str:
+        """Нормализованный email как строка — для JWT payload, логов и т.д."""
+        return str(self.email)
 
-    if not hashed_password:
-        raise ValueError("hashed_password cannot be empty.")
+    @property
+    def role_str(self) -> str:
+        """Строковое имя роли — для JWT payload и API-ответов."""
+        return self.role_name.value
 
+
+def create_account(email: Email, hashed_password: HashedPassword) -> Account:
+    """
+    Фабрика Account.
+
+    Принимает уже валидированные VO — не дублирует валидацию.
+    Новый аккаунт всегда создаётся с ролью USER и пустыми permissions
+    (роль назначается отдельно после регистрации через AccountRoleRepository).
+    """
     return Account(
         id=generate_uuid(),
-        email=email.strip().lower(),
+        email=email,
         hashed_password=hashed_password,
-        role_name="user",
+        role_name=RoleName.USER,
         permissions=frozenset(),
     )

@@ -1,3 +1,7 @@
+"""
+main.py
+"""
+
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 import time
@@ -5,9 +9,10 @@ import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from genealogy.api.routes import family_routes, person_routes, relation_routes
-from identity.api.routes import account_routes, auth_routes, auth_cookie_routes
+from identity.api.routes import account_routes, auth_cookie_routes, auth_routes
 from presentation.cli.cli import cli
 from presentation.rest.exception_handlers import register_exception_handlers
+from shared.infrastructure.cache.redis_client import RedisClient
 from shared.infrastructure.db.database import database
 from shared.infrastructure.db.settings import settings
 
@@ -19,16 +24,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     """
 
     await database.connect()
+    await RedisClient.init()
 
-    yield  # Точка, где приложение работает
+    yield  # приложение работает
 
+    await RedisClient.close()
     await database.disconnect()
 
 
 def create_app() -> FastAPI:
-    """
-    Создает и возвращает FastAPI приложение с конфигурацией, роутерами и middleware.
-    """
+    """Создаёт и возвращает сконфигурированное FastAPI-приложение."""
 
     app = FastAPI(
         title="KinTree API",
@@ -39,7 +44,6 @@ def create_app() -> FastAPI:
 
     app.state.server_start_time = time.time()
 
-    # CORS middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.BACKEND_CORS_ORIGINS,
@@ -58,14 +62,19 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
 
-    # Основные endpoints
     @app.get("/")
     async def root() -> dict:
         return {"message": "service KinTree", "docs": "/docs", "redoc": "/redoc"}
 
     @app.get("/health")
-    async def health_check() -> int:
-        return round((time.time() - app.state.server_start_time) * 100)
+    async def health_check() -> dict:
+        uptime_ms = round((time.time() - app.state.server_start_time) * 1000)
+        redis_ok = await RedisClient.ping()
+        return {
+            "status": "ok",
+            "uptime_ms": uptime_ms,
+            "redis": "ok" if redis_ok else "unavailable",
+        }
 
     return app
 

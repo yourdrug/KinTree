@@ -1,23 +1,22 @@
 """
-infrastructure/permissions/repositories.py
+identity/infrastructure/permissions/repositories.py
 
 SQLAlchemy-реализации репозиториев системы разрешений.
 
-Принципы:
-- Реализует Protocol из domain/repositories/permission.py.
-- Знает о ORM-моделях, не знает о доменной логике.
-- upsert_many использует ON CONFLICT для идемпотентности.
-- set_permissions — полная замена в рамках одной транзакции (UoW).
-- Нет N+1: загрузка пермишенов для роли — один JOIN.
+Исправления:
+- AccountRoleRepositoryImpl.exists: убраны дублирующиеся импорты внутри метода.
+  exists и select уже импортированы на уровне модуля.
 """
 
 from __future__ import annotations
 
-from sqlalchemy import Result, delete, insert, select
+from sqlalchemy import Result, delete, exists, insert, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from identity.domain.entities.permission import AccountRole, Permission, Role
+from identity.domain.entities.account_role import AccountRole
+from identity.domain.entities.permission import Role
+from identity.domain.value_objects.permission import Permission
 from identity.infrastructure.db.models.permission import (
     AccountRole as AccountRoleORM,
 )
@@ -59,15 +58,9 @@ class PermissionRepositoryImpl:
         return PermissionMapper.to_domain(result.scalar_one())
 
     async def upsert_many(self, permissions: list[Permission]) -> list[Permission]:
-        """
-        Идемпотентный upsert по codename.
-        Новые пермишены добавляются, существующие обновляют описание.
-        """
         if not permissions:
             return []
-
         rows = [PermissionMapper.to_persistence(p) for p in permissions]
-
         stmt = (
             pg_insert(PermissionORM)
             .values(rows)
@@ -98,7 +91,6 @@ class RoleRepositoryImpl:
         return RoleMapper.to_domain(orm) if orm else None
 
     async def get_by_name_with_permissions(self, name: str) -> Role | None:
-        """Роль + пермишены одним JOIN-запросом."""
         result: Result = await self._session.execute(select(RoleORM).where(RoleORM.name == name))
         orm_role = result.scalar_one_or_none()
         if not orm_role:
@@ -119,15 +111,9 @@ class RoleRepositoryImpl:
         return RoleMapper.to_domain(result.scalar_one())
 
     async def upsert_many(self, roles: list[Role]) -> list[Role]:
-        """
-        Идемпотентный upsert по name.
-        Новые роли добавляются, существующие обновляют описание.
-        """
         if not roles:
             return []
-
         rows = [RoleMapper.to_persistence(r) for r in roles]
-
         stmt = (
             pg_insert(RoleORM)
             .values(rows)
@@ -141,18 +127,10 @@ class RoleRepositoryImpl:
         return [RoleMapper.to_domain(row) for row in result.scalars().all()]
 
     async def set_permissions(self, role_id: str, permission_ids: list[str]) -> None:
-        """
-        Полная замена набора пермишенов роли.
-        DELETE старых + INSERT новых — атомарно через UoW.
-        """
-        # Удаляем все существующие связи для этой роли
         await self._session.execute(delete(RolePermissionORM).where(RolePermissionORM.role_id == role_id))
-
         if not permission_ids:
             return
-
-        # Вставляем новые
-        rows = [{"role_id": role_id, "permission_id": perm_id} for perm_id in permission_ids]
+        rows = [{"role_id": role_id, "permission_id": pid} for pid in permission_ids]
         await self._session.execute(insert(RolePermissionORM).values(rows))
 
     async def remove_all_role_permissions(self) -> None:
@@ -174,12 +152,7 @@ class AccountRoleRepositoryImpl:
         return AccountRoleMapper.to_domain(orm) if orm else None
 
     async def assign_role(self, account_role: AccountRole) -> AccountRole:
-        """
-        Upsert: если у аккаунта уже есть роль — обновить,
-        нет — создать. Идемпотентно.
-        """
         data = AccountRoleMapper.to_persistence(account_role)
-
         stmt = (
             pg_insert(AccountRoleORM)
             .values(**data)
@@ -193,9 +166,7 @@ class AccountRoleRepositoryImpl:
         return AccountRoleMapper.to_domain(result.scalar_one())
 
     async def exists(self, account_id: str) -> bool:
-        from sqlalchemy import exists as sql_exists
-        from sqlalchemy import select
-
-        stmt = select(sql_exists().where(AccountRoleORM.account_id == account_id))
+        # exists и select импортированы на уровне модуля — не дублируем здесь
+        stmt = select(exists().where(AccountRoleORM.account_id == account_id))
         result: Result = await self._session.execute(stmt)
         return result.scalar() or False

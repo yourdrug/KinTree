@@ -68,7 +68,6 @@ class RolePermission(LinkedBaseModel):
     __tablename__ = "role_permissions"
 
     __table_args__ = (
-        UniqueConstraint("role_id", "permission_id", name="uq_role_permission"),
         Index("idx_rp_role", "role_id"),
         Index("idx_rp_permission", "permission_id"),
     )

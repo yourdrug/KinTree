@@ -1,3 +1,11 @@
+"""
+identity/domain/entities/refresh_token.py
+
+Доменная сущность RefreshToken.
+"""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -9,12 +17,10 @@ class RefreshToken:
     session_id: str
     token_hash: str
     expires_at: datetime
+    created_at: datetime
     revoked: bool = False
-
     user_agent: str | None = None
     ip_address: str | None = None
-
-    # --- Domain behavior ---
 
     def is_expired(self, now: datetime) -> bool:
         return now >= self.expires_at

@@ -1,29 +1,7 @@
 """
-domain/services/permission_sync.py
+identity/domain/services/permission_sync.py
 
 Доменный сервис синхронизации пермишенов.
-
-DDD-принципы:
-- Доменный сервис содержит логику, которая не принадлежит одной Entity.
-- Он знает о domain-константах (PermissionCodename, ROLE_PERMISSIONS).
-- Он НЕ знает о БД, HTTP, Pydantic.
-- Возвращает доменные объекты.
-
-Назначение:
-  При старте приложения убеждаемся, что в БД есть все пермишены
-  и роли, объявленные в коде. Это идемпотентная операция —
-  запускать можно сколько угодно раз.
-
-Алгоритм:
-  1. Собрать все Permission-объекты из enum.
-  2. Upsert в БД (добавить новые, обновить описания).
-  3. Собрать все Role-объекты.
-  4. Upsert в БД.
-  5. Для каждой роли установить правильный набор пермишенов.
-
-Важно: сервис НЕ удаляет «лишние» пермишены из БД.
-Это защита от случайной потери данных при откате деплоя.
-Удаление всегда через явную Alembic-миграцию.
 """
 
 from __future__ import annotations
@@ -41,20 +19,12 @@ class PermissionSyncService:
     """
     Доменный сервис: формирует набор пермишенов и ролей для синхронизации с БД.
 
-    Не делает запросов в БД сам — возвращает объекты, которые
+    Не делает запросов в БД — возвращает объекты, которые
     application-сервис персистирует через репозитории.
-
-    Такой дизайн позволяет тестировать бизнес-логику без БД.
     """
 
     def build_permissions(self) -> list[Permission]:
-        """
-        Создаёт Permission-объекты из enum + описаний.
-        Вызывается перед upsert в БД.
-
-        ID генерируется новый, но upsert в БД использует codename
-        как уникальный ключ (ON CONFLICT(codename) DO UPDATE).
-        """
+        """Создаёт Permission-объекты из enum + описаний."""
         return [
             create_permission(
                 codename=perm.value,
@@ -64,10 +34,7 @@ class PermissionSyncService:
         ]
 
     def build_roles(self) -> list[Role]:
-        """
-        Создаёт Role-объекты из enum + описаний.
-        Без пермишенов — связи устанавливаются отдельно.
-        """
+        """Создаёт Role-объекты из enum + описаний. Без пермишенов — связи устанавливаются отдельно."""
         return [
             create_role(
                 name=role.value,
@@ -80,19 +47,16 @@ class PermissionSyncService:
         """
         Возвращает список codename пермишенов для роли.
 
-        Args:
-            role_name: строковое имя роли (из RoleName.value)
-            description: описание роли
+        Исправление: конвертируем str → RoleName enum перед lookup,
+        т.к. ROLE_PERMISSIONS использует RoleName как ключ.
 
-        Returns:
-            Список codename пермишенов.
-            Пустой список если роль не найдена.
+        Возвращает [] если роль не найдена в словаре.
         """
         try:
-            role = RoleName(value=role_name)
+            role_enum = RoleName(role_name)
         except ValueError:
             return []
-        return [p.value for p in ROLE_PERMISSIONS.get(role.value, [])]
+        return [p.value for p in ROLE_PERMISSIONS.get(role_enum, [])]
 
     def validate_codename_exists(self, codename: str) -> bool:
         """Проверяет что codename зарегистрирован в системе."""
