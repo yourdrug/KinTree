@@ -10,13 +10,16 @@ DIP (Dependency Inversion Principle):
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 import logging
 import secrets
 
 from shared.domain.exceptions import AuthenticationError
+from shared.infrastructure.db.settings import settings
 
 from identity.application.auth.commands import LoginCommand, RegisterCommand, TokenPair
 from identity.domain.entities.account import Account, create_account
+from identity.domain.entities.refresh_token import create_refresh_token
 from identity.domain.ports.password_hasher import IPasswordHasher
 from identity.domain.ports.token_service import ITokenService
 from identity.domain.value_objects.email import Email
@@ -84,13 +87,15 @@ class AuthService:
                 session_id=session_id,
             )
 
-            await uow.refresh_tokens.create(
+            rt = create_refresh_token(
                 account_id=account.id,
                 session_id=session_id,
                 token_hash=token_pair.refresh_token_hash,
+                expires_at=datetime.now(tz=UTC) + timedelta(days=settings.JWT_TOKEN_REFRESH_LIFETIME_DAYS),
                 user_agent=cmd.user_agent,
                 ip_address=cmd.ip_address,
             )
+            await uow.refresh_tokens.create(rt)
 
         return TokenPair(
             access_token=token_pair.access_token,
@@ -146,13 +151,15 @@ class AuthService:
                 session_id=session_id,
             )
 
-            await uow.refresh_tokens.create(
+            new_rt = create_refresh_token(
                 account_id=account_id,
                 session_id=session_id,
                 token_hash=new_token_pair.refresh_token_hash,
+                expires_at=datetime.now(tz=UTC) + timedelta(days=settings.JWT_TOKEN_REFRESH_LIFETIME_DAYS),
                 user_agent=rt.user_agent,
                 ip_address=rt.ip_address,
             )
+            await uow.refresh_tokens.create(new_rt)
 
         return TokenPair(
             access_token=new_token_pair.access_token,

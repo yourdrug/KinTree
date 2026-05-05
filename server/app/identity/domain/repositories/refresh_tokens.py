@@ -14,14 +14,7 @@ from identity.domain.entities.refresh_token import RefreshToken
 class RefreshTokenRepository(Protocol):
     """Контракт хранилища RefreshToken'ов."""
 
-    async def create(
-        self,
-        account_id: str,
-        session_id: str,
-        token_hash: str,
-        user_agent: str | None = None,
-        ip_address: str | None = None,
-    ) -> RefreshToken:
+    async def create(self, token: RefreshToken) -> RefreshToken:
         """Создать новый refresh token."""
         ...
 

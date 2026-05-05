@@ -6,10 +6,9 @@ SQLAlchemy-реализация RefreshTokenRepository.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-from shared.infrastructure.db.settings import settings
-from sqlalchemy import delete, select, update
+from sqlalchemy import Result, delete, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from identity.domain.entities.refresh_token import RefreshToken as DomainRefreshToken
@@ -21,27 +20,12 @@ class RefreshTokenRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create(
-        self,
-        account_id: str,
-        session_id: str,
-        token_hash: str,
-        user_agent: str | None = None,
-        ip_address: str | None = None,
-    ) -> DomainRefreshToken:
+    async def create(self, token: DomainRefreshToken) -> DomainRefreshToken:
         """Создаёт новую запись refresh token, возвращает доменный объект."""
-        expires_at = datetime.now(tz=UTC) + timedelta(days=settings.JWT_TOKEN_REFRESH_LIFETIME_DAYS)
-        orm = RefreshTokenORM(
-            account_id=account_id,
-            session_id=session_id,
-            token_hash=token_hash,
-            expires_at=expires_at,
-            revoked=False,
-            user_agent=user_agent,
-            ip_address=ip_address,
-        )
-        self._session.add(orm)
-        await self._session.flush()
+        data = RefreshTokenMapper.to_persistence(token)
+        stmt = insert(RefreshTokenORM).values(**data).returning(RefreshTokenORM)
+        result: Result = await self._session.execute(stmt)
+        orm: RefreshTokenORM = result.scalar_one()
         return RefreshTokenMapper.to_domain(orm)
 
     async def get_by_session_id(self, session_id: str) -> DomainRefreshToken | None:
