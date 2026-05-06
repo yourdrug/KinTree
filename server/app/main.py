@@ -4,6 +4,7 @@ main.py
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+import logging.config
 import time
 
 from fastapi import FastAPI
@@ -25,6 +26,7 @@ from presentation.rest.middlewares.rate_limit import RateLimitMiddleware
 from shared.infrastructure.cache.redis_client import RedisClient
 from shared.infrastructure.db.database import database
 from shared.infrastructure.db.settings import settings
+from shared.infrastructure.logging.configuration import logging_config
 
 
 @asynccontextmanager
@@ -54,6 +56,8 @@ def create_app() -> FastAPI:
 
     app.state.server_start_time = time.time()
 
+    logging.config.dictConfig(logging_config)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.BACKEND_CORS_ORIGINS,
@@ -79,14 +83,8 @@ def create_app() -> FastAPI:
         return {"message": "service KinTree", "docs": "/docs", "redoc": "/redoc"}
 
     @app.get("/health")
-    async def health_check() -> dict:
-        uptime_ms = round((time.time() - app.state.server_start_time) * 1000)
-        redis_ok = await RedisClient.ping()
-        return {
-            "status": "ok",
-            "uptime_ms": uptime_ms,
-            "redis": "ok" if redis_ok else "unavailable",
-        }
+    async def health_check() -> int:
+        return round((time.time() - app.state.server_start_time) * 100)
 
     return app
 
@@ -95,4 +93,5 @@ def create_app() -> FastAPI:
 app = create_app()
 
 if __name__ == "__main__":
+    logging.config.dictConfig(logging_config)
     cli.execute_command()
