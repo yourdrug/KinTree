@@ -15,10 +15,8 @@ HTTP-роуты для агрегата Family.
 from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, Path, Request, status
-from presentation.rest.dependencies.dependencies import (
-    get_current_account_id,
-    get_family_service,
-)
+from presentation.rest.dependencies.auth import get_current_account_id
+from presentation.rest.dependencies.services import get_family_service
 from shared.domain.value_objects.pagination import BaseFilterSpec, Page
 
 from genealogy.api.schemas.family import (

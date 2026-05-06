@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, Path, status
-from presentation.rest.dependencies.dependencies import get_relation_service
+from presentation.rest.dependencies.services import get_relation_service
 
 from genealogy.api.schemas.relations import (
     AddParentChildRequest,

@@ -30,6 +30,7 @@ from shared.domain.exceptions import (
     NotFoundError,
     PermissionDeniedError,
     PersonDomainError,
+    RateLimitError,
     RelationDomainError,
     ServerException,
 )
@@ -51,6 +52,7 @@ _CLIENT_STATUS_MAP: dict[type[ClientException], int] = {
     NotFoundError: status.HTTP_404_NOT_FOUND,
     ConflictError: status.HTTP_409_CONFLICT,
     FilterValidationError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    RateLimitError: status.HTTP_429_TOO_MANY_REQUESTS,
     ClientException: status.HTTP_400_BAD_REQUEST,  # fallback
 }
 

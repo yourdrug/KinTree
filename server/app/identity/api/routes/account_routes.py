@@ -1,10 +1,11 @@
-from fastapi import (
-    APIRouter,
-    Depends,
-    Path,
-    status,
-)
-from presentation.rest.dependencies.dependencies import get_account_service
+"""
+identy/api/routes/account_routes.py
+
+HTTP-роуты для аккаунтов.
+"""
+
+from fastapi import APIRouter, Depends, Path, status
+from presentation.rest.dependencies.services import get_account_service
 
 from identity.application.account.service import AccountService
 from identity.domain.entities.account import Account
@@ -18,8 +19,6 @@ async def get_account(
     account_id: str = Path(min_length=32, max_length=32),
     service: AccountService = Depends(get_account_service),
 ) -> Account:
-    account: Account = await service.get_account(
-        account_id=account_id,
-    )
+    account: Account = await service.get_account(account_id=account_id)
 
     return account

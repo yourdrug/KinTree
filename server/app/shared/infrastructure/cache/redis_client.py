@@ -17,7 +17,7 @@ RedisClient — универсальный Redis-клиент для кэшир�
 
   Примеры:
     blacklist:jti_abc123          (identity.auth)
-    ratelimit:login:192.168.1.1   (presentation.middleware)
+    ratelimit:login:192.168.1.1   (presentation.middlewares)
     family_cache:family_id_xyz    (genealogy.family)
     session_meta:session_id_abc   (identity.session)
 

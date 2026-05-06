@@ -9,9 +9,19 @@ import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from genealogy.api.routes import family_routes, person_routes, relation_routes
-from identity.api.routes import account_routes, auth_cookie_routes, auth_routes
+from identity.api.routes import account_routes
+from identity.api.routes.auth import (
+    bearer_routes as auth_bearer_routes,
+)
+from identity.api.routes.auth import (
+    common_routes as auth_common_routes,
+)
+from identity.api.routes.auth import (
+    cookie_routes as auth_cookie_routes,
+)
 from presentation.cli.cli import cli
 from presentation.rest.exception_handlers import register_exception_handlers
+from presentation.rest.middlewares.rate_limit import RateLimitMiddleware
 from shared.infrastructure.cache.redis_client import RedisClient
 from shared.infrastructure.db.database import database
 from shared.infrastructure.db.settings import settings
@@ -52,8 +62,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["Set-Cookie"],
     )
+    app.add_middleware(RateLimitMiddleware)
 
-    app.include_router(auth_routes.router)
+    app.include_router(auth_common_routes.router)
+    app.include_router(auth_bearer_routes.router)
     app.include_router(auth_cookie_routes.router)
     app.include_router(account_routes.router)
     app.include_router(person_routes.router)

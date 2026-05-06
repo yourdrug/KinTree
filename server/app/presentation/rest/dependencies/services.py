@@ -1,20 +1,13 @@
 """
-presentation/rest/dependencies/dependencies.py
+presentation/rest/dependencies/services.py
 
 Единственная точка DI для FastAPI.
-
-Регистрирует адаптеры под порты:
-  IPasswordHasher → BcryptPasswordHasher
-  ITokenService   → JWTTokenService
-
-AuthService получает зависимости через конструктор — не импортирует infrastructure.
-FastAPI dependencies — тонкая обёртка, которая связывает порты с адаптерами.
 """
 
 from __future__ import annotations
 
-from fastapi import Depends, Request
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends
+from fastapi.security import HTTPBearer
 from genealogy.application.family.services import FamilyService
 from genealogy.application.person.service import PersonService
 from genealogy.application.relations.service import RelationService
@@ -23,12 +16,10 @@ from identity.application.account.service import AccountService
 from identity.application.auth.service import AuthService
 from identity.application.permissions.service import PermissionService
 from identity.domain.ports.password_hasher import IPasswordHasher
-from identity.domain.ports.token_service import AccessTokenPayload, ITokenService
-from identity.infrastructure.auth.blacklist_service import is_blacklisted
+from identity.domain.ports.token_service import ITokenService
 from identity.infrastructure.auth.password_hasher import get_password_hasher
 from identity.infrastructure.auth.token_service import get_token_service
 from identity.infrastructure.uow_factory import IdentityUoWFactory
-from shared.domain.exceptions import AuthenticationError
 from shared.infrastructure.db.database import database
 
 
@@ -100,57 +91,3 @@ def get_relation_service(
     uow_factory: GenealogyUoWFactory = Depends(get_genealogy_uow_factory),
 ) -> RelationService:
     return RelationService(uow_factory=uow_factory)
-
-
-# ── Auth helpers ───────────────────────────────────────────────────────────────
-
-
-def extract_token(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None,
-) -> str | None:
-    """Cookie → Bearer. Cookie приоритетнее (браузерные клиенты)."""
-    return request.cookies.get("access_token") or (credentials.credentials if credentials else None)
-
-
-async def get_current_account_id(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
-    token_service: ITokenService = Depends(get_token_service_dep),
-) -> str:
-    """
-    Dependency: account_id из валидного, не отозванного access_token.
-
-    Проверки:
-      1. Токен присутствует
-      2. Подпись и TTL валидны (decode_access_token)
-      3. jti не в Redis blacklist (fail-open при недоступности Redis)
-    """
-    token = extract_token(request, credentials)
-    if not token:
-        raise AuthenticationError(message="Not authenticated")
-
-    payload: AccessTokenPayload = token_service.decode_access_token(token)
-
-    if payload.jti and await is_blacklisted(payload.jti):
-        raise AuthenticationError(
-            message="Токен отозван",
-            errors={"token": "revoked"},
-        )
-
-    return payload.account_id
-
-
-async def get_current_token_payload(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
-    token_service: ITokenService = Depends(get_token_service_dep),
-) -> AccessTokenPayload:
-    """
-    Dependency: полный payload access token как typed VO.
-    Нужен в logout для извлечения jti и session_id.
-    """
-    token = extract_token(request, credentials)
-    if not token:
-        raise AuthenticationError(message="Not authenticated")
-    return token_service.decode_access_token(token)

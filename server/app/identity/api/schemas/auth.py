@@ -9,10 +9,17 @@ from __future__ import annotations
 from presentation.rest.dependencies.request_meta import RequestMeta
 from pydantic import BaseModel, EmailStr, Field
 
-from identity.application.auth.commands import LoginCommand, RegisterCommand
+from identity.application.auth.commands import LoginCommand, RegisterCommand, TokenPair
+from identity.domain.entities.account import Account
 
 
 class RegisterRequest(BaseModel):
+    """
+    Схема для регистрации пользователя
+
+    Нет никаких валидаций, все валидируется в домене
+    """
+
     email: EmailStr = Field(..., examples=["user@example.com"])
     password: str = Field(..., min_length=8, max_length=128, examples=["StrongPass1!"])
 
@@ -21,6 +28,8 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
+    """Схема для входа пользователя"""
+
     email: EmailStr = Field(..., examples=["user@example.com"])
     password: str = Field(..., min_length=1, examples=["StrongPass1!"])
 
@@ -40,28 +49,32 @@ class TokenResponse(BaseModel):
     permissions — список всех codename разрешений пользователя.
     Клиент может закэшировать и использовать для UI-логики
     (показать/скрыть кнопки) без дополнительных запросов.
-
-    Пример:
-        {
-          "access_token": "eyJ...",
-          "refresh_token": "eyJ...",
-          "token_type": "bearer",
-          "role": "user",
-          "permissions": ["family:create", "family:read", "person:create", ...]
-        }
     """
 
     access_token: str
     refresh_token: str
     role: str
-    permissions: list[str] = Field(description="Отсортированный список codename всех разрешений")
+    permissions: list[str]
+
+    @classmethod
+    def from_command(cls, token_pair: TokenPair) -> TokenResponse:
+        return cls(
+            access_token=token_pair.access_token,
+            refresh_token=token_pair.refresh_token,
+            role=token_pair.role,
+            permissions=token_pair.permissions,
+        )
 
 
 class RefreshRequest(BaseModel):
+    """Схема для обновления refresh токена на bearer endpoint"""
+
     refresh_token: str = Field(..., min_length=1)
 
 
 class AccountResponse(BaseModel):
+    """Схема, которая возвращает данные аккаунта"""
+
     id: str
     email: str
     is_verified: bool
@@ -69,4 +82,13 @@ class AccountResponse(BaseModel):
     role: str
     permissions: list[str]
 
-    model_config = {"from_attributes": True}
+    @classmethod
+    def from_domain(cls, account: Account) -> AccountResponse:
+        return cls(
+            id=account.id,
+            email=account.email_str,
+            is_verified=account.is_verified,
+            is_acc_blocked=account.is_acc_blocked,
+            role=account.role_name,
+            permissions=sorted(account.permissions),
+        )

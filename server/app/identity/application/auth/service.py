@@ -14,12 +14,12 @@ from datetime import UTC, datetime, timedelta
 import logging
 import secrets
 
-from shared.domain.exceptions import AuthenticationError
+from shared.domain.exceptions import AuthenticationError, DomainValidationError
 from shared.infrastructure.db.settings import settings
 
 from identity.application.auth.commands import LoginCommand, RegisterCommand, TokenPair
 from identity.domain.entities.account import Account, create_account
-from identity.domain.entities.refresh_token import create_refresh_token
+from identity.domain.entities.refresh_token import RefreshToken, create_refresh_token
 from identity.domain.ports.password_hasher import IPasswordHasher
 from identity.domain.ports.token_service import ITokenService
 from identity.domain.value_objects.email import Email
@@ -44,31 +44,31 @@ class AuthService:
 
     # ── Register ──────────────────────────────────────────────────────────────
 
-    async def register(self, cmd: RegisterCommand) -> Account:
+    async def register(self, command: RegisterCommand) -> Account:
         # Валидация силы пароля — бизнес-правило домена
-        HashedPassword.validate_strength(cmd.password)
+        HashedPassword.validate_strength(command.password)
 
-        email = Email.create(cmd.email)
-        hashed = HashedPassword(value=self._hasher.hash(cmd.password))
+        email = Email.create(command.email)
+        hashed = HashedPassword(value=self._hasher.hash(command.password))
 
         async with self._uow_factory.create() as uow:
             existing = await uow.accounts.get_by_email(email.value)
+
             if existing is not None:
-                raise AuthenticationError(
-                    message="Email уже занят",
-                    errors={"email": "already_exists"},
+                raise DomainValidationError(
+                    errors={"email": "Пользователь с таким email уже зарегистрирован."},
                 )
             account = create_account(email=email, hashed_password=hashed)
             return await uow.accounts.save(account)
 
     # ── Login ─────────────────────────────────────────────────────────────────
 
-    async def login(self, cmd: LoginCommand) -> TokenPair:
-        email = Email.create(cmd.email)
+    async def login(self, command: LoginCommand) -> TokenPair:
+        email = Email.create(command.email)
 
         async with self._uow_factory.create() as uow:
             account = await uow.accounts.get_by_email(email.value)
-            if account is None or not self._hasher.verify(cmd.password, str(account.hashed_password)):
+            if account is None or not self._hasher.verify(command.password, str(account.hashed_password)):
                 raise AuthenticationError(
                     message="Неверный email или пароль",
                     errors={"credentials": "invalid"},
@@ -92,8 +92,8 @@ class AuthService:
                 session_id=session_id,
                 token_hash=token_pair.refresh_token_hash,
                 expires_at=datetime.now(tz=UTC) + timedelta(days=settings.JWT_TOKEN_REFRESH_LIFETIME_DAYS),
-                user_agent=cmd.user_agent,
-                ip_address=cmd.ip_address,
+                user_agent=command.user_agent,
+                ip_address=command.ip_address,
             )
             await uow.refresh_tokens.create(rt)
 
@@ -211,9 +211,7 @@ class AuthService:
         async with self._uow_factory.create() as uow:
             await uow.refresh_tokens.revoke_all_by_account(account_id)
 
-    # ── Sessions ──────────────────────────────────────────────────────────────
-
-    async def get_sessions(self, account_id: str) -> list:
+    async def get_sessions(self, account_id: str) -> list[RefreshToken]:
         async with self._uow_factory.create(master=False) as uow:
             return await uow.refresh_tokens.get_active_by_account(account_id)
 

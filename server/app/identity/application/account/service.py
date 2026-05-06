@@ -26,8 +26,6 @@ class AccountService:
     def __init__(self, uow_factory: IdentityUoWFactory) -> None:
         self._uow_factory = uow_factory
 
-    # ── Запросы ──────────────────────────────────────────────────────────────
-
     async def get_account(self, account_id: str) -> Account:
         async with self._uow_factory.create(master=False) as uow:
             return await uow.accounts.get_by_id(account_id)

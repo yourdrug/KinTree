@@ -13,7 +13,7 @@ HTTP-роуты для агрегата Person.
 from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, Path, Request, status
-from presentation.rest.dependencies.dependencies import get_person_service
+from presentation.rest.dependencies.services import get_person_service
 
 from genealogy.api.schemas.person import (
     CreatePersonRequest,

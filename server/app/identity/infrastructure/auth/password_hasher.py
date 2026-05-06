@@ -6,7 +6,7 @@ Adapter: реализация IPasswordHasher через bcrypt.
 Выделен из jwt_service.py, где password utils и token utils
 были смешаны в одном модуле (нарушение SRP).
 
-Регистрируется в DI-контейнере (dependencies.py) и передаётся
+Регистрируется в DI-контейнере (services.py) и передаётся
 в AuthService через конструктор.
 """
 

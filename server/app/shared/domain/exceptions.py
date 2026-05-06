@@ -143,3 +143,13 @@ class AccountBlockedError(ClientException):
 
 class FilterValidationError(ClientException):
     """Некорректные параметры фильтрации (422)."""
+
+
+class RateLimitError(ClientException):
+    """Слишком много запросов на эндпоинт (429)"""
+
+    def __init__(self, retry_after: int) -> None:
+        super().__init__(
+            message="Слишком много запросов",
+            errors={"detail": f"Слишком много запросов. Попробуйте позже после {retry_after} секунд."},
+        )
