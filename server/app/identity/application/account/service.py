@@ -1,12 +1,7 @@
 """
-application/account/service.py
+identy/application/account/service.py
 
 Application-сервис для агрегата Account.
-
-Принципы:
-- Сервис получает зависимости явно через __init__.
-- Работает через UnitOfWork, не через RepositoryFacade.
-- Все публичные методы — use case'ы: одна операция = один метод.
 """
 
 from __future__ import annotations

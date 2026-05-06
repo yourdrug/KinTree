@@ -100,6 +100,14 @@ class RelationDomainError(DomainValidationError):
     """Нарушение инварианта связей между персонами."""
 
 
+class AccountDomainError(DomainValidationError):
+    """Нарушение инварианта аккаунта."""
+
+
+class RoleDomainError(DomainValidationError):
+    """Нарушение инварианта роли."""
+
+
 class NotFoundError(ClientException):
     """Запрошенный ресурс не найден (404)."""
 

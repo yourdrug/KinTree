@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 from shared.domain.utils import generate_uuid
 
+from identity.domain.entities.permission import get_default_role_name
 from identity.domain.permissions.enums import RoleName
 from identity.domain.value_objects.email import Email
 from identity.domain.value_objects.hashed_password import HashedPassword
@@ -73,6 +74,6 @@ def create_account(email: Email, hashed_password: HashedPassword) -> Account:
         id=generate_uuid(),
         email=email,
         hashed_password=hashed_password,
-        role_name=RoleName.USER,
+        role_name=get_default_role_name(),
         permissions=frozenset(),
     )

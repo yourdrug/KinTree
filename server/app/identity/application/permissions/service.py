@@ -7,19 +7,12 @@ Application-сервис системы разрешений.
 1. Синхронизацию пермишенов и ролей с БД при старте (sync_permissions).
 2. Запросы к хранилищу ролей и пермишенов.
 
-DDD-принципы:
-- Сервис оркеструет: домен → репозитории → результат.
-- Бизнес-логика «что синхронизировать» — в PermissionSyncService (домен).
-- Этот сервис только знает «как» (через UoW и репозитории).
-
 Синхронизация при старте:
   Идемпотентная операция. Запускается в lifespan FastAPI.
   Алгоритм:
     1. Upsert всех Permission из кода в БД.
     2. Upsert всех Role из кода в БД.
     3. Для каждой роли: set_permissions (полная замена).
-
-  НЕ удаляет «лишние» пермишены — это защита при откате деплоя.
 """
 
 from __future__ import annotations
@@ -41,8 +34,6 @@ class PermissionService:
         self._uow_factory = uow_factory
         self._sync_service = PermissionSyncService()
 
-    # ── Синхронизация при старте ──────────────────────────────────────────────
-
     async def sync_permissions(self) -> None:
         """
         Синхронизировать пермишены и роли из кода → БД.
@@ -55,31 +46,25 @@ class PermissionService:
         """
         logger.info("Синхронизация пермишенов и ролей...")
 
-        # 1. Собрать объекты из кода
-        permissions_to_sync = self._sync_service.build_permissions()
-        roles_to_sync = self._sync_service.build_roles()
+        permissions_to_sync: list[Permission] = self._sync_service.build_permissions()
+        roles_to_sync: list[Role] = self._sync_service.build_roles()
 
         async with self._uow_factory.create(master=True) as uow:
-            # 2. Upsert пермишенов
-            synced_permissions = await uow.permissions.upsert_many(permissions_to_sync)
+            synced_permissions: list[Permission] = await uow.permissions.upsert_many(permissions_to_sync)
             perm_by_codename: dict[str, Permission] = {p.codename: p for p in synced_permissions}
 
             logger.info(f"Синхронизировано пермишенов: {len(synced_permissions)}")
 
-            # 3. Upsert ролей
-            synced_roles = await uow.roles.upsert_many(roles_to_sync)
+            synced_roles: list[Role] = await uow.roles.upsert_many(roles_to_sync)
 
             logger.info(f"Синхронизировано ролей: {len(synced_roles)}")
 
-            # 4. Установить пермишены для каждой роли
             for role in synced_roles:
-                codenames = self._sync_service.get_role_permission_codenames(role.name)
-                permission_ids = [perm_by_codename[cn].id for cn in codenames if cn in perm_by_codename]
+                codenames: list[str] = self._sync_service.get_role_permission_codenames(role.name)
+                permission_ids: list[str] = [perm_by_codename[cn].id for cn in codenames if cn in perm_by_codename]
                 await uow.roles.set_permissions(role.id, permission_ids)
 
             logger.info("Синхронизация пермишенов завершена успешно")
-
-    # ── Запросы ───────────────────────────────────────────────────────────────
 
     async def get_all_permissions(self) -> list[Permission]:
         async with self._uow_factory.create(master=False) as uow:

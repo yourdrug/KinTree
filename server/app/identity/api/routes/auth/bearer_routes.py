@@ -54,7 +54,6 @@ async def logout(
     """Logout из текущей сессии."""
 
     await service.logout(
-        account_id=token_payload.account_id,
         session_id=token_payload.session_id,
         access_token=raw_token,
     )

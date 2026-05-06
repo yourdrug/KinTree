@@ -1,5 +1,7 @@
 """
-application/auth/commands.py
+identy/application/auth/commands.py
+
+DTO модели для передачи между routes и application слоями
 """
 
 from dataclasses import dataclass
