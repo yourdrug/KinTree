@@ -28,8 +28,8 @@ from identity.domain.value_objects.hashed_password import HashedPassword
 class Account:
     id: str
     email: Email
-    hashed_password: HashedPassword
     role_name: RoleName
+    hashed_password: HashedPassword | None = None  # для oauth аккаунтов
     is_acc_blocked: bool = False
     is_verified: bool = False
     # frozenset[str] — codenames для O(1) has_permission. Загружаются JOIN-ом.
@@ -49,8 +49,6 @@ class Account:
     def has_all_permissions(self, codenames: list[str]) -> bool:
         return all(c in self.permissions for c in codenames)
 
-    # ── Convenience properties ────────────────────────────────────────────────
-
     @property
     def email_str(self) -> str:
         """Нормализованный email как строка — для JWT payload, логов и т.д."""
@@ -62,7 +60,7 @@ class Account:
         return self.role_name.value
 
 
-def create_account(email: Email, hashed_password: HashedPassword) -> Account:
+def create_account(email: Email, hashed_password: HashedPassword | None) -> Account:
     """
     Фабрика Account.
 

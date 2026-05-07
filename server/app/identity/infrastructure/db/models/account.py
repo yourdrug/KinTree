@@ -19,7 +19,7 @@ class Account(BaseModel):
     )
 
     hashed_password: Mapped[str] = mapped_column(
-        nullable=False,
+        nullable=True,
         comment="Bcrypt-hashed password",
     )
 

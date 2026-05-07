@@ -21,7 +21,7 @@ services:
     ports:
       - name: kintree-port
         target: 8000
-        published: 6661
+        published: 8000
         host_ip: 0.0.0.0
         protocol: tcp
         mode: host

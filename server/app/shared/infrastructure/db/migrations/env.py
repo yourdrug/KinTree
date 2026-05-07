@@ -30,6 +30,7 @@ def load_model_modules() -> None:
         "identity.infrastructure.db.models.account",
         "identity.infrastructure.db.models.permission",
         "identity.infrastructure.db.models.refresh_token",
+        "identity.infrastructure.db.models.oauth_account",
     )
 
     for model_module in model_modules:

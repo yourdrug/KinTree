@@ -2,11 +2,6 @@
 identity/infrastructure/account/mapper.py
 
 Маппер ORM Account ↔ доменный Account.
-
-Преобразования:
-  ORM.email (str)             → Email VO
-  ORM.hashed_password (str)   → HashedPassword VO
-  role_name (str из запроса)  → RoleName enum
 """
 
 from __future__ import annotations
@@ -14,6 +9,7 @@ from __future__ import annotations
 import logging
 
 from identity.domain.entities.account import Account as DomainAccount
+from identity.domain.entities.permission import get_default_role_name
 from identity.domain.permissions.enums import RoleName
 from identity.domain.value_objects.email import Email
 from identity.domain.value_objects.hashed_password import HashedPassword
@@ -24,8 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 class AccountMapper:
+    @staticmethod
     def to_domain(
-        self,
         model: ORMAccount,
         permissions: frozenset[str],
         role_name: str,
@@ -33,14 +29,14 @@ class AccountMapper:
         try:
             role = RoleName(role_name)
         except ValueError:
-            # Роль из БД не совпадает ни с одним RoleName — дефолт USER,
+            # Роль из БД не совпадает ни с одним RoleName — берем дефолт,
             # но логируем: это аномалия (например, ручное изменение БД).
             logger.warning(
                 "Unknown role_name %r for account %s, falling back to USER",
                 role_name,
                 model.id,
             )
-            role = RoleName.USER
+            role = get_default_role_name()
 
         return DomainAccount(
             id=model.id,
@@ -52,11 +48,12 @@ class AccountMapper:
             permissions=permissions,
         )
 
-    def to_persistence(self, entity: DomainAccount) -> dict:
+    @staticmethod
+    def to_persistence(entity: DomainAccount) -> dict:
         return {
             "id": entity.id,
             "email": entity.email_str,
-            "hashed_password": str(entity.hashed_password),
+            "hashed_password": entity.hashed_password,
             "is_acc_blocked": entity.is_acc_blocked,
             "is_verified": entity.is_verified,
         }

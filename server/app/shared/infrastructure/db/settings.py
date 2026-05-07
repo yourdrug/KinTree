@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     # Timezone (IANA tz name, например "Europe/Minsk", "UTC", "Europe/Moscow")
     TIMEZONE: str = Field(default="UTC")
 
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+    GOOGLE_REDIRECT_URI: str
+
+    # Telegram
+    TELEGRAM_BOT_TOKEN: str
+
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         case_sensitive=True,
         env_file=".env",

@@ -37,8 +37,6 @@ class JWTTokenService:
         self._access_ttl = timedelta(minutes=access_ttl_minutes)
         self._refresh_ttl = timedelta(days=refresh_ttl_days)
 
-    # ── Port implementation ───────────────────────────────────────────────────
-
     def create_token_pair(
         self,
         account_id: str,
@@ -49,7 +47,7 @@ class JWTTokenService:
         now = datetime.now(tz=settings.tz)
 
         # Access token
-        access_jti = secrets.token_hex(16)
+        access_jti = self.generate_access_hex()
         access_payload = {
             "sub": account_id,
             "email": email,
@@ -63,7 +61,7 @@ class JWTTokenService:
         access_token = self._encode(access_payload)
 
         # Refresh token: raw jti хранится в JWT и хэшируется для БД
-        raw_refresh_jti = secrets.token_hex(32)
+        raw_refresh_jti = self.generate_refresh_hex()
         refresh_payload = {
             "sub": account_id,
             "sid": session_id,
@@ -117,6 +115,15 @@ class JWTTokenService:
             return 0
         now = int(datetime.now(tz=settings.tz).timestamp())
         return max(payload.get("exp", now) - now, 0)
+
+    def generate_access_hex(self) -> str:
+        return secrets.token_hex(16)
+
+    def generate_refresh_hex(self) -> str:
+        return secrets.token_hex(32)
+
+    def generate_session_id_hex(self) -> str:
+        return secrets.token_hex(16)
 
     # ── Private helpers ───────────────────────────────────────────────────────
 

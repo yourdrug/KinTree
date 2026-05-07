@@ -14,6 +14,7 @@ from genealogy.application.relations.service import RelationService
 from genealogy.infrastructure.uow_factory import GenealogyUoWFactory
 from identity.application.account.service import AccountService
 from identity.application.auth.service import AuthService
+from identity.application.oauth.service import OAuthService
 from identity.application.permissions.service import PermissionService
 from identity.domain.ports.password_hasher import IPasswordHasher
 from identity.domain.ports.token_service import ITokenService
@@ -56,6 +57,16 @@ def get_auth_service(
     return AuthService(
         uow_factory=uow_factory,
         password_hasher=password_hasher,
+        token_service=token_service,
+    )
+
+
+def get_oauth_service(
+    uow_factory: IdentityUoWFactory = Depends(get_identity_uow_factory),
+    token_service: ITokenService = Depends(get_token_service_dep),
+) -> OAuthService:
+    return OAuthService(
+        uow_factory=uow_factory,
         token_service=token_service,
     )
 

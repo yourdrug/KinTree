@@ -2,10 +2,6 @@
 identity/domain/ports/token_service.py
 
 Port: интерфейс создания и декодирования токенов.
-
-Разделение ответственности:
-  ITokenService  — создание/верификация access + refresh токенов
-  IPasswordHasher — хэширование паролей (отдельный port)
 """
 
 from __future__ import annotations
@@ -31,7 +27,6 @@ class CreatedTokenPair:
 
     access_token: str
     refresh_token: str
-    # Нужен для blacklist при logout и для хранения в БД
     access_jti: str
     refresh_token_hash: str
 
@@ -77,4 +72,16 @@ class ITokenService(Protocol):
 
     def get_access_token_ttl(self, token: str) -> int:
         """Возвращает оставшееся время жизни access token в секундах."""
+        ...
+
+    def generate_access_hex(self) -> str:
+        """Возвращает hex для access token jti"""
+        ...
+
+    def generate_refresh_hex(self) -> str:
+        """Возвращает hex для refresh token jti"""
+        ...
+
+    def generate_session_id_hex(self) -> str:
+        """Возвращает hex для session id"""
         ...

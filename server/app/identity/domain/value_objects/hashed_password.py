@@ -18,9 +18,12 @@ HashedPassword — Value Object.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 
 from shared.domain.exceptions import DomainValidationError
 
+
+logger = logging.getLogger(__name__)
 
 _MIN_HASH_LENGTH = 20  # bcrypt = 60 chars; защита от случайной передачи plain-text
 _MIN_PASSWORD_LENGTH = 8
@@ -36,19 +39,25 @@ class HashedPassword:
     Домен только хранит и проверяет базовые инварианты хэша.
     """
 
-    value: str
+    value: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.value:
+        if self.value is None:
+            return
+
+        value = self.value.strip()
+
+        if not value:
             raise DomainValidationError(field="hashed_password", message="Хэш пароля не может быть пустым")
-        if len(self.value) < _MIN_HASH_LENGTH:
+
+        if len(value) < _MIN_HASH_LENGTH:
             raise DomainValidationError(
                 field="hashed_password",
                 message="Значение слишком короткое для хэша пароля",
             )
 
     def __str__(self) -> str:
-        return self.value
+        return self.value or ""  # для oauth, мб придумать что получше?
 
     def __repr__(self) -> str:
         return "HashedPassword(***)"

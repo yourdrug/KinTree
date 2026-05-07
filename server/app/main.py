@@ -20,6 +20,7 @@ from identity.api.routes.auth import (
 from identity.api.routes.auth import (
     cookie_routes as auth_cookie_routes,
 )
+from identity.api.routes.auth import oauth_routes
 from presentation.cli.cli import cli
 from presentation.rest.exception_handlers import register_exception_handlers
 from presentation.rest.middlewares.rate_limit import RateLimitMiddleware
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_common_routes.router)
     app.include_router(auth_bearer_routes.router)
     app.include_router(auth_cookie_routes.router)
+    app.include_router(oauth_routes.router)
     app.include_router(account_routes.router)
     app.include_router(person_routes.router)
     app.include_router(family_routes.router)
