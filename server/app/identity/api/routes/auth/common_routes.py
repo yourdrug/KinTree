@@ -11,11 +11,11 @@ from identity.domain.entities.refresh_token import RefreshToken
 from identity.domain.ports.token_service import AccessTokenPayload
 
 
-router: APIRouter = APIRouter(prefix="/auth", tags=["Auth · Bearer", "Auth · Cookie"])
+router: APIRouter = APIRouter(prefix="/auth", tags=["Auth · Common"])
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def cookie_register(
+async def register(
     payload: RegisterRequest = Body(...),
     service: AuthService = Depends(get_auth_service),
 ) -> AccountResponse:
@@ -34,7 +34,7 @@ async def me(
 
 
 @router.get("/sessions", status_code=status.HTTP_200_OK)
-async def cookie_sessions(
+async def get_all_accounts_sessions(
     token_payload: AccessTokenPayload = Depends(get_current_token_payload),
     service: AuthService = Depends(get_auth_service),
 ) -> list[SessionResponse]:

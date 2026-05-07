@@ -26,7 +26,7 @@ from identity.domain.ports.password_hasher import IPasswordHasher
 from identity.domain.ports.token_service import AccessTokenPayload, CreatedTokenPair, ITokenService
 from identity.domain.value_objects.email import Email
 from identity.domain.value_objects.hashed_password import HashedPassword
-from identity.infrastructure.auth.blacklist_service import blacklist_token
+from identity.infrastructure.auth.blacklist_service import blacklist_session, blacklist_token
 from identity.infrastructure.uow_factory import IdentityUoWFactory
 
 
@@ -211,8 +211,14 @@ class AuthService:
             ttl: int = self._tokens.get_access_token_ttl(access_token)
             await blacklist_token(payload.jti, ttl)
 
+        ttl = settings.JWT_TOKEN_ACCESS_LIFETIME_MINUTES * 60
+
         async with self._uow_factory.create() as uow:
+            active_sessions: list[RefreshToken] = await uow.refresh_tokens.get_active_by_account(account_id)
             await uow.refresh_tokens.revoke_all_by_account(account_id)
+
+        for session in active_sessions:
+            await blacklist_session(session.session_id, ttl)
 
     async def get_sessions(self, account_id: str) -> list[RefreshToken]:
         async with self._uow_factory.create(master=False) as uow:
@@ -229,3 +235,6 @@ class AuthService:
                 )
 
             await uow.refresh_tokens.revoke_by_session_id(session_id)
+
+        ttl: int = settings.JWT_TOKEN_ACCESS_LIFETIME_MINUTES * 60
+        await blacklist_session(session_id, ttl)

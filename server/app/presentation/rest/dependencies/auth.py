@@ -11,7 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from identity.application.account.service import AccountService
 from identity.domain.entities.account import Account
 from identity.domain.ports.token_service import AccessTokenPayload, ITokenService
-from identity.infrastructure.auth.blacklist_service import is_blacklisted
+from identity.infrastructure.auth.blacklist_service import is_blacklisted, is_session_blacklisted
 from shared.domain.exceptions import AuthenticationError
 
 from presentation.rest.cookies.auth_cookies import get_access_token
@@ -74,6 +74,12 @@ async def get_current_account_id(
         raise AuthenticationError(
             message="Токен отозван",
             errors={"token": "revoked"},
+        )
+
+    if payload.session_id and await is_session_blacklisted(payload.session_id):
+        raise AuthenticationError(
+            message="Сессия отозвана",
+            errors={"token": "session_revoked"},
         )
 
     return payload.account_id
