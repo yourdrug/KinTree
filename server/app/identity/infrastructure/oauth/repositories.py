@@ -10,7 +10,7 @@ from sqlalchemy import Insert, ScalarResult, Select, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from identity.domain.entities.oauth_account import OAuthAccount as DomainOAuthAccount
-from identity.domain.entities.oauth_provider import OAuthProvider
+from identity.domain.entities.oauth_account import OAuthProvider
 from identity.infrastructure.db.models.oauth_account import OAuthAccount as ORMOAuthAccount
 from identity.infrastructure.oauth.mapper import OAuthAccountMapper
 

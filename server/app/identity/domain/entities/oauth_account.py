@@ -11,10 +11,14 @@ identity/domain/entities/oauth_account.py
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 from shared.domain.utils import generate_uuid
 
-from identity.domain.entities.oauth_provider import OAuthProvider
+
+class OAuthProvider(StrEnum):
+    GOOGLE = "google"
+    TELEGRAM = "telegram"
 
 
 @dataclass

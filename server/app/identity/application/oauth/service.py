@@ -23,8 +23,7 @@ from identity.application.auth.commands import TokenPair
 from identity.application.oauth.commands import GoogleCallbackCommand, TelegramCallbackCommand
 from identity.domain.entities.account import Account, create_account
 from identity.domain.entities.account_role import AccountRole, create_account_role
-from identity.domain.entities.oauth_account import OAuthAccount, create_oauth_account
-from identity.domain.entities.oauth_provider import OAuthProvider
+from identity.domain.entities.oauth_account import OAuthAccount, OAuthProvider, create_oauth_account
 from identity.domain.entities.permission import Role
 from identity.domain.entities.refresh_token import RefreshToken, create_refresh_token
 from identity.domain.ports.token_service import CreatedTokenPair, ITokenService

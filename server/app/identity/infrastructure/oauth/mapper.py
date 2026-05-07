@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 
 from identity.domain.entities.oauth_account import OAuthAccount as DomainOAuthAccount
-from identity.domain.entities.oauth_provider import OAuthProvider
+from identity.domain.entities.oauth_account import OAuthProvider
 from identity.infrastructure.db.models.oauth_account import OAuthAccount as ORMOAuthAccount
 
 

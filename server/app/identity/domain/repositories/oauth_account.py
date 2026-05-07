@@ -8,8 +8,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from identity.domain.entities.oauth_account import OAuthAccount
-from identity.domain.entities.oauth_provider import OAuthProvider
+from identity.domain.entities.oauth_account import OAuthAccount, OAuthProvider
 
 
 class OAuthAccountRepository(Protocol):

@@ -1,5 +1,7 @@
 """
-conf.py: File, containing logger configuration.
+shared/infrastructure/logging/configuration.py
+
+File, containing logger configuration.
 """
 
 import logging
@@ -10,7 +12,7 @@ from shared.infrastructure.logging.filters import ExceptionFilter, LevelMinFilte
 
 logging_config: dict[str, Any] = {
     "version": 1,
-    "disable_existing_loggers": True,
+    "disable_existing_loggers": False,
     "filters": {
         "exclude_exceptions": {
             "()": ExceptionFilter,
