@@ -2,30 +2,29 @@
  * api/endpoints.js
  *
  * Единственный источник правды для всех API URL.
- *
- * Правила:
- *  - Каждый эндпоинт — функция, параметры явные
- *  - Функции возвращают только строки — без axios, без логики
- *  - Реальные вызовы живут в api/index.js
- *
- * Использование:
- *   import { ENDPOINTS as EP } from "@/api/endpoints";
- *
- *   http.get(EP.families.get(id))
- *   http.post(EP.auth.login())
  */
 
 export const ENDPOINTS = {
   // ── Auth (cookie-based) ───────────────────────────────────────────────────
   auth: {
-    me:        () => "/auth/cookie/me",
-    login:     () => "/auth/cookie/login",
-    register:  () => "/auth/cookie/register",
-    logout:    () => "/auth/cookie/logout",
-    logoutAll: () => "/auth/cookie/logout-all",
-    refresh:   () => "/auth/cookie/refresh",
-    sessions:  () => "/auth/cookie/sessions",
-    session:   (sessionId) => `/auth/cookie/sessions/${sessionId}`,
+    me:                   () => "/auth/me",
+    login:                () => "/auth/cookie/login",
+    register:             () => "/auth/register",
+    logout:               () => "/auth/cookie/logout",
+    logoutAll:            () => "/auth/cookie/logout-all",
+    refresh:              () => "/auth/cookie/refresh",
+    sessions:             () => "/auth/sessions",
+    session:              (sessionId) => `/auth/sessions/${sessionId}`,
+
+    // Email verification & password reset
+    verifyEmail:          () => "/auth/verify-email",
+    resendVerification:   () => "/auth/resend-verification",
+    forgotPassword:       () => "/auth/forgot-password",
+    resetPassword:        () => "/account/reset-password",
+
+    // OAuth
+    googleRedirect:       () => "/auth/oauth/cookie/google/callback",
+    telegramCallback:     () => "/auth/oauth/cookie/telegram/callback",
   },
 
   // ── Families ──────────────────────────────────────────────────────────────
@@ -50,13 +49,11 @@ export const ENDPOINTS = {
 
   // ── Relations ─────────────────────────────────────────────────────────────
   relations: {
-    graph:        (familyId) => `/relations/graph/${familyId}`,
-
+    graph:              (familyId)           => `/relations/graph/${familyId}`,
     parentChild:        ()                   => "/relations/parent-child",
     removeParentChild:  (parentId, childId)  => `/relations/parent-child/${parentId}/${childId}`,
-
-    spouses:      ()           => "/relations/spouses",
-    divorce:      ()           => "/relations/spouses/divorce",
-    removeSpouse: (idA, idB)   => `/relations/spouses/${idA}/${idB}`,
+    spouses:            ()                   => "/relations/spouses",
+    divorce:            ()                   => "/relations/spouses/divorce",
+    removeSpouse:       (idA, idB)           => `/relations/spouses/${idA}/${idB}`,
   },
 };

@@ -1,15 +1,5 @@
 /**
  * lib/AuthContext.jsx
- *
- * Cookie-based аутентификация.
- * Axios instance и интерцептор живут в api/client.js — не здесь.
- * URL эндпоинтов — в api/endpoints.js — не здесь.
- *
- * Этот файл отвечает только за:
- *  - React-состояние аутентификации (user, isAuthenticated, ...)
- *  - Методы login / register / logout / logoutAll
- *  - Управление сессиями через useSession()
- *  - Регистрацию _logoutRef для интерцептора
  */
 
 import React, {
@@ -22,6 +12,7 @@ import React, {
 import { http, _logoutRef } from "@/api/client";
 import { ENDPOINTS as EP } from "@/api/endpoints";
 import { ROUTES } from "@/lib/routes";
+import { appParams } from "@/lib/app-params";
 
 // ─── Contexts ──────────────────────────────────────────────────────────────────
 
@@ -47,7 +38,6 @@ export const AuthProvider = ({ children }) => {
     setSessions([]);
   }, []);
 
-  // Регистрируем callback для интерцептора в api/client.js
   useEffect(() => {
     _logoutRef.current = _clearSession;
   }, [_clearSession]);
@@ -105,7 +95,6 @@ export const AuthProvider = ({ children }) => {
   }, [login]);
 
   // ── Logout ─────────────────────────────────────────────────────────────────
-  // window.location.href — сознательный выбор: полный сброс React + query cache
   const logout = useCallback(async () => {
     try {
       await http.post(EP.auth.logout());
@@ -124,6 +113,78 @@ export const AuthProvider = ({ children }) => {
       window.location.href = ROUTES.home();
     }
   }, [_clearSession]);
+
+  // ── OAuth: Google ──────────────────────────────────────────────────────────
+  // Редирект на Google через бэкенд — бэкенд сам формирует consent URL
+  const loginWithGoogle = useCallback(() => {
+    window.location.href = `${appParams.apiUrl}/auth/oauth/google`;
+  }, []);
+
+  // ── OAuth: Telegram ────────────────────────────────────────────────────────
+  // Telegram Login Widget вызывает этот callback с данными пользователя
+  const loginWithTelegram = useCallback(async (telegramData) => {
+    try {
+      setIsLoadingAuth(true);
+      setAuthError(null);
+      const params = new URLSearchParams(telegramData).toString();
+      const res = await http.get(`${EP.auth.telegramCallback()}?${params}`);
+      setUser(res.data);
+      setIsAuthenticated(true);
+      return { ok: true };
+    } catch (err) {
+      const message = _extractError(err, "Telegram login failed");
+      setAuthError(message);
+      return { ok: false, message };
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  }, []);
+
+  // ── Handle OAuth redirect result (вызывается на странице /oauth/callback) ──
+  // После редиректа от Google бэкенд ставит cookie — нужно только обновить user
+  const handleOAuthCallback = useCallback(async () => {
+    await checkUserAuth();
+  }, [checkUserAuth]);
+
+  // ── Email verification ─────────────────────────────────────────────────────
+  const verifyEmail = useCallback(async (token) => {
+    try {
+      await http.post(EP.auth.verifyEmail(), { token });
+      // Обновляем user — is_verified изменился
+      await checkUserAuth();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: _extractError(err, "Verification failed") };
+    }
+  }, [checkUserAuth]);
+
+  const resendVerification = useCallback(async () => {
+    try {
+      await http.post(EP.auth.resendVerification());
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: _extractError(err, "Failed to resend") };
+    }
+  }, []);
+
+  // ── Password reset ─────────────────────────────────────────────────────────
+  const forgotPassword = useCallback(async (email) => {
+    try {
+      await http.post(EP.auth.forgotPassword(), { email });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: _extractError(err, "Failed to send reset email") };
+    }
+  }, []);
+
+  const resetPassword = useCallback(async (token, newPassword) => {
+    try {
+      await http.post(EP.auth.resetPassword(), { token, new_password: newPassword });
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, message: _extractError(err, "Failed to reset password") };
+    }
+  }, []);
 
   // ── Sessions ───────────────────────────────────────────────────────────────
   const fetchSessions = useCallback(async () => {
@@ -165,6 +226,13 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     logoutAll,
+    loginWithGoogle,
+    loginWithTelegram,
+    handleOAuthCallback,
+    verifyEmail,
+    resendVerification,
+    forgotPassword,
+    resetPassword,
     checkUserAuth,
     hasPermission,
   };
@@ -200,14 +268,14 @@ export const useSession = () => {
   return ctx;
 };
 
-// ─── Re-export http для обратной совместимости (api/index.js использует его) ──
 export { http as authApi };
 
 // ─── Internal ──────────────────────────────────────────────────────────────────
 
 function _extractError(err, fallback) {
-  const detail = err.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) return detail.map((d) => d.msg).join("; ");
+  const data = err.response?.data;
+  if (typeof data?.message === "string") return data.message;
+  if (typeof data?.detail === "string") return data.detail;
+  if (Array.isArray(data?.detail)) return data.detail.map((d) => d.msg).join("; ");
   return err.message || fallback;
 }

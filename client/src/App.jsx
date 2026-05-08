@@ -31,6 +31,8 @@ import Sessions  from "@/pages/Sessions";
 // QueryClient (если используете react-query)
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClientInstance } from "@/lib/query-client";
+import ResetPassword from "@/pages/ResetPassword.jsx";
+import VerifyEmail from "@/pages/VerifyEmail.jsx";
 
 export default function App() {
   return (
@@ -40,9 +42,11 @@ export default function App() {
           <Routes>
 
             {/* ── Public ──────────────────────────────────────────────── */}
-            <Route path={ROUTES.home()}    element={<Landing />} />
-            <Route path={ROUTES.login()}   element={<Login />} />
-            <Route path={ROUTES.explore()} element={<Explore />} />
+            <Route path={ROUTES.home()}          element={<Landing />} />
+            <Route path={ROUTES.login()}         element={<Login />} />
+            <Route path={ROUTES.explore()}       element={<Explore />} />
+            <Route path={ROUTES.resetPassword()} element={<ResetPassword />} />
+            <Route path={ROUTES.verifyEmail()}   element={<VerifyEmail />} />
 
             {/* ── Protected ────────────────────────────────────────────── */}
             <Route
