@@ -10,7 +10,7 @@ import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from genealogy.api.routes import family_routes, person_routes, relation_routes
-from identity.api.routes import account_routes
+from identity.api.routes import account_routes, email_routes
 from identity.api.routes.auth import (
     bearer_routes as auth_bearer_routes,
 )
@@ -73,6 +73,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_bearer_routes.router)
     app.include_router(auth_cookie_routes.router)
     app.include_router(oauth_routes.router)
+    app.include_router(email_routes.router)
     app.include_router(account_routes.router)
     app.include_router(person_routes.router)
     app.include_router(family_routes.router)

@@ -61,6 +61,16 @@ class DatabaseError(ServerException):
         )
 
 
+class EmailSendError(ServerException):
+    """Ошибка отправки email (5xx)."""
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(
+            message="Ошибка отправки письма",
+            errors={"detail": detail} if detail else None,
+        )
+
+
 # ── Client ────────────────────────────────────────────────────────────────────
 
 
@@ -160,4 +170,14 @@ class RateLimitError(ClientException):
         super().__init__(
             message="Слишком много запросов",
             errors={"detail": f"Слишком много запросов. Попробуйте позже после {retry_after} секунд."},
+        )
+
+
+class InvalidEmailTokenError(ClientException):
+    """Токен подтверждения/сброса невалиден, использован или истёк (400)."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            message="Токен недействителен или устарел",
+            errors={"token": "invalid_or_expired"},
         )

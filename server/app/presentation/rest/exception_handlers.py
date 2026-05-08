@@ -25,8 +25,10 @@ from shared.domain.exceptions import (
     ConflictError,
     DatabaseError,
     DomainValidationError,
+    EmailSendError,
     FamilyDomainError,
     FilterValidationError,
+    InvalidEmailTokenError,
     NotFoundError,
     PermissionDeniedError,
     PersonDomainError,
@@ -38,8 +40,6 @@ from shared.domain.exceptions import (
 
 logger: Logger = getLogger("default")
 
-
-# ── Маппинг исключений → HTTP-коды ───────────────────────────────────────────
 
 _CLIENT_STATUS_MAP: dict[type[ClientException], int] = {
     DomainValidationError: status.HTTP_400_BAD_REQUEST,
@@ -53,11 +53,13 @@ _CLIENT_STATUS_MAP: dict[type[ClientException], int] = {
     ConflictError: status.HTTP_409_CONFLICT,
     FilterValidationError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     RateLimitError: status.HTTP_429_TOO_MANY_REQUESTS,
+    InvalidEmailTokenError: status.HTTP_400_BAD_REQUEST,
     ClientException: status.HTTP_400_BAD_REQUEST,  # fallback
 }
 
 _SERVER_STATUS_MAP: dict[type[ServerException], int] = {
     DatabaseError: status.HTTP_500_INTERNAL_SERVER_ERROR,
+    EmailSendError: status.HTTP_500_INTERNAL_SERVER_ERROR,
     ServerException: status.HTTP_500_INTERNAL_SERVER_ERROR,  # fallback
 }
 
@@ -71,9 +73,6 @@ def _error(message: str, errors: dict | None = None) -> dict:
     if errors:
         result["errors"] = errors
     return result
-
-
-# ── Handlers ──────────────────────────────────────────────────────────────────
 
 
 async def handle_client_exception(request: Request, exc: Exception) -> JSONResponse:

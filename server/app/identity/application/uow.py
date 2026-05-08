@@ -15,6 +15,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from identity.domain.repositories.account import AccountRepository
+from identity.domain.repositories.email_token import EmailTokenRepository
 from identity.domain.repositories.oauth_account import OAuthAccountRepository
 from identity.domain.repositories.permission import (
     AccountRoleRepository,
@@ -37,6 +38,7 @@ class IdentityUoW:
     account_roles: AccountRoleRepository
     refresh_tokens: RefreshTokenRepository
     oauth_accounts: OAuthAccountRepository
+    email_tokens: EmailTokenRepository
 
     def __init__(
         self,
@@ -47,6 +49,7 @@ class IdentityUoW:
         account_roles: AccountRoleRepository,
         refresh_tokens: RefreshTokenRepository,
         oauth_accounts: OAuthAccountRepository,
+        email_tokens: EmailTokenRepository,
     ) -> None:
         self._session = session
         self.accounts = accounts
@@ -55,6 +58,7 @@ class IdentityUoW:
         self.account_roles = account_roles
         self.refresh_tokens = refresh_tokens
         self.oauth_accounts = oauth_accounts
+        self.email_tokens = email_tokens
 
     async def __aenter__(self) -> IdentityUoW:
         # Не вызываем session.begin() — SQLAlchemy 2.x autobegin включён по умолчанию.

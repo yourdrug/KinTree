@@ -48,8 +48,12 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
 
-    # Telegram
+    # Telegram OAuth
     TELEGRAM_BOT_TOKEN: str
+
+    RESEND_API_KEY: str
+    EMAIL_FROM: str
+    FRONTEND_URL: str
 
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         case_sensitive=True,

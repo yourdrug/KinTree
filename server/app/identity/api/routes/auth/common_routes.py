@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Body, Depends, status
 from presentation.rest.dependencies.auth import get_current_account, get_current_token_payload
-from presentation.rest.dependencies.services import get_auth_service
+from presentation.rest.dependencies.services import get_auth_service, get_email_service
 
 from identity.api.schemas.auth import AccountResponse, RegisterRequest
 from identity.api.schemas.session import SessionResponse
 from identity.application.auth.commands import RegisterCommand
 from identity.application.auth.service import AuthService
+from identity.application.email.commands import SendVerificationEmailCommand
+from identity.application.email.service import EmailService
 from identity.domain.entities.account import Account
 from identity.domain.entities.refresh_token import RefreshToken
 from identity.domain.ports.token_service import AccessTokenPayload
@@ -18,10 +20,19 @@ router: APIRouter = APIRouter(prefix="/auth", tags=["Auth · Common"])
 async def register(
     payload: RegisterRequest = Body(...),
     service: AuthService = Depends(get_auth_service),
+    email_service: EmailService = Depends(get_email_service),
 ) -> AccountResponse:
     """Регистрация нового пользователя"""
     command: RegisterCommand = payload.to_command()
     account: Account = await service.register(command=command)
+
+    await email_service.send_verification_email(
+        SendVerificationEmailCommand(
+            account_id=account.id,
+            email=account.email_str,
+        )
+    )
+
     return AccountResponse.from_domain(account=account)
 
 

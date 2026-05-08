@@ -14,12 +14,15 @@ from genealogy.application.relations.service import RelationService
 from genealogy.infrastructure.uow_factory import GenealogyUoWFactory
 from identity.application.account.service import AccountService
 from identity.application.auth.service import AuthService
+from identity.application.email.service import EmailService
 from identity.application.oauth.service import OAuthService
 from identity.application.permissions.service import PermissionService
+from identity.domain.ports.email_sender import IEmailSender
 from identity.domain.ports.password_hasher import IPasswordHasher
 from identity.domain.ports.token_service import ITokenService
 from identity.infrastructure.auth.password_hasher import get_password_hasher
 from identity.infrastructure.auth.token_service import get_token_service
+from identity.infrastructure.email.resend_sender import get_email_sender
 from identity.infrastructure.uow_factory import IdentityUoWFactory
 from shared.infrastructure.db.database import database
 
@@ -44,6 +47,10 @@ def get_password_hasher_dep() -> IPasswordHasher:
 
 def get_token_service_dep() -> ITokenService:
     return get_token_service()
+
+
+def get_email_sender_service_dep() -> IEmailSender:
+    return get_email_sender()
 
 
 # ── Identity services ──────────────────────────────────────────────────────────
@@ -81,6 +88,18 @@ def get_permission_service(
     uow_factory: IdentityUoWFactory = Depends(get_identity_uow_factory),
 ) -> PermissionService:
     return PermissionService(uow_factory=uow_factory)
+
+
+def get_email_service(
+    uow_factory: IdentityUoWFactory = Depends(get_identity_uow_factory),
+    email_sender: IEmailSender = Depends(get_email_sender_service_dep),
+    password_hasher: IPasswordHasher = Depends(get_password_hasher_dep),
+) -> EmailService:
+    return EmailService(
+        uow_factory=uow_factory,
+        email_sender=email_sender,
+        password_hasher=password_hasher,
+    )
 
 
 # ── Genealogy services ─────────────────────────────────────────────────────────

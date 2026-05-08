@@ -7,6 +7,7 @@ from shared.infrastructure.db.database import DatabaseManager
 
 from identity.application.uow import IdentityUoW
 from identity.infrastructure.account.repositories import AccountRepositoryImpl
+from identity.infrastructure.email_token.repositories import EmailTokenRepositoryImpl
 from identity.infrastructure.oauth.repositories import OAuthAccountRepositoryImpl
 from identity.infrastructure.permissions.repositories import (
     AccountRoleRepositoryImpl,
@@ -31,6 +32,7 @@ class IdentityUoWFactory:
             account_roles=AccountRoleRepositoryImpl(session=session),
             refresh_tokens=RefreshTokenRepositoryImpl(session=session),
             oauth_accounts=OAuthAccountRepositoryImpl(session=session),
+            email_tokens=EmailTokenRepositoryImpl(session=session),
         )
 
         async with uow:
