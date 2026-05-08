@@ -59,6 +59,10 @@ class Account:
         """Строковое имя роли — для JWT payload и API-ответов."""
         return self.role_name.value
 
+    @property
+    def hashed_password_str(self) -> str | None:
+        return str(self.hashed_password) if self.hashed_password else None
+
 
 def create_account(email: Email, hashed_password: HashedPassword | None) -> Account:
     """

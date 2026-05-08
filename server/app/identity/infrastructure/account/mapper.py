@@ -53,7 +53,7 @@ class AccountMapper:
         return {
             "id": entity.id,
             "email": entity.email_str,
-            "hashed_password": str(entity.hashed_password),
+            "hashed_password": entity.hashed_password_str,
             "is_acc_blocked": entity.is_acc_blocked,
             "is_verified": entity.is_verified,
         }
