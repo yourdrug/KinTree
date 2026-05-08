@@ -24,16 +24,15 @@ Flows:
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-import hashlib
 import logging
 import secrets
 
 from shared.domain.exceptions import InvalidEmailTokenError
 from shared.infrastructure.db.settings import settings
+from shared.infrastructure.utils import hash_raw_str
 
 from identity.application.email.commands import (
     ForgotPasswordCommand,
-    ResetPasswordCommand,
     SendVerificationEmailCommand,
     VerifyEmailCommand,
 )
@@ -41,8 +40,6 @@ from identity.domain.entities.account import Account
 from identity.domain.entities.email_token import EmailTokenType, create_email_token
 from identity.domain.ports.email_sender import IEmailSender
 from identity.domain.ports.password_hasher import IPasswordHasher
-from identity.domain.value_objects.hashed_password import HashedPassword
-from identity.infrastructure.auth.blacklist_service import blacklist_session
 from identity.infrastructure.email.templates import reset_password_html, verify_email_html
 from identity.infrastructure.uow_factory import IdentityUoWFactory
 
@@ -102,7 +99,7 @@ class EmailService:
         Raises:
             InvalidEmailTokenError: если токен не найден, использован или истёк.
         """
-        token_hash = self._hash(command.token)
+        token_hash = hash_raw_str(command.token)
 
         async with self._uow_factory.create(master=True) as uow:
             email_token = await uow.email_tokens.get_valid_by_hash(
@@ -153,47 +150,9 @@ class EmailService:
         )
         logger.info("Password reset email sent to account_id=%s", account.id)
 
-    async def reset_password(self, command: ResetPasswordCommand) -> None:
-        """
-        Сбросить пароль по токену из письма.
-
-        Raises:
-            InvalidEmailTokenError: если токен не найден, использован или истёк.
-        """
-        HashedPassword.validate_strength(command.new_password)
-
-        token_hash = self._hash(command.token)
-
-        async with self._uow_factory.create(master=True) as uow:
-            email_token = await uow.email_tokens.get_valid_by_hash(
-                token_hash=token_hash,
-                token_type=EmailTokenType.RESET_PASSWORD,
-            )
-            if email_token is None:
-                raise InvalidEmailTokenError()
-
-            account = await uow.accounts.get_by_id(email_token.account_id)
-
-            new_hashed = self._hasher.hash(command.new_password)
-            account.hashed_password = HashedPassword(value=new_hashed)
-            await uow.accounts.save(account)
-
-            await uow.email_tokens.mark_used(email_token.id)
-
-            # Отзываем все сессии — пароль сменился, старые refresh tokens недействительны
-            ttl = settings.JWT_TOKEN_ACCESS_LIFETIME_MINUTES * 60
-
-            active_sessions = await uow.refresh_tokens.get_active_by_account(account.id)
-            await uow.refresh_tokens.revoke_all_by_account(account.id)
-
-            for session in active_sessions:
-                await blacklist_session(session.session_id, ttl)
-
-        logger.info("Password reset completed for account_id=%s", email_token.account_id)
-
     async def _generate_email_token(self, account_id: str, token_type: EmailTokenType, expires_at: datetime) -> str:
         raw_token: str = secrets.token_urlsafe(32)
-        token_hash: str = self._hash(raw_token)
+        token_hash: str = hash_raw_str(raw_token)
 
         email_token = create_email_token(
             account_id=account_id,
@@ -210,7 +169,3 @@ class EmailService:
             await uow.email_tokens.create(email_token)
 
         return raw_token
-
-    @staticmethod
-    def _hash(raw: str) -> str:
-        return hashlib.sha256(raw.encode()).hexdigest()

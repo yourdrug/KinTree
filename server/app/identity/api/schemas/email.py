@@ -10,9 +10,9 @@ from pydantic import BaseModel, EmailStr, Field
 
 from identity.application.email.commands import (
     ForgotPasswordCommand,
-    ResetPasswordCommand,
     VerifyEmailCommand,
 )
+from identity.application.password.commands import ResetPasswordCommand
 
 
 class VerifyEmailRequest(BaseModel):

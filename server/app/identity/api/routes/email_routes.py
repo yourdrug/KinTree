@@ -23,7 +23,6 @@ from presentation.rest.dependencies.services import get_email_service
 
 from identity.api.schemas.email import (
     ForgotPasswordRequest,
-    ResetPasswordRequest,
     VerifyEmailRequest,
 )
 from identity.application.email.commands import SendVerificationEmailCommand
@@ -78,17 +77,3 @@ async def forgot_password(
     Всегда возвращает 204 — не раскрывает, зарегистрирован ли email.
     """
     await service.forgot_password(payload.to_command())
-
-
-@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
-async def reset_password(
-    payload: ResetPasswordRequest = Body(...),
-    service: EmailService = Depends(get_email_service),
-) -> None:
-    """
-    Установить новый пароль по токену из письма.
-
-    Токен — из ссылки вида `/reset-password?token=...` в письме.
-    После успеха все активные сессии аккаунта отзываются.
-    """
-    await service.reset_password(payload.to_command())

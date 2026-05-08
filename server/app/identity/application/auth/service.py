@@ -203,14 +203,8 @@ class AuthService:
     async def logout_all(
         self,
         account_id: str,
-        access_token: str | None = None,
     ) -> None:
         """Logout со всех устройств. Revoke всех refresh tokens аккаунта."""
-        if access_token:
-            payload: AccessTokenPayload = self._tokens.decode_access_token(access_token)
-            ttl: int = self._tokens.get_access_token_ttl(access_token)
-            await blacklist_token(payload.jti, ttl)
-
         ttl = settings.JWT_TOKEN_ACCESS_LIFETIME_MINUTES * 60
 
         async with self._uow_factory.create() as uow:

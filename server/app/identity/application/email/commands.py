@@ -23,9 +23,3 @@ class VerifyEmailCommand:
 @dataclass
 class ForgotPasswordCommand:
     email: str
-
-
-@dataclass
-class ResetPasswordCommand:
-    token: str
-    new_password: str

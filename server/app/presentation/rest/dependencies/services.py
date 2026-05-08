@@ -16,6 +16,7 @@ from identity.application.account.service import AccountService
 from identity.application.auth.service import AuthService
 from identity.application.email.service import EmailService
 from identity.application.oauth.service import OAuthService
+from identity.application.password.service import PasswordService
 from identity.application.permissions.service import PermissionService
 from identity.domain.ports.email_sender import IEmailSender
 from identity.domain.ports.password_hasher import IPasswordHasher
@@ -98,6 +99,16 @@ def get_email_service(
     return EmailService(
         uow_factory=uow_factory,
         email_sender=email_sender,
+        password_hasher=password_hasher,
+    )
+
+
+def get_password_service(
+    uow_factory: IdentityUoWFactory = Depends(get_identity_uow_factory),
+    password_hasher: IPasswordHasher = Depends(get_password_hasher_dep),
+) -> PasswordService:
+    return PasswordService(
+        uow_factory=uow_factory,
         password_hasher=password_hasher,
     )
 

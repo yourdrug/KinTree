@@ -90,14 +90,10 @@ async def cookie_logout(
 @router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
 async def cookie_logout_all(
     response: Response,
-    raw_token: str = Depends(get_raw_access_token),
     token_payload: AccessTokenPayload = Depends(get_current_token_payload),
     service: AuthService = Depends(get_auth_service),
 ) -> None:
     """Logout из всех сессий для этого аккаунта."""
 
-    await service.logout_all(
-        account_id=token_payload.account_id,
-        access_token=raw_token,
-    )
+    await service.logout_all(account_id=token_payload.account_id)
     clear_auth_cookies(response=response)
