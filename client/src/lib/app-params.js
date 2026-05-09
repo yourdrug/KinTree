@@ -6,5 +6,5 @@
  */
 
 export const appParams = {
-  apiUrl: import.meta.env.VITE_API_URL || "http://localhost:8000",
+  apiUrl: import.meta.env.VITE_API_URL || "http://localhost:6661",
 };

@@ -1,21 +1,17 @@
 /**
- * App.jsx  (или router.jsx — в зависимости от вашей структуры)
+ * App.jsx
  *
- * Весь роутинг приложения в одном месте.
- * Маршруты берутся из ROUTES — нет ни одной строки URL вручную.
- *
- * Структура:
- *   Public  — доступны всем
- *   Protected — требуют авторизации, оборачиваются ProtectedRoute
- *   Fallback  — 404
+ * Изменения:
+ *  - Добавлен <Toaster /> — теперь toast() работает глобально
  */
 
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-import { AuthProvider } from "@/lib/AuthContext";
-import ProtectedRoute   from "@/lib/ProtectedRoute";
-import { ROUTES }       from "@/lib/routes";
+import { AuthProvider }  from "@/lib/AuthContext";
+import ProtectedRoute    from "@/lib/ProtectedRoute";
+import { ROUTES }        from "@/lib/routes";
+import { Toaster }       from "@/components/ui/toaster";
 
 // Pages — public
 import Landing      from "@/pages/Landing";
@@ -28,11 +24,10 @@ import Dashboard from "@/pages/Dashboard";
 import TreeView  from "@/pages/TreeView";
 import Sessions  from "@/pages/Sessions";
 
-// QueryClient (если используете react-query)
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClientInstance } from "@/lib/query-client";
 import ResetPassword from "@/pages/ResetPassword.jsx";
-import VerifyEmail from "@/pages/VerifyEmail.jsx";
+import VerifyEmail   from "@/pages/VerifyEmail.jsx";
 
 export default function App() {
   return (
@@ -40,7 +35,6 @@ export default function App() {
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-
             {/* ── Public ──────────────────────────────────────────────── */}
             <Route path={ROUTES.home()}          element={<Landing />} />
             <Route path={ROUTES.login()}         element={<Login />} />
@@ -57,14 +51,10 @@ export default function App() {
               path={ROUTES.tree(":id")}
               element={<ProtectedRoute><TreeView /></ProtectedRoute>}
             />
-
-            {/* Settings — группируем под /settings/* */}
             <Route
               path={ROUTES.settings.sessions()}
               element={<ProtectedRoute><Sessions /></ProtectedRoute>}
             />
-
-            {/* Редирект /settings → /settings/sessions как index */}
             <Route
               path={ROUTES.settings.root()}
               element={<Navigate to={ROUTES.settings.sessions()} replace />}
@@ -72,8 +62,8 @@ export default function App() {
 
             {/* ── 404 ─────────────────────────────────────────────────── */}
             <Route path="*" element={<PageNotFound />} />
-
           </Routes>
+          <Toaster />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

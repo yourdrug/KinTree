@@ -1,29 +1,29 @@
-"use client";
-import { useTheme } from "next-themes"
-import { Toaster as Sonner } from "sonner"
+/**
+ * components/ui/sonner.jsx
+ *
+ * Исправлено: убрана зависимость от next-themes (не используется в проекте).
+ * Тема захардкожена как "light" — при необходимости заменить на контекст.
+ */
 
-const Toaster = ({
-  ...props
-}) => {
-  const { theme = "system" } = useTheme()
+import { Toaster as Sonner } from "sonner";
 
-  return (
-    (<Sonner
-      theme={theme}
-      className="toaster group"
-      toastOptions={{
-        classNames: {
-          toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
-          description: "group-[.toast]:text-muted-foreground",
-          actionButton:
-            "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
-          cancelButton:
-            "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
-        },
-      }}
-      {...props} />)
-  );
-}
+const Toaster = ({ ...props }) => (
+  <Sonner
+    theme="light"
+    className="toaster group"
+    toastOptions={{
+      classNames: {
+        toast:
+          "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+        description: "group-[.toast]:text-muted-foreground",
+        actionButton:
+          "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
+        cancelButton:
+          "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+      },
+    }}
+    {...props}
+  />
+);
 
-export { Toaster }
+export { Toaster };

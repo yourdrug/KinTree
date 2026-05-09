@@ -7,7 +7,7 @@
 export const ENDPOINTS = {
   // ── Auth (cookie-based) ───────────────────────────────────────────────────
   auth: {
-    me:                   () => "/auth/me",
+    me:                   () => "/account/me",
     login:                () => "/auth/cookie/login",
     register:             () => "/auth/register",
     logout:               () => "/auth/cookie/logout",
