@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+
+    <title>KinTree API</title>
+
+    <link
+        rel="shortcut icon"
+        type="image/png"
+        href="static/server/favicon.ico"
+        sizes="32x32"
+    />
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            background: #f5f7fb;
+
+            font-family: Verdana, sans-serif;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+
+            padding: 40px;
+
+            text-align: center;
+
+            background: white;
+
+            border-radius: 20px;
+
+            box-shadow:
+                0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        .logo {
+            max-width: 100%;
+
+            height: auto;
+
+            margin-bottom: 20px;
+
+            object-fit: contain;
+
+            display: block;
+        }
+
+        .description {
+            margin-bottom: 30px;
+
+            color: #718096;
+
+            line-height: 1.6;
+        }
+
+        .links {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .links a {
+            display: block;
+
+            padding: 14px 20px;
+
+            border-radius: 12px;
+
+            text-decoration: none;
+
+            background: #4f46e5;
+            color: white;
+
+            font-size: 16px;
+            font-weight: 600;
+
+            transition:
+                transform 0.2s ease,
+                opacity 0.2s ease;
+        }
+
+        .links a:hover {
+            opacity: 0.92;
+            transform: translateY(-2px);
+        }
+
+        .footer {
+            margin-top: 30px;
+
+            font-size: 14px;
+
+            color: #a0aec0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        <img
+            class="logo"
+            src="static/server/img/kintree-logo.png"
+            alt="KinTree Logo"
+        >
+
+        <p class="description">
+            Платформа для создания и управления
+            генеалогическими деревьями.
+        </p>
+
+        <div class="links">
+            <a href="/docs">
+                Custom Swagger UI
+            </a>
+
+            <a href="/_docs">
+                FastAPI Swagger UI
+            </a>
+
+            <a href="/_redoc">
+                FastAPI ReDoc
+            </a>
+        </div>
+
+        <div class="footer">
+            KinTree API • FastAPI
+        </div>
+
+    </div>
+</body>
+</html>

@@ -27,14 +27,13 @@ from presentation.rest.dependencies.request_meta import RequestMeta, get_request
 from presentation.rest.dependencies.services import get_oauth_service
 from shared.infrastructure.db.settings import settings
 
-from identity.api.schemas.auth import TokenResponse
 from identity.api.schemas.oauth import TelegramCallbackRequest
 from identity.application.auth.commands import TokenPair
 from identity.application.oauth.commands import GoogleCallbackCommand, TelegramCallbackCommand
 from identity.application.oauth.service import OAuthService
 
 
-router: APIRouter = APIRouter(prefix="/auth/oauth", tags=["Auth · OAuth"])
+router: APIRouter = APIRouter(prefix="/auth/oauth", tags=["Auth"])
 
 
 @router.get("/google", status_code=status.HTTP_302_FOUND)
@@ -61,34 +60,18 @@ async def google_redirect() -> RedirectResponse:
 
 
 @router.get("/google/callback", status_code=status.HTTP_200_OK)
-async def google_callback(
-    code: str = Query(..., description="Authorization code от Google"),
-    meta: RequestMeta = Depends(get_request_meta),
-    service: OAuthService = Depends(get_oauth_service),
-) -> TokenResponse:
-    """
-    Шаг 2: получить code от Google, обменять на токены.
-
-    Google редиректит сюда с ?code=...&state=...
-    Возвращаем наши access/refresh токены.
-    """
-    command = GoogleCallbackCommand(
-        code=code,
-        user_agent=meta.user_agent,
-        ip_address=meta.ip_address,
-    )
-    token_pair: TokenPair = await service.google_callback(command)
-    return TokenResponse.from_command(token_pair)
-
-
-@router.get("/cookie/google/callback", status_code=status.HTTP_200_OK)
 async def google_callback_cookie(
     response: Response,
     code: str = Query(..., description="Authorization code от Google"),
     meta: RequestMeta = Depends(get_request_meta),
     service: OAuthService = Depends(get_oauth_service),
-) -> TokenResponse:
-    """Cookie-версия Google callback — кладёт токены в cookie."""
+) -> dict[str, str]:
+    """
+    Шаг 2: получить code от Google, обменять на токены.
+
+    Google редиректит сюда с ?code=...&state=...
+    Кладет токены в Cookie.
+    """
     command = GoogleCallbackCommand(
         code=code,
         user_agent=meta.user_agent,
@@ -96,41 +79,7 @@ async def google_callback_cookie(
     )
     token_pair: TokenPair = await service.google_callback(command)
     set_auth_cookies(response, token_pair.access_token, token_pair.refresh_token)
-    return TokenResponse.from_command(token_pair)
-
-
-@router.get("/telegram/callback", status_code=status.HTTP_200_OK)
-async def telegram_callback(
-    id: str = Query(...),
-    first_name: str = Query(...),
-    auth_date: int = Query(...),
-    hash: str = Query(...),
-    last_name: str | None = Query(default=None),
-    username: str | None = Query(default=None),
-    photo_url: str | None = Query(default=None),
-    meta: RequestMeta = Depends(get_request_meta),
-    service: OAuthService = Depends(get_oauth_service),
-) -> TokenResponse:
-    """
-    Callback от Telegram Login Widget.
-
-    Telegram редиректит пользователя сюда с GET-параметрами:
-      id, first_name, last_name, username, photo_url, auth_date, hash
-
-    Мы верифицируем HMAC-подпись и выдаём наши токены.
-    """
-    request_schema = TelegramCallbackRequest(
-        id=id,
-        first_name=first_name,
-        last_name=last_name,
-        username=username,
-        photo_url=photo_url,
-        auth_date=auth_date,
-        hash=hash,
-    )
-    command: TelegramCallbackCommand = request_schema.to_command(meta)
-    token_pair: TokenPair = await service.telegram_callback(command)
-    return TokenResponse.from_command(token_pair)
+    return {"detail": "ok"}
 
 
 @router.get("/cookie/telegram/callback", status_code=status.HTTP_200_OK)
@@ -145,8 +94,16 @@ async def telegram_callback_cookie(
     photo_url: str | None = Query(default=None),
     meta: RequestMeta = Depends(get_request_meta),
     service: OAuthService = Depends(get_oauth_service),
-) -> TokenResponse:
-    """Cookie-версия Telegram callback."""
+) -> dict[str, str]:
+    """
+    Callback от Telegram Login Widget.
+
+    Telegram редиректит пользователя сюда с GET-параметрами:
+        id, first_name, last_name, username, photo_url, auth_date, hash
+
+    Мы верифицируем HMAC-подпись и выдаём наши токены.
+
+    """
     request_schema = TelegramCallbackRequest(
         id=id,
         first_name=first_name,
@@ -159,4 +116,4 @@ async def telegram_callback_cookie(
     command: TelegramCallbackCommand = request_schema.to_command(meta)
     token_pair: TokenPair = await service.telegram_callback(command)
     set_auth_cookies(response, token_pair.access_token, token_pair.refresh_token)
-    return TokenResponse.from_command(token_pair)
+    return {"detail": "ok"}

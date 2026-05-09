@@ -8,20 +8,11 @@ services:
     container_name: kintree-server
     user: root
     entrypoint: ["./entrypoint.sh"]
-    command: [
-      "uvicorn",
-      "main:create_app",
-      "--factory",
-      "--host",
-      "0.0.0.0",
-      "--port",
-      "8000",
-      "--reload"
-    ]
+    command: ["python", "main.py", "runserver", "--reload"]
     ports:
       - name: kintree-port
         target: 8000
-        published: 8000
+        published: 6661
         host_ip: 0.0.0.0
         protocol: tcp
         mode: host

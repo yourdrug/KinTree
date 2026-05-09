@@ -30,7 +30,7 @@ from identity.application.email.service import EmailService
 from identity.domain.entities.account import Account
 
 
-router: APIRouter = APIRouter(prefix="/auth", tags=["Auth · Email"])
+router: APIRouter = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/verify-email", status_code=status.HTTP_204_NO_CONTENT)

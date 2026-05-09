@@ -5,8 +5,10 @@ HTTP-роуты для аккаунтов.
 """
 
 from fastapi import APIRouter, Body, Depends, Path, status
+from presentation.rest.dependencies.auth import get_current_account
 from presentation.rest.dependencies.services import get_account_service, get_password_service
 
+from identity.api.schemas.auth import AccountResponse
 from identity.api.schemas.email import ResetPasswordRequest  # todo ref into dif dir
 from identity.application.account.service import AccountService
 from identity.application.password.commands import ResetPasswordCommand
@@ -21,10 +23,17 @@ router: APIRouter = APIRouter(prefix="/account", tags=["Accounts"])
 async def get_account(
     account_id: str = Path(min_length=32, max_length=32),
     service: AccountService = Depends(get_account_service),
-) -> Account:
+) -> AccountResponse:
     account: Account = await service.get_account(account_id=account_id)
+    return AccountResponse.from_domain(account=account)
 
-    return account
+
+@router.get("/me", status_code=status.HTTP_200_OK)
+async def me(
+    account: Account = Depends(get_current_account),
+) -> AccountResponse:
+    """Получение информации о своем аккаунте. Используется для отображения информации на клиенте"""
+    return AccountResponse.from_domain(account=account)
 
 
 @router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)

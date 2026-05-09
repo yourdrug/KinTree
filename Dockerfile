@@ -207,15 +207,15 @@ COPY --from=node $NODE_STATIC_PATH $PYTHON_STATIC_PATH
 ENTRYPOINT [ "./entrypoint.sh" ]
 
 # Run server
-CMD [\
-    "python",\
-    "-m",\
-    "uvicorn",\
-    "main:create_app",\
-    "--host", "0.0.0.0",\
-    "--port", "8000",\
-    "--proxy-headers",\
-    "--forwarded-allow-ips", "*"\
+CMD [                                                                               \
+    "python",                                                                       \
+    "main.py",                                                                      \
+    "runserver",                                                                    \
+    "--proxy-headers",                                                              \
+    "--forwarded-allow-ips",                                                        \
+    "*",                                                                            \
+    "--loop",                                                                       \
+    "uvloop"                                                                        \
 ]
 
 # Container will listen this port
@@ -278,15 +278,15 @@ COPY --from=node $NODE_STATIC_PATH $PYTHON_STATIC_PATH
 ENTRYPOINT [ "./entrypoint.sh" ]
 
 # Run server
-CMD [\
-    "python",\
-    "-m",\
-    "uvicorn",\
-    "main:create_app",\
-    "--host", "0.0.0.0",\
-    "--port", "8000",\
-    "--proxy-headers",\
-    "--forwarded-allow-ips", "*"\
+CMD [                                                                               \
+    "python",                                                                       \
+    "main.py",                                                                      \
+    "runserver",                                                                    \
+    "--proxy-headers",                                                              \
+    "--forwarded-allow-ips",                                                        \
+    "*",                                                                            \
+    "--loop",                                                                       \
+    "uvloop"                                                                        \
 ]
 
 # Container will listen this port

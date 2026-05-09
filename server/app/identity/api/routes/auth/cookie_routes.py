@@ -21,7 +21,7 @@ from identity.domain.ports.token_service import AccessTokenPayload, ITokenServic
 from identity.infrastructure.auth.token_service import get_token_service
 
 
-router: APIRouter = APIRouter(prefix="/auth/cookie", tags=["Auth · Cookie"])
+router: APIRouter = APIRouter(prefix="/auth/cookie", tags=["Auth"])
 
 
 @router.post("/login", status_code=status.HTTP_200_OK)

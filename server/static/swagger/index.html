@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+	<title>Swagger UI</title>
+	<meta charset="UTF-8">
+	<meta name="version" content="5.30.2">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="shortcut icon" type="image/png" href="static/swagger/favicon-32x32.png" sizes="32x32" />
+	<link rel="shortcut icon" type="image/png" href="static/swagger/favicon-16x16.png" sizes="16x16" />
+<!--
+	<link rel="stylesheet" type="text/css" href="static/swagger/swagger-ui.css" />
+//-->
+	<link rel="stylesheet" type="text/css" href="static/swagger/swagger-ui.improved.css" />
+	<style>
+		html {
+			box-sizing: border-box;
+			overflow: -moz-scrollbars-vertical;
+			overflow-y: scroll;
+		}
+
+		*,
+		*:before,
+		*:after {
+			box-sizing: inherit;
+		}
+
+		body {
+			margin: 0;
+			background: #fafafa;
+		}
+
+		/* Скрываем блок с авторизацией */
+		/* display: flex; display: none; */
+		.scheme-container {
+			display: flex;
+		}
+	</style>
+</head>
+<body>
+	<div id="swagger-ui"></div>
+	<script src="static/swagger/swagger-ui-bundle.js" charset="UTF-8"> </script>
+	<script src="static/swagger/swagger-ui-standalone-preset.js" charset="UTF-8"> </script>
+	<script src="static/swagger/swagger-initializer.js" charset="UTF-8"> </script>
+</body>
+</html>

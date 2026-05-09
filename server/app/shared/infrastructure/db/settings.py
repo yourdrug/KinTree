@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import ClassVar
 from zoneinfo import ZoneInfo
 
-from pydantic import Field, field_validator
+from pydantic import AwareDatetime, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str
     EMAIL_FROM: str
     FRONTEND_URL: str
+
+    SERVICE_START_DATETIME: AwareDatetime | None = Field(default=None)
 
     model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         case_sensitive=True,

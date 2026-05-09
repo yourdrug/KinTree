@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from logging import Logger, getLogger
 
-from fastapi import FastAPI, status
+from fastapi import status
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse
@@ -171,15 +171,3 @@ async def handle_unexpected_exception(request: Request, exc: Exception) -> JSONR
     """Fallback для необработанных исключений."""
     logger.error("Unhandled exception: %s", exc, exc_info=True)
     return _json(_error("Internal Server Error"), status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-def register_exception_handlers(app: FastAPI) -> None:
-    """
-    Регистрирует все обработчики в FastAPI-приложении.
-    Вызывается в create_app().
-    """
-    app.add_exception_handler(ServerException, handle_server_exception)
-    app.add_exception_handler(ClientException, handle_client_exception)
-    app.add_exception_handler(RequestValidationError, handle_validation_exception)
-    app.add_exception_handler(HTTPException, handle_http_exception)
-    app.add_exception_handler(Exception, handle_unexpected_exception)

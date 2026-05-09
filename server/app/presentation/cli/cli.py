@@ -10,6 +10,7 @@ from typing import Any
 from shared.infrastructure.db.database import database
 from typer import Typer
 
+from presentation.cli.commands.runserver import runserver
 from presentation.cli.commands.upload_all_fixtures import upload_all_fixtures
 from presentation.cli.commands.upload_roles_and_permissions import upload_roles_and_permissions
 
@@ -81,7 +82,7 @@ class CLI:
         ]
 
         commands_without_db: list[tuple] = [
-            # добавить если будет что-то
+            ("runserver", runserver),
         ]
 
         for name, func in commands_with_db:

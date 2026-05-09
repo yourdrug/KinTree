@@ -15,7 +15,7 @@ from identity.application.auth.service import AuthService
 from identity.domain.ports.token_service import AccessTokenPayload
 
 
-router: APIRouter = APIRouter(prefix="/auth", tags=["Auth · Bearer"])
+router: APIRouter = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/login", status_code=status.HTTP_200_OK)

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Body, Depends, status
-from presentation.rest.dependencies.auth import get_current_account, get_current_token_payload
+from presentation.rest.dependencies.auth import get_current_token_payload
 from presentation.rest.dependencies.services import get_auth_service, get_email_service
 
 from identity.api.schemas.auth import AccountResponse, RegisterRequest
@@ -13,7 +13,7 @@ from identity.domain.entities.refresh_token import RefreshToken
 from identity.domain.ports.token_service import AccessTokenPayload
 
 
-router: APIRouter = APIRouter(prefix="/auth", tags=["Auth · Common"])
+router: APIRouter = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -33,14 +33,6 @@ async def register(
         )
     )
 
-    return AccountResponse.from_domain(account=account)
-
-
-@router.get("/me", status_code=status.HTTP_200_OK)
-async def me(
-    account: Account = Depends(get_current_account),
-) -> AccountResponse:
-    """Получение информации о своем аккаунте. Используется для отображения информации на клиенте"""
     return AccountResponse.from_domain(account=account)
 
 
