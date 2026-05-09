@@ -1,8 +1,11 @@
 /**
  * pages/TreeView.jsx
  *
- * Изменения:
- *  - toast() вместо console.error во всех обработчиках
+ * Исправления:
+ * - handleSave корректно строит payload с family_id для новых персон
+ * - Сиблинги: создаём через addParentChild для каждого общего родителя
+ * - graph и members (enriched) передаются в PersonSidebar
+ * - Убраны несуществующие поля из запросов
  */
 
 import { useState, useEffect }     from "react";
@@ -16,8 +19,11 @@ import TreeCanvas        from "@/components/tree/TreeCanvas";
 import PersonSidebar     from "@/components/tree/PersonSidebar";
 import AddPersonModal    from "@/components/tree/AddPersonModal";
 import {
-  familiesApi, personsApi, relationsApi,
-  loadFamilyTree, createPersonAsChild, createPersonAsSpouse,
+  personsApi,
+  relationsApi,
+  loadFamilyTree,
+  createPersonAsChild,
+  createPersonAsSpouse,
 } from "@/api";
 import { useAuth } from "@/lib/AuthContext";
 import { ROUTES }  from "@/lib/routes";
@@ -27,7 +33,7 @@ export default function TreeView() {
   const { user } = useAuth();
 
   const [family,         setFamily]         = useState(null);
-  const [persons,        setPersons]        = useState([]);
+  const [persons,        setPersons]        = useState([]); // enriched
   const [graph,          setGraph]          = useState(null);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [loading,        setLoading]        = useState(true);
@@ -42,12 +48,13 @@ export default function TreeView() {
     if (user && family) setIsOwner(family.owner_id === user.id);
   }, [user, family]);
 
+  // Обновляем selectedPerson при изменении persons
   useEffect(() => {
     if (selectedPerson) {
       const updated = persons.find((p) => p.id === selectedPerson.id);
       if (updated) setSelectedPerson(updated);
     }
-  }, [persons]);
+  }, [persons]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = async () => {
     try {
@@ -56,7 +63,7 @@ export default function TreeView() {
       setFamily(data.family);
       setPersons(data.persons);
       setGraph(data.graph);
-    } catch {
+    } catch (err) {
       toast({
         variant: "destructive",
         title: "Ошибка загрузки",
@@ -73,35 +80,63 @@ export default function TreeView() {
   const closeModal = ()                => { setShowModal(false); setRelativePerson(null); setEditPerson(null); };
 
   // ── Сохранение ───────────────────────────────────────────────────────────
-  const handleSave = async (data, existingId, relationType, relPerson) => {
+  const handleSave = async (formData, existingId, relationType, relPerson) => {
     try {
       if (existingId) {
-        const updated = await personsApi.patch(existingId, data);
-        setPersons((prev) => prev.map((p) => (p.id === existingId ? updated : p)));
+        // PATCH: только поля first_name, last_name, gender, birth_date, death_date
+        await personsApi.patch(existingId, formData);
         toast({ title: "Изменения сохранены" });
+        await loadData();
         return;
       }
 
-      const personPayload = { ...data, family_id: familyId };
+      // Базовый payload для создания
+      const personPayload = {
+        first_name: formData.first_name,
+        last_name:  formData.last_name,
+        gender:     formData.gender,
+        birth_date: formData.birth_date || null,
+        death_date: formData.death_date || null,
+        family_id:  familyId,
+      };
 
       if (relationType === "child" && relPerson) {
         await createPersonAsChild(personPayload, relPerson.id);
       } else if (relationType === "parent" && relPerson) {
         const newPerson = await personsApi.create(personPayload);
-        await relationsApi.addParentChild({ parent_id: newPerson.id, child_id: relPerson.id });
+        await relationsApi.addParentChild({
+          parent_id: newPerson.id,
+          child_id:  relPerson.id,
+          relation_type: "BIOLOGICAL",
+        });
       } else if (relationType === "partner" && relPerson) {
         await createPersonAsSpouse(personPayload, relPerson.id);
+      } else if (relationType === "sibling" && relPerson) {
+        // Добавляем тех же родителей что и у relative
+        const newPerson = await personsApi.create(personPayload);
+        const parentIds = relPerson.parent_ids || [];
+        await Promise.all(
+          parentIds.map((pid) =>
+            relationsApi.addParentChild({
+              parent_id: pid,
+              child_id:  newPerson.id,
+              relation_type: "BIOLOGICAL",
+            })
+          )
+        );
       } else {
+        // Просто создаём без связей
         await personsApi.create(personPayload);
       }
 
       toast({ title: "Человек добавлен" });
       await loadData();
-    } catch {
+    } catch (err) {
+      const msg = err?.response?.data?.detail || err?.message || "Неизвестная ошибка";
       toast({
         variant: "destructive",
         title: "Ошибка сохранения",
-        description: "Не удалось сохранить данные. Проверьте соединение и попробуйте снова.",
+        description: typeof msg === "string" ? msg : "Проверьте данные и попробуйте снова.",
       });
     }
   };
@@ -109,10 +144,9 @@ export default function TreeView() {
   const handleDelete = async (personId) => {
     try {
       await personsApi.delete(personId);
-      setPersons((prev) => prev.filter((p) => p.id !== personId));
       if (selectedPerson?.id === personId) setSelectedPerson(null);
-      setGraph(await relationsApi.getGraph(familyId));
       toast({ title: "Запись удалена" });
+      await loadData();
     } catch {
       toast({
         variant: "destructive",
@@ -126,8 +160,8 @@ export default function TreeView() {
     try {
       if (type === "parent_child") await relationsApi.removeParentChild(idA, idB);
       else if (type === "spouse")  await relationsApi.removeSpouse(idA, idB);
-      setGraph(await relationsApi.getGraph(familyId));
       toast({ title: "Связь удалена" });
+      await loadData();
     } catch {
       toast({
         variant: "destructive",
@@ -174,7 +208,7 @@ export default function TreeView() {
         </div>
 
         <div className="flex gap-2">
-          {!user         && <span className="text-sm text-muted-foreground px-2">Гость</span>}
+          {!user          && <span className="text-sm text-muted-foreground px-2">Гость</span>}
           {user && !isOwner && <span className="text-sm text-muted-foreground px-2">Просмотр</span>}
           {isOwner && (
             <>

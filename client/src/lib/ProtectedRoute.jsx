@@ -2,9 +2,12 @@
  * lib/ProtectedRoute.jsx
  *
  * Поведение:
- *  - isLoadingAuth  → спиннер (не редиректим, пока не знаем статус)
+ *  - isLoadingAuth  → спиннер (ждём результата /account/me)
  *  - !isAuthenticated → Navigate на /login с сохранением текущего пути
  *  - isAuthenticated → рендерим children
+ *
+ * Важно: компонент НЕ вызывает повторно checkUserAuth при навигации —
+ * AuthProvider монтируется один раз и хранит состояние в памяти.
  */
 
 import { Navigate, useLocation } from "react-router-dom";
@@ -16,7 +19,10 @@ export default function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoadingAuth } = useAuth();
   const location = useLocation();
 
-  if (isLoadingAuth) return <LoadingSpinner fullScreen />;
+  // Показываем спиннер только пока идёт начальная проверка куки
+  if (isLoadingAuth) {
+    return <LoadingSpinner fullScreen />;
+  }
 
   if (!isAuthenticated) {
     return (

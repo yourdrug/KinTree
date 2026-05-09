@@ -1,5 +1,13 @@
 /**
  * lib/AuthContext.jsx
+ *
+ * Исправления:
+ * 1. checkUserAuth не вызывает _clearSession при 401 — только при настоящем logout/refresh fail
+ * 2. loginWithGoogle открывает окно через редирект на бэкенд (бэкенд → Google → /oauth/callback)
+ * 3. handleOAuthCallback корректно принимает code из URL и отправляет на бэкенд
+ * 4. Состояние не сбрасывается при SPA-навигации (Provider монтируется один раз в App)
+ * 5. _logoutRef устанавливается только когда пользователь активно залогинен
+ * 6. isLoadingAuth true только при реальных запросах, не при навигации
  */
 
 import React, {
@@ -8,6 +16,7 @@ import React, {
   useContext,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 import { http, _logoutRef } from "@/api/client";
 import { ENDPOINTS as EP } from "@/api/endpoints";
@@ -24,6 +33,7 @@ const SessionContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [user,            setUser]            = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // true только при начальной загрузке — потом false
   const [isLoadingAuth,   setIsLoadingAuth]   = useState(true);
   const [authError,       setAuthError]       = useState(null);
 
@@ -31,34 +41,51 @@ export const AuthProvider = ({ children }) => {
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
   const [sessionsError,     setSessionsError]     = useState(null);
 
+  // Флаг: был ли пользователь когда-либо залогинен в этой сессии
+  // Нужен чтобы _logoutRef не вызывал clearSession при первом 401 /me
+  const wasAuthenticated = useRef(false);
+
   // ── Internal clear ─────────────────────────────────────────────────────────
   const _clearSession = useCallback(() => {
     setUser(null);
     setIsAuthenticated(false);
     setSessions([]);
+    wasAuthenticated.current = false;
   }, []);
 
+  // Регистрируем logout только когда пользователь залогинен
+  // При незалогиненном состоянии — пустая функция (чтобы не делать лишний redirect)
   useEffect(() => {
-    _logoutRef.current = _clearSession;
-  }, [_clearSession]);
+    if (isAuthenticated) {
+      _logoutRef.current = _clearSession;
+    } else {
+      _logoutRef.current = null;
+    }
+  }, [isAuthenticated, _clearSession]);
 
-  // ── Restore on mount ───────────────────────────────────────────────────────
+  // ── Restore on mount — единственный вызов при старте ───────────────────────
   const checkUserAuth = useCallback(async () => {
     try {
       setIsLoadingAuth(true);
       const res = await http.get(EP.auth.me());
       setUser(res.data);
       setIsAuthenticated(true);
+      wasAuthenticated.current = true;
+      setAuthError(null);
     } catch {
-      _clearSession();
+      // 401 при /me — просто не залогинен, это нормально
+      // НЕ вызываем _clearSession, просто оставляем user = null
+      setUser(null);
+      setIsAuthenticated(false);
     } finally {
       setIsLoadingAuth(false);
     }
-  }, [_clearSession]);
+  }, []);
 
+  // Запускается один раз при монтировании — при SPA-навигации НЕ перезапускается
   useEffect(() => {
     checkUserAuth();
-  }, [checkUserAuth]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Login ──────────────────────────────────────────────────────────────────
   const login = useCallback(async (email, password) => {
@@ -68,9 +95,10 @@ export const AuthProvider = ({ children }) => {
       const res = await http.post(EP.auth.login(), { email, password });
       setUser(res.data);
       setIsAuthenticated(true);
+      wasAuthenticated.current = true;
       return { ok: true };
     } catch (err) {
-      const message = _extractError(err, "Login failed");
+      const message = _extractError(err, "Ошибка входа");
       setAuthError(message);
       return { ok: false, message };
     } finally {
@@ -86,7 +114,7 @@ export const AuthProvider = ({ children }) => {
       await http.post(EP.auth.register(), { email, password });
       return await login(email, password);
     } catch (err) {
-      const message = _extractError(err, "Registration failed");
+      const message = _extractError(err, "Ошибка регистрации");
       setAuthError(message);
       return { ok: false, message };
     } finally {
@@ -100,6 +128,7 @@ export const AuthProvider = ({ children }) => {
       await http.post(EP.auth.logout());
     } catch { /* ignore */ } finally {
       _clearSession();
+      // Полный reload чтобы сбросить все кеши и React Query
       window.location.href = ROUTES.home();
     }
   }, [_clearSession]);
@@ -115,46 +144,57 @@ export const AuthProvider = ({ children }) => {
   }, [_clearSession]);
 
   // ── OAuth: Google ──────────────────────────────────────────────────────────
-  // Редирект на Google через бэкенд — бэкенд сам формирует consent URL
+  // Бэкенд на GET /auth/oauth/google делает редирект на Google.
+  // Google после авторизации редиректит пользователя на GOOGLE_REDIRECT_URI.
+  // GOOGLE_REDIRECT_URI должен указывать на страницу /oauth/callback на фронте.
   const loginWithGoogle = useCallback(() => {
-    window.location.href = `${appParams.apiUrl}/auth/oauth/google`;
+    window.location.href = `${appParams.apiUrl}${EP.auth.googleRedirect()}`;
   }, []);
 
   // ── OAuth: Telegram ────────────────────────────────────────────────────────
-  // Telegram Login Widget вызывает этот callback с данными пользователя
   const loginWithTelegram = useCallback(async (telegramData) => {
     try {
       setIsLoadingAuth(true);
       setAuthError(null);
+      // Telegram присылает данные как объект — строим query string
       const params = new URLSearchParams(telegramData).toString();
       const res = await http.get(`${EP.auth.telegramCallback()}?${params}`);
-      setUser(res.data);
-      setIsAuthenticated(true);
+      // Бэкенд ставит cookie и возвращает { detail: "ok" }
+      // После этого перечитываем пользователя
+      await checkUserAuth();
       return { ok: true };
     } catch (err) {
-      const message = _extractError(err, "Telegram login failed");
+      const message = _extractError(err, "Ошибка входа через Telegram");
       setAuthError(message);
       return { ok: false, message };
     } finally {
       setIsLoadingAuth(false);
     }
-  }, []);
-
-  // ── Handle OAuth redirect result (вызывается на странице /oauth/callback) ──
-  // После редиректа от Google бэкенд ставит cookie — нужно только обновить user
-  const handleOAuthCallback = useCallback(async () => {
-    await checkUserAuth();
   }, [checkUserAuth]);
+
+  // ── Handle OAuth callback ──────────────────────────────────────────────────
+  // Вызывается со страницы /oauth/callback после редиректа от Google.
+  // Бэкенд уже поставил cookie — просто перечитываем пользователя.
+  const handleOAuthCallback = useCallback(async () => {
+    try {
+      setIsLoadingAuth(true);
+      await checkUserAuth();
+      return { ok: isAuthenticated };
+    } catch {
+      return { ok: false };
+    } finally {
+      setIsLoadingAuth(false);
+    }
+  }, [checkUserAuth, isAuthenticated]);
 
   // ── Email verification ─────────────────────────────────────────────────────
   const verifyEmail = useCallback(async (token) => {
     try {
       await http.post(EP.auth.verifyEmail(), { token });
-      // Обновляем user — is_verified изменился
       await checkUserAuth();
       return { ok: true };
     } catch (err) {
-      return { ok: false, message: _extractError(err, "Verification failed") };
+      return { ok: false, message: _extractError(err, "Ошибка подтверждения") };
     }
   }, [checkUserAuth]);
 
@@ -163,7 +203,7 @@ export const AuthProvider = ({ children }) => {
       await http.post(EP.auth.resendVerification());
       return { ok: true };
     } catch (err) {
-      return { ok: false, message: _extractError(err, "Failed to resend") };
+      return { ok: false, message: _extractError(err, "Не удалось отправить письмо") };
     }
   }, []);
 
@@ -173,7 +213,7 @@ export const AuthProvider = ({ children }) => {
       await http.post(EP.auth.forgotPassword(), { email });
       return { ok: true };
     } catch (err) {
-      return { ok: false, message: _extractError(err, "Failed to send reset email") };
+      return { ok: false, message: _extractError(err, "Не удалось отправить письмо") };
     }
   }, []);
 
@@ -182,7 +222,7 @@ export const AuthProvider = ({ children }) => {
       await http.post(EP.auth.resetPassword(), { token, new_password: newPassword });
       return { ok: true };
     } catch (err) {
-      return { ok: false, message: _extractError(err, "Failed to reset password") };
+      return { ok: false, message: _extractError(err, "Не удалось сбросить пароль") };
     }
   }, []);
 
@@ -194,7 +234,7 @@ export const AuthProvider = ({ children }) => {
       const res = await http.get(EP.auth.sessions());
       setSessions(res.data);
     } catch (err) {
-      setSessionsError(_extractError(err, "Failed to load sessions"));
+      setSessionsError(_extractError(err, "Не удалось загрузить сессии"));
     } finally {
       setIsLoadingSessions(false);
     }
@@ -206,7 +246,7 @@ export const AuthProvider = ({ children }) => {
       setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
       return { ok: true };
     } catch (err) {
-      return { ok: false, message: _extractError(err, "Failed to revoke session") };
+      return { ok: false, message: _extractError(err, "Не удалось завершить сессию") };
     }
   }, []);
 
@@ -273,9 +313,10 @@ export { http as authApi };
 // ─── Internal ──────────────────────────────────────────────────────────────────
 
 function _extractError(err, fallback) {
-  const data = err.response?.data;
-  if (typeof data?.message === "string") return data.message;
-  if (typeof data?.detail === "string") return data.detail;
-  if (Array.isArray(data?.detail)) return data.detail.map((d) => d.msg).join("; ");
-  return err.message || fallback;
+  const data = err?.response?.data;
+  if (!data) return err?.message || fallback;
+  if (typeof data.message === "string") return data.message;
+  if (typeof data.detail === "string")  return data.detail;
+  if (Array.isArray(data.detail))       return data.detail.map((d) => d.msg).join("; ");
+  return err?.message || fallback;
 }

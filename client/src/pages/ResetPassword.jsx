@@ -71,7 +71,7 @@ export default function ResetPassword() {
         <p className="text-sm text-muted-foreground mb-8">
           Новый пароль установлен. Все активные сессии завершены.
         </p>
-        <Button onClick={() => nav.to(ROUTES.login())}
+        <Button onClick={() => nav.toLogin()}
           className="w-full h-12 rounded-xl text-sm font-semibold gap-2"
           style={{ background: "hsl(145,35%,38%)", color: "white" }}>
           Войти в аккаунт <ArrowRight className="w-4 h-4" />

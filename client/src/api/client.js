@@ -2,16 +2,17 @@
  * api/client.js
  *
  * Axios instance с silent-refresh интерцептором.
- * Вынесен из AuthContext чтобы:
- *  - api/index.js мог импортировать его без циклических зависимостей
- *  - AuthContext импортировал только http, не создавал свой instance
  *
  * Поток при 401:
  *  1. Запрос вернул 401
  *  2. Если это не /refresh и не /login — пробуем тихий refresh
  *  3. Параллельные 401 ставятся в очередь, refresh делается один раз
  *  4. После успешного refresh — повторяем все запросы из очереди
- *  5. Если refresh тоже 401 — вызываем _logoutRef.current() (устанавливает AuthContext)
+ *  5. Если refresh тоже 401 — вызываем _logoutRef.current()
+ *
+ * Важно: /account/me при первом запуске может вернуть 401 —
+ * это НЕ должно вызывать logout (пользователь просто не залогинен).
+ * Поэтому /account/me помечен как "auth endpoint" и не идёт через refresh.
  */
 
 import axios from "axios";
@@ -20,7 +21,7 @@ import { ENDPOINTS as EP } from "@/api/endpoints";
 
 export const http = axios.create({
   baseURL: appParams.apiUrl,
-  withCredentials: true, // куки идут с каждым запросом автоматически
+  withCredentials: true,
 });
 
 // ── Refresh queue ──────────────────────────────────────────────────────────────
@@ -34,7 +35,6 @@ function _processQueue(error) {
 }
 
 // Устанавливается из AuthContext после mount
-// Ref-паттерн: интерцептор не захватывает устаревший closure
 export const _logoutRef = { current: null };
 
 // ── Interceptor ────────────────────────────────────────────────────────────────
@@ -43,12 +43,16 @@ http.interceptors.response.use(
   (res) => res,
   async (err) => {
     const original = err.config;
+    const status   = err.response?.status;
+    const url      = original?.url ?? "";
 
-    const isAuthEndpoint =
-      original.url?.includes(EP.auth.refresh()) ||
-      original.url?.includes(EP.auth.login());
+    // Эти эндпоинты не должны триггерить refresh — они сами про аутентификацию
+    const isAuthUrl =
+      url.includes(EP.auth.refresh()) ||
+      url.includes(EP.auth.login())   ||
+      url.includes(EP.auth.me());     // /account/me — начальная проверка
 
-    if (err.response?.status !== 401 || original._retry || isAuthEndpoint) {
+    if (status !== 401 || original._retry || isAuthUrl) {
       return Promise.reject(err);
     }
 
@@ -68,6 +72,8 @@ http.interceptors.response.use(
       return http(original);
     } catch (refreshErr) {
       _processQueue(refreshErr);
+      // Вызываем logout только если пользователь был залогинен
+      // (т.е. _logoutRef установлен и был активный пользователь)
       _logoutRef.current?.();
       return Promise.reject(refreshErr);
     } finally {

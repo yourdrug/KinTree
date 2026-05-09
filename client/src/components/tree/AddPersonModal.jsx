@@ -2,6 +2,12 @@
  * components/tree/AddPersonModal.jsx
  *
  * Модалка добавления / редактирования члена семьи.
+ *
+ * Исправления:
+ * - Убраны поля bio, birth_place, photo_url, generation — их нет в API
+ * - gender приведён к значениям сервера: MALE | FEMALE | OTHER
+ * - birth_date / death_date хранятся как строки "YYYY-MM-DD" в форме,
+ *   преобразование в PartialDateSchema происходит в personsApi
  */
 
 import { useState, useEffect } from "react";
@@ -10,11 +16,11 @@ import { X, User } from "lucide-react";
 import { Button }   from "@/components/ui/button";
 import { Input }    from "@/components/ui/input";
 import { Label }    from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { fromPartialDate } from "@/api";
 
 // ─── Константы ────────────────────────────────────────────────────────────────
 
@@ -25,53 +31,33 @@ const RELATION_TYPES = [
   { value: "sibling", label: "Брат / Сестра" },
 ];
 
+// Значения совпадают с PersonGender на сервере
 const GENDERS = [
-  { value: "male",   label: "Мужской" },
-  { value: "female", label: "Женский" },
-  { value: "other",  label: "Другой" },
+  { value: "MALE",   label: "Мужской" },
+  { value: "FEMALE", label: "Женский" },
+  { value: "OTHER",  label: "Другой" },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildEmptyForm(relativeId, relativeData, relationType) {
-  const base = {
-    first_name: "", last_name: "",
-    birth_date: "", death_date: "",
-    gender: "male", birth_place: "", bio: "", photo_url: "",
-    parent_ids: [], partner_id: "", generation: 0,
+function buildEmptyForm() {
+  return {
+    first_name: "",
+    last_name: "",
+    birth_date: "",
+    death_date: "",
+    gender: "MALE",
   };
-
-  if (!relativeId || !relativeData) return base;
-
-  const relGen = relativeData.generation ?? 0;
-
-  switch (relationType) {
-    case "child":
-      return { ...base, parent_ids: [relativeId], generation: relGen + 1 };
-    case "parent":
-      return { ...base, generation: relGen - 1 };
-    case "partner":
-      return { ...base, generation: relGen };
-    case "sibling":
-      return { ...base, parent_ids: relativeData.parent_ids || [], generation: relGen };
-    default:
-      return base;
-  }
 }
 
 function formFromPerson(person) {
   return {
-    first_name:  person.first_name  || "",
-    last_name:   person.last_name   || "",
-    birth_date:  person.birth_date  || "",
-    death_date:  person.death_date  || "",
-    gender:      person.gender      || "male",
-    birth_place: person.birth_place || "",
-    bio:         person.bio         || "",
-    photo_url:   person.photo_url   || "",
-    parent_ids:  person.parent_ids  || [],
-    partner_id:  person.partner_id  || "",
-    generation:  person.generation  ?? 0,
+    first_name: person.first_name  || "",
+    last_name:  person.last_name   || "",
+    birth_date: fromPartialDate(person.birth_date),
+    death_date: fromPartialDate(person.death_date),
+    // Нормализуем gender — сервер может вернуть MALE/FEMALE/OTHER
+    gender:     person.gender || "MALE",
   };
 }
 
@@ -85,39 +71,27 @@ export default function AddPersonModal({
   editPerson,
 }) {
   const [relationType, setRelationType] = useState("child");
-  const [form,         setForm]         = useState({});
+  const [form,         setForm]         = useState(buildEmptyForm());
   const [saving,       setSaving]       = useState(false);
 
   const isEdit = !!editPerson;
 
-  // Инициализация формы при открытии
   useEffect(() => {
     if (!open) return;
     if (isEdit) {
       setForm(formFromPerson(editPerson));
     } else {
       setRelationType("child");
-      setForm(buildEmptyForm(relativePerson?.id, relativePerson, "child"));
+      setForm(buildEmptyForm());
     }
-  }, [open, relativePerson, editPerson]);
+  }, [open, editPerson, isEdit]);
 
   const setField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
-  const handleRelationChange = (val) => {
-    setRelationType(val);
-    setForm(buildEmptyForm(relativePerson?.id, relativePerson, val));
-  };
-
   const handleSave = async () => {
     setSaving(true);
-
-    const data = { ...form };
-    // Чистим пустые опциональные поля
-    if (!data.death_date)  delete data.death_date;
-    if (!data.partner_id)  delete data.partner_id;
-    if (!data.birth_date)  delete data.birth_date;
-
-    await onSave(data, editPerson?.id, relationType, relativePerson);
+    // Передаём форму как есть — нормализация дат происходит в personsApi
+    await onSave(form, editPerson?.id, relationType, relativePerson);
     setSaving(false);
     onClose();
   };
@@ -159,23 +133,20 @@ export default function AddPersonModal({
             {/* Body */}
             <div className="px-6 py-5 space-y-4 max-h-[72vh] overflow-y-auto">
 
-              {/* Тип связи — только для нового человека с относительным контекстом */}
+              {/* Тип связи */}
               {!isEdit && relativePerson && (
                 <RelationSelector
                   relative={relativePerson}
                   value={relationType}
-                  onChange={handleRelationChange}
+                  onChange={setRelationType}
                 />
               )}
-
-              {/* Фото (только отображение, загрузка не реализована) */}
-              <PhotoPreview url={form.photo_url} />
 
               {/* Имя и фамилия */}
               <div className="grid grid-cols-2 gap-3">
                 <FormField label="Имя *">
                   <Input
-                    value={form.first_name || ""}
+                    value={form.first_name}
                     onChange={(e) => setField("first_name", e.target.value)}
                     placeholder="Иван"
                     className="rounded-xl"
@@ -183,7 +154,7 @@ export default function AddPersonModal({
                 </FormField>
                 <FormField label="Фамилия *">
                   <Input
-                    value={form.last_name || ""}
+                    value={form.last_name}
                     onChange={(e) => setField("last_name", e.target.value)}
                     placeholder="Иванов"
                     className="rounded-xl"
@@ -193,7 +164,7 @@ export default function AddPersonModal({
 
               {/* Пол */}
               <FormField label="Пол">
-                <Select value={form.gender || "male"} onValueChange={(v) => setField("gender", v)}>
+                <Select value={form.gender} onValueChange={(v) => setField("gender", v)}>
                   <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {GENDERS.map((g) => (
@@ -208,7 +179,7 @@ export default function AddPersonModal({
                 <FormField label="Дата рождения">
                   <Input
                     type="date"
-                    value={form.birth_date || ""}
+                    value={form.birth_date}
                     onChange={(e) => setField("birth_date", e.target.value)}
                     className="rounded-xl"
                   />
@@ -216,44 +187,16 @@ export default function AddPersonModal({
                 <FormField label="Дата смерти">
                   <Input
                     type="date"
-                    value={form.death_date || ""}
+                    value={form.death_date}
                     onChange={(e) => setField("death_date", e.target.value)}
                     className="rounded-xl"
                   />
                 </FormField>
               </div>
 
-              {/* Место рождения */}
-              <FormField label="Место рождения">
-                <Input
-                  value={form.birth_place || ""}
-                  onChange={(e) => setField("birth_place", e.target.value)}
-                  placeholder="Москва, Россия"
-                  className="rounded-xl"
-                />
-              </FormField>
-
-              {/* Поколение — только в режиме редактирования */}
-              {isEdit && (
-                <FormField label="Поколение (0 = корень)">
-                  <Input
-                    type="number"
-                    value={form.generation ?? 0}
-                    onChange={(e) => setField("generation", Number(e.target.value))}
-                    className="rounded-xl"
-                  />
-                </FormField>
-              )}
-
-              {/* Биография */}
-              <FormField label="Биография">
-                <Textarea
-                  value={form.bio || ""}
-                  onChange={(e) => setField("bio", e.target.value)}
-                  placeholder="Краткая история жизни..."
-                  className="rounded-xl h-20 resize-none"
-                />
-              </FormField>
+              <p className="text-xs text-muted-foreground">
+                * Обязательные поля
+              </p>
             </div>
 
             {/* Footer */}
@@ -320,20 +263,6 @@ function RelationSelector({ relative, value, onChange }) {
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-function PhotoPreview({ url }) {
-  return (
-    <div
-      className="w-16 h-16 rounded-2xl overflow-hidden flex items-center justify-center"
-      style={{ background: "hsl(35,40%,92%)" }}
-    >
-      {url
-        ? <img src={url} className="w-full h-full object-cover" alt="" />
-        : <User className="w-7 h-7 text-muted-foreground" />
-      }
     </div>
   );
 }

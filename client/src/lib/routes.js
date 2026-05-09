@@ -4,12 +4,13 @@
 
 export const ROUTES = {
   // ── Public ──────────────────────────────────────────────────────────────────
-  home:          () => "/",
-  login:         () => "/login",
-  explore:       () => "/explore",
-  forgotPassword:() => "/forgot-password",
-  resetPassword: () => "/reset-password",   // ?token=...
-  verifyEmail:   () => "/verify-email",     // ?token=...
+  home:           () => "/",
+  login:          () => "/login",
+  explore:        () => "/explore",
+  forgotPassword: () => "/forgot-password",
+  resetPassword:  () => "/reset-password",   // ?token=...
+  verifyEmail:    () => "/verify-email",     // ?token=...
+  oauthCallback:  () => "/oauth/callback",   // после редиректа от Google
 
   // ── Protected ────────────────────────────────────────────────────────────────
   dashboard: () => "/dashboard",

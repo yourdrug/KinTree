@@ -1,8 +1,28 @@
+/**
+ * components/tree/PersonNode.jsx
+ *
+ * Исправления:
+ * - birth_date и death_date — PartialDateSchema { year, month, day }
+ * - Отображаем year из объекта, не парсим строку
+ */
+
 import { motion } from "framer-motion";
 import { Plus, User } from "lucide-react";
 
+function getYear(pd) {
+  if (!pd) return null;
+  if (typeof pd === "object" && pd.year) return pd.year;
+  return null;
+}
+
 export default function PersonNode({ person, isSelected, onClick, canEdit, onAddChild, style = {} }) {
-  const isAlive = !person.death_date;
+  const birthYear = getYear(person.birth_date);
+  const deathYear = getYear(person.death_date);
+  const isAlive   = person.is_alive;
+
+  const yearsStr = birthYear
+    ? `${birthYear} — ${isAlive ? "наст." : deathYear ?? "?"}`
+    : null;
 
   return (
     <motion.div
@@ -18,40 +38,48 @@ export default function PersonNode({ person, isSelected, onClick, canEdit, onAdd
         className="rounded-2xl p-3 text-center transition-all duration-300"
         style={{
           background: isSelected ? "hsl(145,35%,38%)" : "white",
-          border: isSelected ? "2px solid hsl(145,35%,38%)" : "2px solid hsl(35,20%,88%)",
+          border: isSelected
+            ? "2px solid hsl(145,35%,38%)"
+            : "2px solid hsl(35,20%,88%)",
           boxShadow: isSelected
             ? "0 8px 30px hsla(145,35%,38%,0.3)"
             : "0 4px 16px hsla(30,10%,15%,0.08)",
         }}
       >
-        {/* Photo */}
-        <div className="mx-auto w-14 h-14 rounded-full overflow-hidden mb-2 border-2"
-          style={{ borderColor: isSelected ? "hsla(255,255%,255%,0.3)" : "hsl(35,30%,90%)" }}>
-          {person.photo_url ? (
-            <img src={person.photo_url} alt={person.first_name} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center"
-              style={{ background: isSelected ? "hsla(255,255%,255%,0.2)" : "hsl(35,40%,92%)" }}>
-              <User className="w-6 h-6" style={{ color: isSelected ? "white" : "hsl(30,8%,50%)" }} />
-            </div>
-          )}
+        {/* Avatar */}
+        <div
+          className="mx-auto w-14 h-14 rounded-full overflow-hidden mb-2 flex items-center justify-center border-2"
+          style={{
+            borderColor: isSelected ? "hsla(255,255%,255%,0.3)" : "hsl(35,30%,90%)",
+            background: isSelected ? "hsla(255,255%,255%,0.2)" : "hsl(35,40%,92%)",
+          }}
+        >
+          <User className="w-6 h-6" style={{ color: isSelected ? "white" : "hsl(30,8%,50%)" }} />
         </div>
 
         {/* Name */}
-        <div className="text-xs font-semibold leading-tight truncate"
-          style={{ color: isSelected ? "white" : "hsl(30,10%,15%)" }}>
+        <div
+          className="text-xs font-semibold leading-tight truncate"
+          style={{ color: isSelected ? "white" : "hsl(30,10%,15%)" }}
+        >
           {person.first_name}
         </div>
-        <div className="text-xs font-semibold leading-tight truncate mb-1"
-          style={{ color: isSelected ? "hsla(255,255%,255%,0.9)" : "hsl(30,10%,15%)" }}>
+        <div
+          className="text-xs font-semibold leading-tight truncate mb-1"
+          style={{ color: isSelected ? "hsla(255,255%,255%,0.9)" : "hsl(30,10%,15%)" }}
+        >
           {person.last_name}
         </div>
 
         {/* Years */}
-        <div className="text-[10px]" style={{ color: isSelected ? "hsla(255,255%,255%,0.7)" : "hsl(30,8%,55%)" }}>
-          {person.birth_date ? new Date(person.birth_date).getFullYear() : "?"} —{" "}
-          {isAlive ? "наст." : person.death_date ? new Date(person.death_date).getFullYear() : "?"}
-        </div>
+        {yearsStr && (
+          <div
+            className="text-[10px]"
+            style={{ color: isSelected ? "hsla(255,255%,255%,0.7)" : "hsl(30,8%,55%)" }}
+          >
+            {yearsStr}
+          </div>
+        )}
       </div>
 
       {/* Add child button */}

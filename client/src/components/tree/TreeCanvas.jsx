@@ -1,3 +1,11 @@
+/**
+ * components/tree/TreeCanvas.jsx
+ *
+ * Исправления:
+ * - computePositions использует person.generation (из enriched данных)
+ * - Передаёт graph в PersonNode через onAddChild
+ */
+
 import { useRef, useState, useCallback, useEffect } from "react";
 import { ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import PersonNode from "./PersonNode";
@@ -15,15 +23,16 @@ function computePositions(members) {
 
   const sortedGens = Object.keys(genGroups).map(Number).sort((a, b) => a - b);
   const NODE_W = 130;
-  const GEN_H = 160;
+  const NODE_GAP = 30;
+  const GEN_H = 170;
 
   sortedGens.forEach((gen) => {
     const group = genGroups[gen];
-    const totalW = group.length * NODE_W + (group.length - 1) * 30;
+    const totalW = group.length * NODE_W + (group.length - 1) * NODE_GAP;
     const startX = -totalW / 2;
     group.forEach((m, i) => {
       positions[m.id] = {
-        x: startX + i * (NODE_W + 30),
+        x: startX + i * (NODE_W + NODE_GAP),
         y: gen * GEN_H,
       };
     });
@@ -32,7 +41,7 @@ function computePositions(members) {
   return positions;
 }
 
-export default function TreeCanvas({ members, selectedPerson, onSelectPerson, canEdit, onAddChild }) {
+export default function TreeCanvas({ members, graph, selectedPerson, onSelectPerson, canEdit, onAddChild }) {
   const containerRef = useRef(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [scale, setScale] = useState(0.9);
@@ -41,7 +50,6 @@ export default function TreeCanvas({ members, selectedPerson, onSelectPerson, ca
 
   const positions = computePositions(members);
 
-  // Center on load
   useEffect(() => {
     if (containerRef.current) {
       setOffset({ x: containerRef.current.clientWidth / 2, y: 80 });
@@ -80,14 +88,17 @@ export default function TreeCanvas({ members, selectedPerson, onSelectPerson, ca
     <div
       ref={containerRef}
       className="relative w-full h-full overflow-hidden select-none"
-      style={{ cursor: dragging ? "grabbing" : "grab", background: "radial-gradient(ellipse at 50% 30%, hsl(145,35%,97%) 0%, hsl(40,33%,98%) 60%)" }}
+      style={{
+        cursor: dragging ? "grabbing" : "grab",
+        background: "radial-gradient(ellipse at 50% 30%, hsl(145,35%,97%) 0%, hsl(40,33%,98%) 60%)",
+      }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onWheel={handleWheel}
     >
-      {/* Grid pattern */}
+      {/* Grid */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30">
         <defs>
           <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
@@ -121,23 +132,34 @@ export default function TreeCanvas({ members, selectedPerson, onSelectPerson, ca
 
       {/* Zoom Controls */}
       <div className="absolute bottom-6 right-6 flex flex-col gap-2 z-10">
-        <button onClick={() => zoom(1)} className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md hover:scale-105 transition-transform"
-          style={{ background: "white", border: "1px solid hsl(35,20%,88%)" }}>
+        <button
+          onClick={() => zoom(1)}
+          className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md hover:scale-105 transition-transform"
+          style={{ background: "white", border: "1px solid hsl(35,20%,88%)" }}
+        >
           <ZoomIn className="w-4 h-4 text-foreground" />
         </button>
-        <button onClick={() => zoom(-1)} className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md hover:scale-105 transition-transform"
-          style={{ background: "white", border: "1px solid hsl(35,20%,88%)" }}>
+        <button
+          onClick={() => zoom(-1)}
+          className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md hover:scale-105 transition-transform"
+          style={{ background: "white", border: "1px solid hsl(35,20%,88%)" }}
+        >
           <ZoomOut className="w-4 h-4 text-foreground" />
         </button>
-        <button onClick={reset} className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md hover:scale-105 transition-transform"
-          style={{ background: "white", border: "1px solid hsl(35,20%,88%)" }}>
+        <button
+          onClick={reset}
+          className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md hover:scale-105 transition-transform"
+          style={{ background: "white", border: "1px solid hsl(35,20%,88%)" }}
+        >
           <Maximize2 className="w-4 h-4 text-foreground" />
         </button>
       </div>
 
       {/* Scale indicator */}
-      <div className="absolute bottom-6 left-6 px-3 py-1.5 rounded-lg text-xs text-muted-foreground"
-        style={{ background: "hsla(40,33%,98%,0.8)", border: "1px solid hsl(35,20%,88%)" }}>
+      <div
+        className="absolute bottom-6 left-6 px-3 py-1.5 rounded-lg text-xs text-muted-foreground"
+        style={{ background: "hsla(40,33%,98%,0.8)", border: "1px solid hsl(35,20%,88%)" }}
+      >
         {Math.round(scale * 100)}%
       </div>
 
