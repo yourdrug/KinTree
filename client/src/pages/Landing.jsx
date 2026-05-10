@@ -1,14 +1,10 @@
 /**
  * pages/Landing.jsx
- *
- * Изменения:
- *  - window.location.href → useAppNavigate
- *  - <Link> использует ROUTES
  */
 
 import { motion } from "framer-motion";
-import { Leaf, ArrowRight, Eye } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Leaf, ArrowRight, Eye, LayoutDashboard } from "lucide-react";
+import { Button }   from "@/components/ui/button";
 import Navbar       from "../components/landing/Navbar";
 import HeroTree     from "../components/landing/HeroTree";
 import FeatureCards from "../components/landing/FeatureCards";
@@ -16,10 +12,12 @@ import HowItWorks   from "../components/landing/HowItWorks";
 import Footer       from "../components/landing/Footer";
 import { Link }           from "react-router-dom";
 import { useAppNavigate } from "@/lib/navigation";
+import { useAuth }        from "@/lib/AuthContext";
 import { ROUTES }         from "@/lib/routes";
 
 export default function Landing() {
   const nav = useAppNavigate();
+  const { isAuthenticated, user } = useAuth();
 
   return (
     <div className="min-h-screen font-sans" style={{ background: "hsl(40,33%,98%)" }}>
@@ -58,32 +56,56 @@ export default function Landing() {
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.7, delay: 0.3 }}
                 className="flex flex-col sm:flex-row gap-3">
-                <Button size="lg"
-                  className="rounded-2xl px-8 py-6 text-base font-semibold shadow-lg gap-2"
-                  style={{ background: "hsl(145,35%,38%)", color: "white", boxShadow: "0 8px 30px hsla(145,35%,38%,0.3)" }}
-                  onClick={() => nav.toLogin()}>
-                  Создать фамильное дерево
-                  <ArrowRight className="w-5 h-5" />
-                </Button>
 
-                <Button size="lg" variant="outline"
-                  className="rounded-2xl px-8 py-6 text-base font-medium gap-2"
-                  style={{ borderColor: "hsl(35,20%,82%)", color: "hsl(30,10%,30%)" }}
-                  onClick={() => nav.toLogin()}>
-                  Войти
-                </Button>
+                {isAuthenticated ? (
+                  // ── Авторизован ───────────────────────────────────────────
+                  <>
+                    <Button size="lg"
+                      className="rounded-2xl px-8 py-6 text-base font-semibold shadow-lg gap-2"
+                      style={{ background: "hsl(145,35%,38%)", color: "white", boxShadow: "0 8px 30px hsla(145,35%,38%,0.3)" }}
+                      onClick={() => nav.toDashboard()}>
+                      <LayoutDashboard className="w-5 h-5" />
+                      Мои деревья
+                    </Button>
+                    {user?.full_name && (
+                      <div className="flex items-center px-4 py-3 rounded-2xl text-sm text-muted-foreground"
+                        style={{ border: "1px solid hsl(35,20%,88%)" }}>
+                        Добро пожаловать, <strong className="ml-1 text-foreground">{user.full_name}</strong>!
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  // ── Гость ──────────────────────────────────────────────────
+                  <>
+                    <Button size="lg"
+                      className="rounded-2xl px-8 py-6 text-base font-semibold shadow-lg gap-2"
+                      style={{ background: "hsl(145,35%,38%)", color: "white", boxShadow: "0 8px 30px hsla(145,35%,38%,0.3)" }}
+                      onClick={() => nav.toLogin()}>
+                      Создать фамильное дерево
+                      <ArrowRight className="w-5 h-5" />
+                    </Button>
+                    <Button size="lg" variant="outline"
+                      className="rounded-2xl px-8 py-6 text-base font-medium gap-2"
+                      style={{ borderColor: "hsl(35,20%,82%)", color: "hsl(30,10%,30%)" }}
+                      onClick={() => nav.toLogin()}>
+                      Войти
+                    </Button>
+                  </>
+                )}
               </motion.div>
 
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }} className="mt-4">
-                <Link to={ROUTES.explore()}>
-                  <Button variant="ghost"
-                    className="gap-2 text-muted-foreground hover:text-foreground text-sm rounded-xl">
-                    <Eye className="w-4 h-4" />
-                    Продолжить как гость
-                  </Button>
-                </Link>
-              </motion.div>
+              {!isAuthenticated && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 }} className="mt-4">
+                  <Link to={ROUTES.explore()}>
+                    <Button variant="ghost"
+                      className="gap-2 text-muted-foreground hover:text-foreground text-sm rounded-xl">
+                      <Eye className="w-4 h-4" />
+                      Продолжить как гость
+                    </Button>
+                  </Link>
+                </motion.div>
+              )}
 
               {/* Social proof */}
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -146,15 +168,17 @@ export default function Landing() {
             style={{ background: "linear-gradient(135deg, hsl(145,35%,92%) 0%, hsl(30,50%,92%) 100%)", border: "1px solid hsl(35,20%,85%)" }}>
             <div className="text-5xl mb-5">🌳</div>
             <h2 className="font-serif text-3xl md:text-4xl font-semibold text-foreground mb-4">
-              Начните сегодня
+              {isAuthenticated ? "Продолжить работу" : "Начните сегодня"}
             </h2>
             <p className="text-muted-foreground mb-8 text-lg">
-              Ваша семейная история заслуживает быть сохранённой
+              {isAuthenticated
+                ? "Ваши семейные деревья ждут вас"
+                : "Ваша семейная история заслуживает быть сохранённой"}
             </p>
             <Button size="lg" className="rounded-2xl px-10 py-6 text-base font-semibold gap-2"
               style={{ background: "hsl(145,35%,38%)", color: "white", boxShadow: "0 8px 30px hsla(145,35%,38%,0.35)" }}
-              onClick={() => nav.toLogin()}>
-              Создать бесплатно
+              onClick={() => isAuthenticated ? nav.toDashboard() : nav.toLogin()}>
+              {isAuthenticated ? "Открыть мои деревья" : "Создать бесплатно"}
               <ArrowRight className="w-5 h-5" />
             </Button>
           </div>

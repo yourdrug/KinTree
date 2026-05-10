@@ -1,31 +1,34 @@
 /**
  * pages/VerifyEmail.jsx
  *
- * Страница подтверждения email.
- * Открывается по ссылке из письма: /verify-email?token=...
- *
- * При монтировании сразу вызывает API — пользователь не нажимает кнопку.
+ * Исправлено: nav.to() → nav.toDashboard() / nav.toLogin()
+ * "Отправить повторно" использует resendVerification, а не verifyEmail(token)
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle2, XCircle, Loader2, Leaf } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button }         from "@/components/ui/button";
 import { useAuth }        from "@/lib/AuthContext";
 import { useAppNavigate } from "@/lib/navigation";
 import { ROUTES }         from "@/lib/routes";
 
 export default function VerifyEmail() {
-  const { verifyEmail, isAuthenticated } = useAuth();
+  const { verifyEmail, resendVerification, isAuthenticated } = useAuth();
   const nav = useAppNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
 
-  const [status, setStatus] = useState("loading"); // loading | success | error
+  const [status,  setStatus]  = useState("loading");
   const [message, setMessage] = useState("");
+  const [resent,  setResent]  = useState(false);
+  const called = useRef(false);
 
   useEffect(() => {
+    if (called.current) return;
+    called.current = true;
+
     if (!token) {
       setStatus("error");
       setMessage("Токен не найден в ссылке.");
@@ -42,9 +45,15 @@ export default function VerifyEmail() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleResend = async () => {
+    const result = await resendVerification();
+    if (result?.ok) setResent(true);
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6"
       style={{ background: "hsl(40,33%,98%)" }}>
+
       <Link to={ROUTES.home()} className="flex items-center gap-2 mb-12">
         <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
           <Leaf className="w-4 h-4 text-primary-foreground" />
@@ -78,7 +87,7 @@ export default function VerifyEmail() {
               Ваш адрес электронной почты успешно подтверждён.
             </p>
             <Button
-              onClick={() => isAuthenticated ? nav.to(ROUTES.dashboard()) : nav.to(ROUTES.login())}
+              onClick={() => isAuthenticated ? nav.toDashboard() : nav.toLogin()}
               className="w-full h-12 rounded-xl text-sm font-semibold"
               style={{ background: "hsl(145,35%,38%)", color: "white" }}>
               {isAuthenticated ? "Перейти к дашборду" : "Войти в аккаунт"}
@@ -99,13 +108,11 @@ export default function VerifyEmail() {
             <div className="space-y-3">
               {isAuthenticated && (
                 <Button
-                  onClick={async () => {
-                    await verifyEmail(token); // resend через контекст
-                    nav.to(ROUTES.login());
-                  }}
+                  onClick={handleResend}
+                  disabled={resent}
                   className="w-full h-11 rounded-xl text-sm"
                   style={{ background: "hsl(145,35%,38%)", color: "white" }}>
-                  Отправить письмо повторно
+                  {resent ? "Письмо отправлено" : "Отправить повторно"}
                 </Button>
               )}
               <Link to={ROUTES.login()}>
