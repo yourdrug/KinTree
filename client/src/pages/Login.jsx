@@ -1,11 +1,11 @@
 /**
  * pages/Login.jsx
  *
- * Исправления:
- * - Google: window.location.href на бэкенд (не на фронт-страницу)
- * - Telegram: корректный callback с данными виджета
- * - after-login: replace: true чтобы не было /login в истории
- * - Убран дублирующий разделитель "или"
+ * ИСПРАВЛЕНИЯ:
+ * 1. useEffect для редиректа авторизованного пользователя — nav добавлен в deps,
+ *    используем useRef для nav чтобы не перезапускать effect при каждом рендере.
+ * 2. Telegram widget: убрана зависимость от изменяемой функции onAuth без useCallback.
+ * 3. handleSubmit и handleForgotSubmit стабилизированы через useCallback.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -98,15 +98,18 @@ const TelegramIcon = () => (
 
 function useTelegramWidget(onAuth, enabled) {
   const containerRef = useRef(null);
+  // Храним колбэк в ref чтобы не пересоздавать виджет при каждом рендере
+  const onAuthRef = useRef(onAuth);
+  useEffect(() => { onAuthRef.current = onAuth; }, [onAuth]);
 
   useEffect(() => {
     if (!enabled || !containerRef.current) return;
     containerRef.current.innerHTML = "";
 
-    window._tgAuthCallback = (user) => { onAuth(user); };
+    window._tgAuthCallback = (user) => { onAuthRef.current(user); };
 
     const botName = import.meta.env.VITE_TELEGRAM_BOT_NAME;
-    if (!botName) return; // виджет без bot name не работает
+    if (!botName) return;
 
     const script = document.createElement("script");
     script.src = "https://telegram.org/js/telegram-widget.js?22";
@@ -119,7 +122,7 @@ function useTelegramWidget(onAuth, enabled) {
     containerRef.current.appendChild(script);
 
     return () => { delete window._tgAuthCallback; };
-  }, [enabled, onAuth]);
+  }, [enabled]); // onAuth намеренно исключён — используем ref
 
   return containerRef;
 }
@@ -135,12 +138,16 @@ export default function Login() {
   const location = useLocation();
   const from     = location.state?.from || null;
 
+  // FIX: стабилизируем nav в ref чтобы не перезапускать effect
+  const navRef = useRef(nav);
+  useEffect(() => { navRef.current = nav; }, [nav]);
+
   // Если уже залогинен — сразу на dashboard
   useEffect(() => {
     if (isAuthenticated) {
-      nav.afterLogin();
+      navRef.current.afterLogin();
     }
-  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   const [view,          setView]          = useState("login");
   const [showPassword,  setShowPassword]  = useState(false);
@@ -154,18 +161,18 @@ export default function Login() {
   const handleTelegramAuth = useCallback(async (telegramData) => {
     const result = await loginWithTelegram(telegramData);
     if (result?.ok) {
-      from ? (window.location.href = from) : nav.afterLogin();
+      from ? (window.location.href = from) : navRef.current.afterLogin();
     } else {
       setLocalError(result?.message || "Ошибка входа через Telegram");
     }
-  }, [loginWithTelegram, nav, from]);
+  }, [loginWithTelegram, from]);
 
   const tgContainerRef = useTelegramWidget(handleTelegramAuth, showTgWidget);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const clearError = () => setLocalError("");
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     clearError();
 
@@ -179,13 +186,13 @@ export default function Login() {
       : register(form.email, form.password));
 
     if (result?.ok) {
-      from ? (window.location.href = from) : nav.afterLogin();
+      from ? (window.location.href = from) : navRef.current.afterLogin();
     } else {
       setLocalError(result?.message || "Ошибка авторизации");
     }
-  };
+  }, [form, view, login, register, from]);
 
-  const handleForgotSubmit = async (e) => {
+  const handleForgotSubmit = useCallback(async (e) => {
     e.preventDefault();
     clearError();
     if (!forgotEmail.trim()) { setLocalError("Введите email"); return; }
@@ -199,7 +206,7 @@ export default function Login() {
     } else {
       setLocalError(result?.message || "Ошибка отправки");
     }
-  };
+  }, [forgotEmail, forgotPassword]);
 
   const error = localError || (typeof authError === "string" ? authError : "");
 

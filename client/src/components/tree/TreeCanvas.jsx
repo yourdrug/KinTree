@@ -1,9 +1,12 @@
 /**
  * components/tree/TreeCanvas.jsx
  *
- * Исправления:
- * - computePositions использует person.generation (из enriched данных)
- * - Передаёт graph в PersonNode через onAddChild
+ * ИСПРАВЛЕНИЯ:
+ * 1. handleWheel теперь добавляется через addEventListener с { passive: false },
+ *    что необходимо для корректного e.preventDefault() в Chrome/Firefox.
+ *    React onWheel всегда passive в новых версиях React — зум не работал.
+ * 2. computePositions вынесен за компонент — не пересоздаётся при каждом рендере.
+ * 3. dragStart.current корректно очищается в handleMouseLeave.
  */
 
 import { useRef, useState, useCallback, useEffect } from "react";
@@ -56,6 +59,21 @@ export default function TreeCanvas({ members, graph, selectedPerson, onSelectPer
     }
   }, []);
 
+  // FIX: wheel должен быть non-passive чтобы e.preventDefault() работал
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleWheel = (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.08 : 0.08;
+      setScale((s) => Math.max(0.3, Math.min(2, s + delta)));
+    };
+
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, []);
+
   const handleMouseDown = useCallback((e) => {
     if (e.target.closest("[data-node]")) return;
     setDragging(true);
@@ -70,12 +88,6 @@ export default function TreeCanvas({ members, graph, selectedPerson, onSelectPer
   const handleMouseUp = useCallback(() => {
     setDragging(false);
     dragStart.current = null;
-  }, []);
-
-  const handleWheel = useCallback((e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.08 : 0.08;
-    setScale((s) => Math.max(0.3, Math.min(2, s + delta)));
   }, []);
 
   const zoom = (dir) => setScale((s) => Math.max(0.3, Math.min(2, s + dir * 0.15)));
@@ -96,7 +108,7 @@ export default function TreeCanvas({ members, graph, selectedPerson, onSelectPer
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}
+      // onWheel убран — обрабатывается через addEventListener с { passive: false }
     >
       {/* Grid */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30">

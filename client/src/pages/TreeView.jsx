@@ -1,14 +1,16 @@
 /**
  * pages/TreeView.jsx
  *
- * Исправления:
- * - handleSave корректно строит payload с family_id для новых персон
- * - Сиблинги: создаём через addParentChild для каждого общего родителя
- * - graph и members (enriched) передаются в PersonSidebar
- * - Убраны несуществующие поля из запросов
+ * ИСПРАВЛЕНИЯ:
+ * 1. loadData обёрнут в useCallback — стабильная ссылка, нет бесконечных рендеров.
+ * 2. useEffect для обновления selectedPerson использует ref-based подход —
+ *    не вызывает loadData снова при изменении persons.
+ * 3. Убрана зависимость от persons в useEffect ([persons]) которая ранее
+ *    могла вызвать бесконечный цикл: loadData → setPersons → effect → loadData.
+ * 4. Стабильные deps во всех useEffect.
  */
 
-import { useState, useEffect }     from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link }         from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Leaf, ChevronLeft, UserPlus, Share2 } from "lucide-react";
@@ -33,7 +35,7 @@ export default function TreeView() {
   const { user } = useAuth();
 
   const [family,         setFamily]         = useState(null);
-  const [persons,        setPersons]        = useState([]); // enriched
+  const [persons,        setPersons]        = useState([]);
   const [graph,          setGraph]          = useState(null);
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [loading,        setLoading]        = useState(true);
@@ -42,28 +44,24 @@ export default function TreeView() {
   const [editPerson,     setEditPerson]     = useState(null);
   const [isOwner,        setIsOwner]        = useState(false);
 
-  useEffect(() => { loadData(); }, [familyId]);
+  // Ref для синхронизации selectedPerson без лишних рендеров
+  const selectedIdRef = useRef(null);
 
-  useEffect(() => {
-    if (user && family) setIsOwner(family.owner_id === user.id);
-  }, [user, family]);
-
-  // Обновляем selectedPerson при изменении persons
-  useEffect(() => {
-    if (selectedPerson) {
-      const updated = persons.find((p) => p.id === selectedPerson.id);
-      if (updated) setSelectedPerson(updated);
-    }
-  }, [persons]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const data = await loadFamilyTree(familyId);
       setFamily(data.family);
       setPersons(data.persons);
       setGraph(data.graph);
-    } catch (err) {
+
+      // Обновляем selectedPerson если он был выбран — через ref, без зависимости от стейта
+      if (selectedIdRef.current) {
+        const updated = data.persons.find((p) => p.id === selectedIdRef.current);
+        setSelectedPerson(updated || null);
+        if (!updated) selectedIdRef.current = null;
+      }
+    } catch {
       toast({
         variant: "destructive",
         title: "Ошибка загрузки",
@@ -72,25 +70,45 @@ export default function TreeView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [familyId]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    if (user && family) setIsOwner(family.owner_id === user.id);
+  }, [user, family]);
+
+  const handleSelectPerson = useCallback((p) => {
+    setSelectedPerson((prev) => {
+      if (prev?.id === p.id) {
+        selectedIdRef.current = null;
+        return null;
+      }
+      selectedIdRef.current = p.id;
+      return p;
+    });
+  }, []);
+
+  const handleCloseSidebar = useCallback(() => {
+    setSelectedPerson(null);
+    selectedIdRef.current = null;
+  }, []);
 
   // ── Управление модалкой ──────────────────────────────────────────────────
-  const openAdd    = (relative = null) => { setRelativePerson(relative); setEditPerson(null);     setShowModal(true); };
-  const openEdit   = (person)          => { setEditPerson(person);       setRelativePerson(null); setShowModal(true); };
-  const closeModal = ()                => { setShowModal(false); setRelativePerson(null); setEditPerson(null); };
+  const openAdd    = useCallback((relative = null) => { setRelativePerson(relative); setEditPerson(null);     setShowModal(true); }, []);
+  const openEdit   = useCallback((person)          => { setEditPerson(person);       setRelativePerson(null); setShowModal(true); }, []);
+  const closeModal = useCallback(()                => { setShowModal(false); setRelativePerson(null); setEditPerson(null); }, []);
 
   // ── Сохранение ───────────────────────────────────────────────────────────
-  const handleSave = async (formData, existingId, relationType, relPerson) => {
+  const handleSave = useCallback(async (formData, existingId, relationType, relPerson) => {
     try {
       if (existingId) {
-        // PATCH: только поля first_name, last_name, gender, birth_date, death_date
         await personsApi.patch(existingId, formData);
         toast({ title: "Изменения сохранены" });
         await loadData();
         return;
       }
 
-      // Базовый payload для создания
       const personPayload = {
         first_name: formData.first_name,
         last_name:  formData.last_name,
@@ -112,7 +130,6 @@ export default function TreeView() {
       } else if (relationType === "partner" && relPerson) {
         await createPersonAsSpouse(personPayload, relPerson.id);
       } else if (relationType === "sibling" && relPerson) {
-        // Добавляем тех же родителей что и у relative
         const newPerson = await personsApi.create(personPayload);
         const parentIds = relPerson.parent_ids || [];
         await Promise.all(
@@ -125,7 +142,6 @@ export default function TreeView() {
           )
         );
       } else {
-        // Просто создаём без связей
         await personsApi.create(personPayload);
       }
 
@@ -139,12 +155,15 @@ export default function TreeView() {
         description: typeof msg === "string" ? msg : "Проверьте данные и попробуйте снова.",
       });
     }
-  };
+  }, [familyId, loadData]);
 
-  const handleDelete = async (personId) => {
+  const handleDelete = useCallback(async (personId) => {
     try {
       await personsApi.delete(personId);
-      if (selectedPerson?.id === personId) setSelectedPerson(null);
+      if (selectedIdRef.current === personId) {
+        setSelectedPerson(null);
+        selectedIdRef.current = null;
+      }
       toast({ title: "Запись удалена" });
       await loadData();
     } catch {
@@ -154,9 +173,9 @@ export default function TreeView() {
         description: "Не удалось удалить запись.",
       });
     }
-  };
+  }, [loadData]);
 
-  const handleRemoveRelation = async (type, idA, idB) => {
+  const handleRemoveRelation = useCallback(async (type, idA, idB) => {
     try {
       if (type === "parent_child") await relationsApi.removeParentChild(idA, idB);
       else if (type === "spouse")  await relationsApi.removeSpouse(idA, idB);
@@ -169,7 +188,7 @@ export default function TreeView() {
         description: "Не удалось удалить связь.",
       });
     }
-  };
+  }, [loadData]);
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -228,7 +247,7 @@ export default function TreeView() {
           members={persons}
           graph={graph}
           selectedPerson={selectedPerson}
-          onSelectPerson={(p) => setSelectedPerson((prev) => (prev?.id === p.id ? null : p))}
+          onSelectPerson={handleSelectPerson}
           canEdit={isOwner}
           onAddChild={(parent) => openAdd(parent)}
         />
@@ -244,7 +263,7 @@ export default function TreeView() {
                 person={selectedPerson}
                 members={persons}
                 graph={graph}
-                onClose={() => setSelectedPerson(null)}
+                onClose={handleCloseSidebar}
                 canEdit={isOwner}
                 onEdit={openEdit}
                 onDelete={handleDelete}

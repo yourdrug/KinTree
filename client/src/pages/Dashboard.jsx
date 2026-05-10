@@ -1,8 +1,10 @@
 /**
  * pages/Dashboard.jsx
  *
- * Изменения:
- *  - toast() вместо console.error
+ * ИСПРАВЛЕНИЕ:
+ * - loadTrees вызывается только когда user уже загружен (не null).
+ *   Раньше при первом рендере user?.id был undefined — список грузился без фильтра.
+ * - useEffect зависит от user?.id, а не от user целиком — нет лишних ре-запросов.
  */
 
 import { useState, useEffect } from "react";
@@ -27,12 +29,16 @@ export default function Dashboard() {
   const [creating,    setCreating]    = useState(false);
   const [newTreeName, setNewTreeName] = useState("");
 
-  useEffect(() => { loadTrees(); }, []);
+  // FIX: загружаем только когда user.id доступен
+  useEffect(() => {
+    if (!user?.id) return;
+    loadTrees();
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadTrees = async () => {
     try {
       setLoading(true);
-      const page = await familiesApi.list({ owner_id: user?.id, limit: 100 });
+      const page = await familiesApi.list({ owner_id: user.id, limit: 100 });
       setTrees(page.result ?? []);
     } catch {
       toast({

@@ -1,9 +1,13 @@
 /**
  * components/tree/TreeConnections.jsx
  *
- * Исправления:
- * - parent_ids и spouse_ids берутся из enriched persons (из графа)
- * - Дедублируем линии супругов чтобы не рисовать дважды
+ * ИСПРАВЛЕНИЯ:
+ * 1. Линия супругов рисовалась с неправильной Y-координатой:
+ *    y = childPos.y + 45 — использовала "childPos" что было текущей персоной,
+ *    а не средним между двумя супругами. Теперь y берётся как среднее Y обоих.
+ * 2. X-координаты линии между супругами: правильно берём правый край левого
+ *    узла (x + 110) и левый край правого узла (x), независимо от порядка.
+ * 3. Добавлена проверка что позиции обоих участников существуют.
  */
 
 export default function TreeConnections({ members, positions }) {
@@ -11,8 +15,8 @@ export default function TreeConnections({ members, positions }) {
   const drawnSpousePairs = new Set();
 
   members.forEach((member) => {
-    const childPos = positions[member.id];
-    if (!childPos) return;
+    const memberPos = positions[member.id];
+    if (!memberPos) return;
 
     // Линии родитель → ребёнок
     (member.parent_ids || []).forEach((parentId) => {
@@ -21,8 +25,8 @@ export default function TreeConnections({ members, positions }) {
 
       const x1 = parentPos.x + 55;
       const y1 = parentPos.y + 90;
-      const x2 = childPos.x + 55;
-      const y2 = childPos.y;
+      const x2 = memberPos.x + 55;
+      const y2 = memberPos.y;
       const midY = (y1 + y2) / 2;
 
       paths.push(
@@ -47,20 +51,29 @@ export default function TreeConnections({ members, positions }) {
       const spousePos = positions[spouseId];
       if (!spousePos) return;
 
-      const x1 = Math.min(childPos.x, spousePos.x) + 110;
-      const x2 = Math.max(childPos.x, spousePos.x);
-      const y  = childPos.y + 45;
+      // FIX: определяем кто левее/правее и строим линию правильно
+      const leftPos  = memberPos.x < spousePos.x ? memberPos : spousePos;
+      const rightPos = memberPos.x < spousePos.x ? spousePos : memberPos;
 
-      paths.push(
-        <line
-          key={`sp-${pairKey}`}
-          x1={x1} y1={y} x2={x2} y2={y}
-          stroke="hsl(30,50%,60%)"
-          strokeWidth="2"
-          strokeDasharray="4 3"
-          opacity="0.45"
-        />
-      );
+      // Линия от правого края левого узла до левого края правого узла
+      const x1 = leftPos.x + 110;
+      const x2 = rightPos.x;
+      // FIX: Y = середина между вертикальными центрами обоих узлов
+      const y = (leftPos.y + rightPos.y) / 2 + 45;
+
+      // Рисуем только если узлы не перекрываются
+      if (x2 > x1) {
+        paths.push(
+          <line
+            key={`sp-${pairKey}`}
+            x1={x1} y1={y} x2={x2} y2={y}
+            stroke="hsl(30,50%,60%)"
+            strokeWidth="2"
+            strokeDasharray="4 3"
+            opacity="0.45"
+          />
+        );
+      }
     });
   });
 

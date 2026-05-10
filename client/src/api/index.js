@@ -1,8 +1,5 @@
 /**
  * api/index.js
- *
- * Все API-вызовы приложения.
- * Использует ENDPOINTS для URL — никаких строк вручную.
  */
 
 import { http } from "@/api/client";
@@ -10,26 +7,19 @@ import { ENDPOINTS as EP } from "@/api/endpoints";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Преобразует строку ISO-даты "YYYY-MM-DD" или число года в PartialDateSchema.
- * Сервер ждёт { year, month, day } — не строку.
- */
 export function toPartialDate(value) {
   if (!value) return null;
-  if (typeof value === "object" && "year" in value) return value; // уже PartialDateSchema
+  // Пустая строка — не дата
+  if (typeof value === "string" && value.trim() === "") return null;
+  if (typeof value === "object" && "year" in value) return value;
   if (typeof value === "string" && value.includes("-")) {
     const [year, month, day] = value.split("-").map(Number);
     return { year: year || null, month: month || null, day: day || null };
   }
-  // просто год
   const year = Number(value);
   return isNaN(year) ? null : { year, month: null, day: null };
 }
 
-/**
- * Преобразует PartialDateSchema { year, month, day } в строку "YYYY-MM-DD"
- * для отображения в инпутах типа date.
- */
 export function fromPartialDate(pd) {
   if (!pd) return "";
   if (typeof pd === "string") return pd;
@@ -40,9 +30,6 @@ export function fromPartialDate(pd) {
   return `${year}-${mm}-${dd}`;
 }
 
-/**
- * Строит отображаемую строку даты из PartialDateSchema.
- */
 export function formatPartialDate(pd) {
   if (!pd) return null;
   if (typeof pd === "string") return pd;
@@ -81,28 +68,70 @@ export const familiesApi = {
 // ─── Persons ───────────────────────────────────────────────────────────────────
 
 /**
- * Нормализует данные персоны перед отправкой на сервер:
- * - строки дат → PartialDateSchema
- * - удаляет поля, которых нет в CreatePersonRequest / UpdatePersonRequest
+ * Whitelist допустимых полей для CREATE/UPDATE.
+ * Только то что принимает сервер в CreatePersonRequest / UpdatePersonRequest.
  */
+const PERSON_API_FIELDS = new Set([
+  "gender",
+  "family_id",
+  "first_name",
+  "last_name",
+  "birth_date",
+  "death_date",
+  "birth_date_raw",
+  "death_date_raw",
+]);
+
 function normalizePersonPayload(data) {
   const payload = {
-    gender: data.gender || "MALE",
-    family_id: data.family_id,
-    first_name: data.first_name || null,
-    last_name: data.last_name || null,
-    birth_date: toPartialDate(data.birth_date),
-    death_date: toPartialDate(data.death_date),
+    gender:         data.gender || "MALE",
+    family_id:      data.family_id,
+    first_name:     data.first_name || null,
+    last_name:      data.last_name  || null,
+    birth_date:     toPartialDate(data.birth_date),
+    death_date:     toPartialDate(data.death_date),
     birth_date_raw: data.birth_date_raw || null,
     death_date_raw: data.death_date_raw || null,
   };
-  // Убираем null-значения для чистоты
-  if (!payload.birth_date) delete payload.birth_date;
-  if (!payload.death_date) delete payload.death_date;
+
+  // Убираем null-значения
+  if (!payload.birth_date)     delete payload.birth_date;
+  if (!payload.death_date)     delete payload.death_date;
   if (!payload.birth_date_raw) delete payload.birth_date_raw;
   if (!payload.death_date_raw) delete payload.death_date_raw;
-  if (!payload.family_id) delete payload.family_id; // для patch/update
+  if (!payload.family_id)      delete payload.family_id;
+
   return payload;
+}
+
+/**
+ * FIX: PATCH использует whitelist вместо blacklist.
+ * Только поля из PERSON_API_FIELDS попадают в запрос.
+ * Это гарантирует что клиентские поля (is_alive, spouse_ids, child_ids и т.д.)
+ * никогда не попадут на сервер.
+ */
+function buildPatchPayload(data) {
+  const patch = {};
+
+  // Берём только разрешённые поля
+  for (const key of PERSON_API_FIELDS) {
+    if (!(key in data)) continue;
+    if (key === "family_id") continue; // никогда не патчим family_id
+
+    let value = data[key];
+
+    // Нормализуем даты
+    if (key === "birth_date" || key === "death_date") {
+      value = toPartialDate(value);
+      if (!value) continue; // не отправляем null даты в PATCH
+    }
+
+    if (value !== null && value !== undefined) {
+      patch[key] = value;
+    }
+  }
+
+  return patch;
 }
 
 export const personsApi = {
@@ -123,23 +152,14 @@ export const personsApi = {
   },
 
   update: (personId, data) => {
-    const { ...rest } = normalizePersonPayload(data);
-    return http.put(EP.persons.update(personId), rest).then((r) => r.data);
+    const payload = normalizePersonPayload(data);
+    delete payload.family_id;
+    return http.put(EP.persons.update(personId), payload).then((r) => r.data);
   },
 
+  // FIX: используем whitelist вместо удаления конкретных полей
   patch: (personId, data) => {
-    // PATCH — только присланные поля; нормализуем даты если переданы
-    const patch = { ...data };
-    if ("birth_date" in patch) patch.birth_date = toPartialDate(patch.birth_date);
-    if ("death_date" in patch) patch.death_date = toPartialDate(patch.death_date);
-    // Убираем клиентские поля, которых нет на сервере
-    delete patch.family_id;
-    delete patch.parent_ids;
-    delete patch.partner_id;
-    delete patch.generation;
-    delete patch.bio;
-    delete patch.birth_place;
-    delete patch.photo_url;
+    const patch = buildPatchPayload(data);
     return http.patch(EP.persons.patch(personId), patch).then((r) => r.data);
   },
 
@@ -171,11 +191,6 @@ export const relationsApi = {
 
 // ─── High-level helpers ────────────────────────────────────────────────────────
 
-/**
- * Загружает семью, персон и граф связей.
- * Возвращает enriched persons — nodes из графа с добавленными связями:
- *   parent_ids, child_ids, spouse_ids, generation
- */
 export async function loadFamilyTree(familyId) {
   const [family, personsPage, graph] = await Promise.all([
     familiesApi.get(familyId),
@@ -189,22 +204,14 @@ export async function loadFamilyTree(familyId) {
   return { family, persons: enriched, graph };
 }
 
-/**
- * Обогащает список персон данными из графа:
- * - parent_ids: [] — ID родителей
- * - child_ids: [] — ID детей
- * - spouse_ids: [] — ID супругов
- * - generation: number — вычисленное поколение (0 = корень)
- */
 export function enrichPersonsFromGraph(persons, graph) {
   if (!graph) return persons;
 
   const parentChildEdges = (graph.edges || []).filter((e) => e.type === "parent_child");
   const spouseEdges = (graph.edges || []).filter((e) => e.type === "spouse");
 
-  // Строим карты связей
-  const parentIds = {}; // childId → [parentId]
-  const childIds = {};  // parentId → [childId]
+  const parentIds = {};
+  const childIds = {};
   parentChildEdges.forEach(({ source_id, target_id }) => {
     if (!parentIds[target_id]) parentIds[target_id] = [];
     parentIds[target_id].push(source_id);
@@ -212,7 +219,7 @@ export function enrichPersonsFromGraph(persons, graph) {
     childIds[source_id].push(target_id);
   });
 
-  const spouseMap = {}; // personId → [spouseId]
+  const spouseMap = {};
   spouseEdges.forEach(({ source_id, target_id }) => {
     if (!spouseMap[source_id]) spouseMap[source_id] = [];
     spouseMap[source_id].push(target_id);
@@ -220,7 +227,6 @@ export function enrichPersonsFromGraph(persons, graph) {
     spouseMap[target_id].push(source_id);
   });
 
-  // Вычисляем поколения через BFS от корней
   const generations = computeGenerations(persons, parentChildEdges);
 
   return persons.map((p) => ({
@@ -228,7 +234,6 @@ export function enrichPersonsFromGraph(persons, graph) {
     parent_ids: parentIds[p.id] || [],
     child_ids: childIds[p.id] || [],
     spouse_ids: spouseMap[p.id] || [],
-    // Обратная совместимость: первый супруг как partner_id
     partner_id: (spouseMap[p.id] || [])[0] || null,
     generation: generations[p.id] ?? 0,
   }));
@@ -237,7 +242,6 @@ export function enrichPersonsFromGraph(persons, graph) {
 function computeGenerations(persons, parentChildEdges) {
   const generations = {};
 
-  // Корни — у которых нет родителей
   const hasParent = new Set(parentChildEdges.map((e) => e.target_id));
   const roots = persons.filter((p) => !hasParent.has(p.id));
 
@@ -260,7 +264,6 @@ function computeGenerations(persons, parentChildEdges) {
     });
   }
 
-  // Персоны без связей — gen 0
   persons.forEach((p) => {
     if (!(p.id in generations)) generations[p.id] = 0;
   });

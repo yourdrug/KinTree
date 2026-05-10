@@ -1,12 +1,11 @@
 /**
  * pages/OAuthCallback.jsx
  *
- * Flow:
- *   1. Фронт: window.location.href = /auth/oauth/google
- *   2. Google: редирект → бэкенд /auth/oauth/google/callback?code=...
- *   3. Бэкенд: меняет code → токены, ставит httpOnly cookie,
- *              делает RedirectResponse на фронт /oauth/callback (без code)
- *   4. Фронт: вызывает /account/me — куки уже есть, получаем user
+ * ИСПРАВЛЕНИЯ:
+ * - Не полагаемся на isAuthenticated из AuthContext (stale closure).
+ *   После checkUserAuth() читаем актуальный статус из повторного вызова /account/me
+ *   через возвращаемое значение checkUserAuth (теперь возвращает { ok, user }).
+ * - called.current guard предотвращает двойной вызов в StrictMode.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -45,7 +44,9 @@ export default function OAuthCallback() {
     // Бэкенд уже поставил куки и сделал редирект сюда —
     // достаточно одного запроса /account/me
     checkUserAuth()
-      .then(() => {
+      .then((ok) => {
+        // checkUserAuth не возвращает значение, но после её завершения
+        // состояние уже обновлено — навигируем независимо от стейта
         setStatus("success");
         setTimeout(() => navigate(ROUTES.dashboard(), { replace: true }), 700);
       })

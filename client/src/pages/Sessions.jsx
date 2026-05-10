@@ -1,11 +1,14 @@
 /**
  * pages/Sessions.jsx
  *
- * Изменения:
- *  - PageHeader вместо дублированной шапки
+ * ИСПРАВЛЕНИЕ:
+ * - useEffect([fetchSessions]) — fetchSessions из useSession() должен быть стабильным.
+ *   В AuthContext fetchSessions уже обёрнут в useCallback — это корректно.
+ *   Но если AuthContext пересоздаёт функцию — добавлен guard через useRef.
+ *   Теперь fetchSessions вызывается только при монтировании (один раз).
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Monitor, Smartphone, Globe,
@@ -144,7 +147,15 @@ export default function Sessions() {
   const { logoutAll } = useAuth();
   const { sessions, isLoadingSessions, sessionsError, fetchSessions, revokeSession } = useSession();
 
-  useEffect(() => { fetchSessions(); }, [fetchSessions]);
+  // FIX: fetchSessions вызываем один раз при монтировании через ref-guard.
+  // Это защищает от повторного вызова если AuthContext по какой-то причине
+  // пересоздаст fetchSessions (хотя с useCallback это не должно происходить).
+  const fetchedRef = useRef(false);
+  useEffect(() => {
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+    fetchSessions();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentSession = sessions.find((s) => s.is_current);
   const otherSessions  = sessions.filter((s) => !s.is_current);
@@ -164,7 +175,6 @@ export default function Sessions() {
           </p>
         </motion.div>
 
-        {/* Предупреждение при большом числе сессий */}
         {sessions.length > 2 && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -185,7 +195,6 @@ export default function Sessions() {
           </motion.div>
         )}
 
-        {/* Состояния загрузки / ошибки */}
         {isLoadingSessions && <SkeletonList />}
 
         {sessionsError && !isLoadingSessions && (
@@ -197,7 +206,6 @@ export default function Sessions() {
           </div>
         )}
 
-        {/* Список сессий */}
         {!isLoadingSessions && !sessionsError && (
           <div className="space-y-3">
             {currentSession && (
@@ -216,7 +224,6 @@ export default function Sessions() {
           </div>
         )}
 
-        {/* Кнопка «Выйти везде» */}
         {sessions.length > 0 && !isLoadingSessions && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}

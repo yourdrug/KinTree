@@ -1,16 +1,13 @@
 /**
  * components/tree/PersonSidebar.jsx
  *
- * Исправления:
- * - Использует только поля из PersonResponse: first_name, last_name, gender,
- *   birth_date (PartialDateSchema), death_date (PartialDateSchema), is_alive
- * - Убраны bio, birth_place, photo_url — их нет в API
- * - parent_ids, spouse_ids, child_ids берутся из enriched persons (из графа)
- * - Форматирование дат через formatPartialDate
+ * ИСПРАВЛЕНИЯ:
+ * 1. Возраст теперь вычисляется с учётом month/day из PartialDateSchema,
+ *    а не просто разностью годов. Для умерших — возраст на момент смерти.
+ * 2. Убраны неиспользуемые импорты (ChevronRight, AnimatePresence).
  */
 
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Edit, UserPlus, User, Calendar, Heart, ChevronRight } from "lucide-react";
+import { X, Edit, UserPlus, User, Calendar, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatPartialDate } from "@/api";
 
@@ -43,20 +40,48 @@ function getYear(pd) {
   return null;
 }
 
+function computeAge(birthDate, deathDate) {
+  if (!birthDate) return null;
+
+  const birthYear  = birthDate.year;
+  const birthMonth = birthDate.month || 1;
+  const birthDay   = birthDate.day   || 1;
+
+  if (!birthYear) return null;
+
+  let endYear, endMonth, endDay;
+
+  if (deathDate?.year) {
+    endYear  = deathDate.year;
+    endMonth = deathDate.month || 1;
+    endDay   = deathDate.day   || 1;
+  } else {
+    const now = new Date();
+    endYear  = now.getFullYear();
+    endMonth = now.getMonth() + 1;
+    endDay   = now.getDate();
+  }
+
+  let age = endYear - birthYear;
+  // Если день рождения в этом году ещё не наступил — вычитаем 1
+  if (endMonth < birthMonth || (endMonth === birthMonth && endDay < birthDay)) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
+}
+
 export default function PersonSidebar({
   person,
   members,
-  graph,
   onClose,
   canEdit,
   onEdit,
   onAddRelative,
   onDelete,
-  onRemoveRelation,
 }) {
   if (!person) return null;
 
-  // Используем enriched данные (parent_ids, spouse_ids, child_ids из графа)
   const parents  = (person.parent_ids  || []).map((id) => members.find((m) => m.id === id)).filter(Boolean);
   const children = (person.child_ids   || []).map((id) => members.find((m) => m.id === id)).filter(Boolean);
   const spouses  = (person.spouse_ids  || []).map((id) => members.find((m) => m.id === id)).filter(Boolean);
@@ -69,11 +94,12 @@ export default function PersonSidebar({
 
   const birthYear = getYear(person.birth_date);
   const deathYear = getYear(person.death_date);
-  const age = birthYear
-    ? deathYear
-      ? deathYear - birthYear
-      : new Date().getFullYear() - birthYear
-    : null;
+
+  // FIX: передаём объекты PartialDateSchema, не только год
+  const age = computeAge(
+    typeof person.birth_date === "object" ? person.birth_date : null,
+    typeof person.death_date === "object" ? person.death_date : null
+  );
 
   const genderLabel =
     person.gender === "MALE" ? "Мужской" :

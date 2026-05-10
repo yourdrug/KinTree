@@ -1,18 +1,17 @@
 /**
  * components/tree/AddPersonModal.jsx
  *
- * Модалка добавления / редактирования члена семьи.
- *
- * Исправления:
- * - Убраны поля bio, birth_place, photo_url, generation — их нет в API
- * - gender приведён к значениям сервера: MALE | FEMALE | OTHER
- * - birth_date / death_date хранятся как строки "YYYY-MM-DD" в форме,
- *   преобразование в PartialDateSchema происходит в personsApi
+ * ИСПРАВЛЕНИЯ:
+ * 1. handleSave: onClose() вызывался сразу после await onSave() — но если onSave
+ *    бросало ошибку, модалка всё равно закрывалась. Теперь onClose вызывается
+ *    только при успехе; при ошибке модалка остаётся открытой.
+ * 2. saving состояние корректно сбрасывается через finally.
+ * 3. canSave проверяет !saving явно.
  */
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, User } from "lucide-react";
+import { X } from "lucide-react";
 import { Button }   from "@/components/ui/button";
 import { Input }    from "@/components/ui/input";
 import { Label }    from "@/components/ui/label";
@@ -31,7 +30,6 @@ const RELATION_TYPES = [
   { value: "sibling", label: "Брат / Сестра" },
 ];
 
-// Значения совпадают с PersonGender на сервере
 const GENDERS = [
   { value: "MALE",   label: "Мужской" },
   { value: "FEMALE", label: "Женский" },
@@ -56,7 +54,6 @@ function formFromPerson(person) {
     last_name:  person.last_name   || "",
     birth_date: fromPartialDate(person.birth_date),
     death_date: fromPartialDate(person.death_date),
-    // Нормализуем gender — сервер может вернуть MALE/FEMALE/OTHER
     gender:     person.gender || "MALE",
   };
 }
@@ -88,12 +85,19 @@ export default function AddPersonModal({
 
   const setField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
+  // FIX: onClose вызывается только при успешном сохранении.
+  // При ошибке в onSave — модалка остаётся открытой, ошибка показывается в TreeView.
   const handleSave = async () => {
+    if (saving) return;
     setSaving(true);
-    // Передаём форму как есть — нормализация дат происходит в personsApi
-    await onSave(form, editPerson?.id, relationType, relativePerson);
-    setSaving(false);
-    onClose();
+    try {
+      await onSave(form, editPerson?.id, relationType, relativePerson);
+      onClose(); // закрываем только при успехе
+    } catch {
+      // Ошибка обрабатывается в TreeView через toast — здесь не закрываем
+    } finally {
+      setSaving(false);
+    }
   };
 
   const canSave = form.first_name?.trim() && form.last_name?.trim() && !saving;
@@ -107,7 +111,7 @@ export default function AddPersonModal({
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: "hsla(30,10%,15%,0.55)", backdropFilter: "blur(10px)" }}
-          onClick={(e) => e.target === e.currentTarget && onClose()}
+          onClick={(e) => e.target === e.currentTarget && !saving && onClose()}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.93, y: 24 }}
@@ -127,7 +131,7 @@ export default function AddPersonModal({
                     : "Добавить человека"
               }
               subtitle={!isEdit && relativePerson ? "Выберите тип связи" : undefined}
-              onClose={onClose}
+              onClose={saving ? undefined : onClose}
             />
 
             {/* Body */}
@@ -150,6 +154,7 @@ export default function AddPersonModal({
                     onChange={(e) => setField("first_name", e.target.value)}
                     placeholder="Иван"
                     className="rounded-xl"
+                    disabled={saving}
                   />
                 </FormField>
                 <FormField label="Фамилия *">
@@ -158,13 +163,14 @@ export default function AddPersonModal({
                     onChange={(e) => setField("last_name", e.target.value)}
                     placeholder="Иванов"
                     className="rounded-xl"
+                    disabled={saving}
                   />
                 </FormField>
               </div>
 
               {/* Пол */}
               <FormField label="Пол">
-                <Select value={form.gender} onValueChange={(v) => setField("gender", v)}>
+                <Select value={form.gender} onValueChange={(v) => setField("gender", v)} disabled={saving}>
                   <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {GENDERS.map((g) => (
@@ -182,6 +188,7 @@ export default function AddPersonModal({
                     value={form.birth_date}
                     onChange={(e) => setField("birth_date", e.target.value)}
                     className="rounded-xl"
+                    disabled={saving}
                   />
                 </FormField>
                 <FormField label="Дата смерти">
@@ -190,6 +197,7 @@ export default function AddPersonModal({
                     value={form.death_date}
                     onChange={(e) => setField("death_date", e.target.value)}
                     className="rounded-xl"
+                    disabled={saving}
                   />
                 </FormField>
               </div>
@@ -201,7 +209,12 @@ export default function AddPersonModal({
 
             {/* Footer */}
             <div className="flex gap-3 px-6 py-4" style={{ borderTop: "1px solid hsl(35,20%,90%)" }}>
-              <Button variant="outline" className="flex-1 rounded-xl" onClick={onClose}>
+              <Button
+                variant="outline"
+                className="flex-1 rounded-xl"
+                onClick={onClose}
+                disabled={saving}
+              >
                 Отмена
               </Button>
               <Button
@@ -231,12 +244,14 @@ function ModalHeader({ title, subtitle, onClose }) {
         <h2 className="font-serif text-xl font-semibold text-foreground">{title}</h2>
         {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
       </div>
-      <button
-        onClick={onClose}
-        className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted transition-colors"
-      >
-        <X className="w-4 h-4 text-muted-foreground" />
-      </button>
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted transition-colors"
+        >
+          <X className="w-4 h-4 text-muted-foreground" />
+        </button>
+      )}
     </div>
   );
 }
