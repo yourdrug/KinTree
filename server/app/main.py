@@ -37,6 +37,7 @@ from shared.domain.exceptions import ClientException, ServerException
 from shared.infrastructure.cache.redis_client import RedisClient
 from shared.infrastructure.db.database import database
 from shared.infrastructure.db.settings import settings
+from shared.infrastructure.delayed_tasks.apscheduler import scheduler
 from shared.infrastructure.logging.configuration import logging_config
 from shared.infrastructure.utils import Singleton
 
@@ -48,11 +49,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     """
 
     await database.connect()
+    await scheduler.startup()
     await RedisClient.init()
 
     yield  # приложение работает
 
     await RedisClient.close()
+    await scheduler.shutdown()
     await database.disconnect()
 
 

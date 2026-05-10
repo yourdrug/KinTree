@@ -12,7 +12,6 @@ from identity.application.email.commands import (
     ForgotPasswordCommand,
     VerifyEmailCommand,
 )
-from identity.application.password.commands import ResetPasswordCommand
 
 
 class VerifyEmailRequest(BaseModel):
@@ -31,13 +30,3 @@ class ForgotPasswordRequest(BaseModel):
 
     def to_command(self) -> ForgotPasswordCommand:
         return ForgotPasswordCommand(email=self.email)
-
-
-class ResetPasswordRequest(BaseModel):
-    """Установка нового пароля по токену из письма."""
-
-    token: str = Field(..., min_length=1, description="Токен из письма сброса пароля")
-    new_password: str = Field(..., min_length=8, max_length=128, examples=["NewStr0ngPass!"])
-
-    def to_command(self) -> ResetPasswordCommand:
-        return ResetPasswordCommand(token=self.token, new_password=self.new_password)

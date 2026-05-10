@@ -3,24 +3,17 @@ identity/api/routes/auth/oauth_routes.py
 
 OAuth роуты: Google (Authorization Code) + Telegram (Login Widget).
 
-Google flow:
-  GET /auth/oauth/google          → редирект на Google consent screen
-  GET /auth/oauth/google/callback → получить code, выдать TokenResponse
-
-Telegram flow:
-  GET /auth/oauth/telegram/callback → получить данные от Widget, выдать TokenResponse
-
 Cookie-версии:
   POST /auth/cookie/oauth/google/callback
   POST /auth/cookie/oauth/telegram/callback
-  → кладут токены в cookie, возвращают AccountResponse
+  → кладут токены в cookie, возвращают RedirectResponse на нужную страницу на клиенте
 """
 
 from __future__ import annotations
 
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import RedirectResponse
 from presentation.rest.cookies.auth_cookies import set_auth_cookies
 from presentation.rest.dependencies.request_meta import RequestMeta, get_request_meta
@@ -61,11 +54,10 @@ async def google_redirect() -> RedirectResponse:
 
 @router.get("/google/callback", status_code=status.HTTP_200_OK)
 async def google_callback_cookie(
-    response: Response,
     code: str = Query(..., description="Authorization code от Google"),
     meta: RequestMeta = Depends(get_request_meta),
     service: OAuthService = Depends(get_oauth_service),
-) -> dict[str, str]:
+) -> RedirectResponse:
     """
     Шаг 2: получить code от Google, обменять на токены.
 
@@ -78,13 +70,14 @@ async def google_callback_cookie(
         ip_address=meta.ip_address,
     )
     token_pair: TokenPair = await service.google_callback(command)
-    set_auth_cookies(response, token_pair.access_token, token_pair.refresh_token)
-    return {"detail": "ok"}
+
+    redirect = RedirectResponse(url=settings.FRONTEND_OAUTH_REDIRECT_URL, status_code=302)
+    set_auth_cookies(redirect, token_pair.access_token, token_pair.refresh_token)
+    return redirect
 
 
 @router.get("/cookie/telegram/callback", status_code=status.HTTP_200_OK)
 async def telegram_callback_cookie(
-    response: Response,
     id: str = Query(...),
     first_name: str = Query(...),
     auth_date: int = Query(...),
@@ -94,15 +87,14 @@ async def telegram_callback_cookie(
     photo_url: str | None = Query(default=None),
     meta: RequestMeta = Depends(get_request_meta),
     service: OAuthService = Depends(get_oauth_service),
-) -> dict[str, str]:
+) -> RedirectResponse:
     """
     Callback от Telegram Login Widget.
 
     Telegram редиректит пользователя сюда с GET-параметрами:
         id, first_name, last_name, username, photo_url, auth_date, hash
 
-    Мы верифицируем HMAC-подпись и выдаём наши токены.
-
+    Верифицируем HMAC-подпись и выдаём наши токены.
     """
     request_schema = TelegramCallbackRequest(
         id=id,
@@ -115,5 +107,6 @@ async def telegram_callback_cookie(
     )
     command: TelegramCallbackCommand = request_schema.to_command(meta)
     token_pair: TokenPair = await service.telegram_callback(command)
-    set_auth_cookies(response, token_pair.access_token, token_pair.refresh_token)
-    return {"detail": "ok"}
+    redirect = RedirectResponse(url=settings.FRONTEND_OAUTH_REDIRECT_URL, status_code=302)
+    set_auth_cookies(redirect, token_pair.access_token, token_pair.refresh_token)
+    return redirect

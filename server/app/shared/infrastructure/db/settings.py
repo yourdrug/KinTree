@@ -53,7 +53,9 @@ class Settings(BaseSettings):
 
     RESEND_API_KEY: str
     EMAIL_FROM: str
+
     FRONTEND_URL: str
+    FRONTEND_OAUTH_REDIRECT_URL: str
 
     SERVICE_START_DATETIME: AwareDatetime | None = Field(default=None)
 

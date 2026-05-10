@@ -7,7 +7,6 @@ Endpoints:
   POST /auth/verify-email          — подтвердить email по токену
   POST /auth/resend-verification   — повторно отправить письмо подтверждения
   POST /auth/forgot-password       — запросить сброс пароля (отправить письмо)
-  POST /auth/reset-password        — установить новый пароль по токену
 
 Принципы:
   - forgot-password всегда возвращает 204 — не раскрываем существование аккаунта.

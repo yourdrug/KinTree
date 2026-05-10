@@ -12,7 +12,8 @@ from presentation.rest.dependencies.auth import get_current_token_payload, get_r
 from presentation.rest.dependencies.request_meta import RequestMeta, get_request_meta
 from presentation.rest.dependencies.services import get_account_service, get_auth_service
 
-from identity.api.schemas.auth import AccountResponse, LoginRequest
+from identity.api.schemas.account import AccountResponse
+from identity.api.schemas.auth import LoginRequest
 from identity.application.account.service import AccountService
 from identity.application.auth.commands import LoginCommand, TokenPair
 from identity.application.auth.service import AuthService

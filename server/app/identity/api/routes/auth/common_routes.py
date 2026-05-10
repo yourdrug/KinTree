@@ -2,7 +2,8 @@ from fastapi import APIRouter, Body, Depends, status
 from presentation.rest.dependencies.auth import get_current_token_payload
 from presentation.rest.dependencies.services import get_auth_service, get_email_service
 
-from identity.api.schemas.auth import AccountResponse, RegisterRequest
+from identity.api.schemas.account import AccountResponse
+from identity.api.schemas.auth import RegisterRequest
 from identity.api.schemas.session import SessionResponse
 from identity.application.auth.commands import RegisterCommand
 from identity.application.auth.service import AuthService

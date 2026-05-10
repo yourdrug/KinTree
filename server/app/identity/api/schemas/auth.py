@@ -10,7 +10,6 @@ from presentation.rest.dependencies.request_meta import RequestMeta
 from pydantic import BaseModel, EmailStr, Field
 
 from identity.application.auth.commands import LoginCommand, RegisterCommand, TokenPair
-from identity.domain.entities.account import Account
 
 
 class RegisterRequest(BaseModel):
@@ -70,25 +69,3 @@ class RefreshRequest(BaseModel):
     """Схема для обновления refresh токена на bearer endpoint"""
 
     refresh_token: str = Field(..., min_length=1)
-
-
-class AccountResponse(BaseModel):
-    """Схема, которая возвращает данные аккаунта"""
-
-    id: str
-    email: str
-    is_verified: bool
-    is_acc_blocked: bool
-    role: str
-    permissions: list[str]
-
-    @classmethod
-    def from_domain(cls, account: Account) -> AccountResponse:
-        return cls(
-            id=account.id,
-            email=account.email_str,
-            is_verified=account.is_verified,
-            is_acc_blocked=account.is_acc_blocked,
-            role=account.role_name,
-            permissions=sorted(account.permissions),
-        )
