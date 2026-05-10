@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 
 const TOAST_LIMIT = 20;
-const TOAST_REMOVE_DELAY = 300; // время анимации исчезновения после dismiss
+const TOAST_REMOVE_DELAY = 400; // время анимации исчезновения после dismiss
 const TOAST_DURATION = 4000;    // сколько показывать тост
 
 const actionTypes = {
@@ -20,29 +20,17 @@ function genId() {
 }
 
 const toastTimeouts = new Map();
+const toastDismissTimers = new Map();
 
 const addToRemoveQueue = (toastId) => {
-  if (toastTimeouts.has(toastId)) {
-    return;
-  }
+  if (toastTimeouts.has(toastId)) return;
 
   const timeout = setTimeout(() => {
     toastTimeouts.delete(toastId);
-    dispatch({
-      type: actionTypes.REMOVE_TOAST,
-      toastId,
-    });
+    dispatch({ type: actionTypes.REMOVE_TOAST, toastId });
   }, TOAST_REMOVE_DELAY);
 
   toastTimeouts.set(toastId, timeout);
-};
-
-const _clearFromRemoveQueue = (toastId) => {
-  const timeout = toastTimeouts.get(toastId);
-  if (timeout) {
-    clearTimeout(timeout);
-    toastTimeouts.delete(toastId);
-  }
 };
 
 export const reducer = (state, action) => {
@@ -64,13 +52,21 @@ export const reducer = (state, action) => {
     case actionTypes.DISMISS_TOAST: {
       const { toastId } = action;
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
       if (toastId) {
         addToRemoveQueue(toastId);
+        const timer = toastDismissTimers.get(toastId);
+        if (timer) {
+          clearTimeout(timer);
+          toastDismissTimers.delete(toastId);
+        }
       } else {
         state.toasts.forEach((toast) => {
           addToRemoveQueue(toast.id);
+          const timer = toastDismissTimers.get(toast.id);
+          if (timer) {
+            clearTimeout(timer);
+            toastDismissTimers.delete(toast.id);
+          }
         });
       }
 
@@ -78,20 +74,15 @@ export const reducer = (state, action) => {
         ...state,
         toasts: state.toasts.map((t) =>
           t.id === toastId || toastId === undefined
-            ? {
-                ...t,
-                open: false,
-              }
+            ? { ...t, open: false }
             : t
         ),
       };
     }
+
     case actionTypes.REMOVE_TOAST:
       if (action.toastId === undefined) {
-        return {
-          ...state,
-          toasts: [],
-        };
+        return { ...state, toasts: [] };
       }
       return {
         ...state,
@@ -101,27 +92,21 @@ export const reducer = (state, action) => {
 };
 
 const listeners = [];
-
 let memoryState = { toasts: [] };
 
 function dispatch(action) {
   memoryState = reducer(memoryState, action);
-  listeners.forEach((listener) => {
-    listener(memoryState);
-  });
+  listeners.forEach((listener) => listener(memoryState));
 }
 
-function toast({ ...props }) {
+function toast({ duration = TOAST_DURATION, ...props }) {
   const id = genId();
-
-  const update = (props) =>
-    dispatch({
-      type: actionTypes.UPDATE_TOAST,
-      toast: { ...props, id },
-    });
 
   const dismiss = () =>
     dispatch({ type: actionTypes.DISMISS_TOAST, toastId: id });
+
+  const update = (props) =>
+    dispatch({ type: actionTypes.UPDATE_TOAST, toast: { ...props, id } });
 
   dispatch({
     type: actionTypes.ADD_TOAST,
@@ -135,14 +120,11 @@ function toast({ ...props }) {
     },
   });
 
-  // Автоматически скрываем через TOAST_DURATION
-  setTimeout(() => dismiss(), TOAST_DURATION);
+  // Автодисмисс
+  const timer = setTimeout(() => dismiss(), duration);
+  toastDismissTimers.set(id, timer);
 
-  return {
-    id,
-    dismiss,
-    update,
-  };
+  return { id, dismiss, update };
 }
 
 function useToast() {
@@ -152,9 +134,7 @@ function useToast() {
     listeners.push(setState);
     return () => {
       const index = listeners.indexOf(setState);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
+      if (index > -1) listeners.splice(index, 1);
     };
   }, [state]);
 
