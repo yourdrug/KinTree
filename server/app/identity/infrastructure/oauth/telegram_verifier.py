@@ -50,7 +50,7 @@ def verify_telegram_auth(
     username: str | None,
     photo_url: str | None,
     auth_date: int,
-    hash: str,
+    received_hash: str,
 ) -> TelegramUserInfo:
     """
     Верифицировать данные от Telegram Login Widget.
@@ -62,7 +62,7 @@ def verify_telegram_auth(
         username: Username (опционально)
         photo_url: Фото (опционально)
         auth_date: Unix timestamp авторизации
-        hash: HMAC подпись от Telegram
+        received_hash: HMAC подпись от Telegram
 
     Returns:
         TelegramUserInfo — верифицированные данные
@@ -97,7 +97,7 @@ def verify_telegram_auth(
     ).hexdigest()
 
     # 5. Сравнить в константное время (защита от timing attack)
-    if not hmac.compare_digest(expected_hash, hash):
+    if not hmac.compare_digest(expected_hash, received_hash):
         logger.warning("Telegram auth hash mismatch for telegram_id=%s", telegram_id)
         raise ValueError("Невалидная подпись Telegram")
 

@@ -1,24 +1,7 @@
 """
 identity/application/email/service.py
 
-EmailService — application-сервис подтверждения email и сброса пароля.
-
-Flows:
-
-  Подтверждение email:
-    1. register() → AuthService создаёт аккаунт → вызывает send_verification_email()
-    2. send_verification_email() → генерирует токен, сохраняет хэш, отправляет письмо
-    3. verify_email() → проверяет токен, ставит account.is_verified = True
-
-  Сброс пароля:
-    1. forgot_password() → находит аккаунт по email, отправляет письмо со ссылкой
-    2. reset_password() → проверяет токен, обновляет пароль аккаунта
-
-Безопасность:
-  - raw токен = secrets.token_urlsafe(32), хранится только SHA-256 хэш
-  - Перед выдачей нового токена аннулируются все предыдущие (invalidate_previous)
-  - forgot_password() не раскрывает, существует ли аккаунт (одинаковый ответ)
-  - Токены одноразовые (mark_used после валидации)
+EmailService — application-сервис подтверждения email и отправления писем.
 """
 
 from __future__ import annotations
@@ -27,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 import logging
 import secrets
 
-from shared.domain.exceptions import InvalidEmailTokenError
+from shared.domain.exceptions import AccountBlockedError, InvalidEmailTokenError
 from shared.infrastructure.db.settings import settings
 from shared.infrastructure.utils import hash_raw_str
 
@@ -44,7 +27,8 @@ from identity.infrastructure.email.templates import reset_password_html, verify_
 from identity.infrastructure.uow_factory import IdentityUoWFactory
 
 
-logger = logging.getLogger("default")
+logger = logging.getLogger(__name__)
+
 
 # TTL для токенов
 _VERIFY_EMAIL_TTL_MINUTES = 60
@@ -75,14 +59,30 @@ class EmailService:
         Аннулирует предыдущие токены верификации для этого аккаунта.
         """
 
-        expires_at = datetime.now(tz=UTC) + timedelta(minutes=_VERIFY_EMAIL_TTL_MINUTES)
+        async with self._uow_factory.create(master=True) as uow:
+            account: Account = await uow.accounts.get_by_id(account_id=command.account_id)
 
-        raw_token = await self._generate_email_token(
-            account_id=command.account_id,
-            token_type=EmailTokenType.VERIFY_EMAIL,
-            expires_at=expires_at,
-        )
-        verify_url = f"{settings.FRONTEND_URL}/verify-email?token={raw_token}"
+            if account.is_acc_blocked:
+                raise AccountBlockedError()
+
+            raw_token = secrets.token_urlsafe(32)
+            token_hash = hash_raw_str(raw_token)
+
+            expires_at = datetime.now(tz=UTC) + timedelta(minutes=_VERIFY_EMAIL_TTL_MINUTES)
+            email_token = create_email_token(
+                account_id=command.account_id,
+                token_hash=token_hash,
+                token_type=EmailTokenType.VERIFY_EMAIL,
+                expires_at=expires_at,
+            )
+
+            await uow.email_tokens.invalidate_previous(
+                account_id=command.account_id,
+                token_type=EmailTokenType.VERIFY_EMAIL,
+            )
+            await uow.email_tokens.create(email_token)
+
+        verify_url = f"{settings.FRONTEND_VERIFY_EMAIL_URL}?token={raw_token}"
         html = verify_email_html(verify_url=verify_url, expires_minutes=_VERIFY_EMAIL_TTL_MINUTES)
 
         await self._sender.send(
@@ -106,6 +106,7 @@ class EmailService:
                 token_hash=token_hash,
                 token_type=EmailTokenType.VERIFY_EMAIL,
             )
+
             if email_token is None:
                 raise InvalidEmailTokenError()
 
@@ -130,42 +131,24 @@ class EmailService:
         async with self._uow_factory.create(master=True) as uow:
             account: Account | None = await uow.accounts.get_by_email(command.email)
 
-        if account is None:
-            return
+            if account is None:
+                return
 
-        expires_at = datetime.now(tz=UTC) + timedelta(minutes=_RESET_PASSWORD_TTL_MINUTES)
-        raw_token = await self._generate_email_token(
-            account_id=account.id,
-            token_type=EmailTokenType.RESET_PASSWORD,
-            expires_at=expires_at,
-        )
+            expires_at = datetime.now(tz=UTC) + timedelta(minutes=_RESET_PASSWORD_TTL_MINUTES)
+            raw_token = secrets.token_urlsafe(32)
+            token_hash = hash_raw_str(raw_token)
 
-        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={raw_token}"
-        html = reset_password_html(reset_url=reset_url, expires_minutes=_RESET_PASSWORD_TTL_MINUTES)
-
-        await self._sender.send(
-            to=command.email,
-            subject="Сброс пароля — KinTree",
-            html=html,
-        )
-        logger.info("Password reset email sent to account_id=%s", account.id)
-
-    async def _generate_email_token(self, account_id: str, token_type: EmailTokenType, expires_at: datetime) -> str:
-        raw_token: str = secrets.token_urlsafe(32)
-        token_hash: str = hash_raw_str(raw_token)
-
-        email_token = create_email_token(
-            account_id=account_id,
-            token_hash=token_hash,
-            token_type=token_type,
-            expires_at=expires_at,
-        )
-
-        async with self._uow_factory.create(master=True) as uow:
-            await uow.email_tokens.invalidate_previous(
-                account_id=account_id,
-                token_type=token_type,
+            email_token = create_email_token(
+                account_id=account.id,
+                token_hash=token_hash,
+                token_type=EmailTokenType.RESET_PASSWORD,
+                expires_at=expires_at,
             )
+            await uow.email_tokens.invalidate_previous(account.id, EmailTokenType.RESET_PASSWORD)
             await uow.email_tokens.create(email_token)
 
-        return raw_token
+        # Письмо — вне транзакции (не блокируем коммит IO)
+        reset_url = f"{settings.FRONTEND_RESET_URL}?token={raw_token}"
+        html = reset_password_html(reset_url=reset_url, expires_minutes=_RESET_PASSWORD_TTL_MINUTES)
+        await self._sender.send(to=command.email, subject="Сброс пароля — KinTree", html=html)
+        logger.info("Password reset email sent to account_id=%s", account.id)

@@ -1,5 +1,14 @@
+"""
+identity/api/routes/common_routes.py
+
+Базовые методы для всех видов авторизации.
+"""
+
 from fastapi import APIRouter, Body, Depends, status
-from presentation.rest.dependencies.auth import get_current_token_payload
+from presentation.rest.dependencies.auth import (
+    get_current_token_payload,
+    get_current_token_payload_verified,
+)
 from presentation.rest.dependencies.services import get_auth_service, get_email_service
 
 from identity.api.schemas.account import AccountResponse
@@ -24,6 +33,7 @@ async def register(
     email_service: EmailService = Depends(get_email_service),
 ) -> AccountResponse:
     """Регистрация нового пользователя"""
+
     command: RegisterCommand = payload.to_command()
     account: Account = await service.register(command=command)
 
@@ -39,14 +49,14 @@ async def register(
 
 @router.get("/sessions", status_code=status.HTTP_200_OK)
 async def get_all_accounts_sessions(
-    token_payload: AccessTokenPayload = Depends(get_current_token_payload),
+    payload: AccessTokenPayload = Depends(get_current_token_payload_verified),
     service: AuthService = Depends(get_auth_service),
 ) -> list[SessionResponse]:
     """Получение всех сессий для определенного аккаунта."""
 
-    sessions: list[RefreshToken] = await service.get_sessions(token_payload.account_id)
+    sessions: list[RefreshToken] = await service.get_sessions(payload.account_id)
 
-    return [SessionResponse.from_domain(session=session, token_payload=token_payload) for session in sessions]
+    return [SessionResponse.from_domain(session=session, token_payload=payload) for session in sessions]
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

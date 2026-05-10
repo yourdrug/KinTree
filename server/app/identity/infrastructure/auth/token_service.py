@@ -95,6 +95,29 @@ class JWTTokenService:
             session_id=payload.get("sid", ""),
         )
 
+    def decode_access_token_unverified(self, token: str) -> AccessTokenPayload:
+        """Декодирует payload без проверки exp. Только для logout."""
+        try:
+            payload = jwt.decode(
+                token,
+                self._secret,
+                algorithms=["HS256"],
+                options={"verify_exp": False},  # игнорируем истечение
+            )
+        except (DecodeError, InvalidTokenError) as exc:
+            raise AuthenticationError(
+                message="Недействительный токен",
+                errors={"token": "invalid"},
+            ) from exc
+
+        return AccessTokenPayload(
+            account_id=payload["sub"],
+            email=payload.get("email", ""),
+            role=payload.get("role", ""),
+            jti=payload.get("jti", ""),
+            session_id=payload.get("sid", ""),
+        )
+
     def decode_refresh_token(self, token: str) -> dict:
         payload = self._decode(token)
         if payload.get("type") != _REFRESH_TYPE:

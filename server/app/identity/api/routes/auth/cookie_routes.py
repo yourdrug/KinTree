@@ -6,9 +6,9 @@ Cookie-based аутентификация.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
-from presentation.rest.cookies.auth_cookies import clear_auth_cookies, get_refresh_token, set_auth_cookies
-from presentation.rest.dependencies.auth import get_current_token_payload, get_raw_access_token
+from fastapi import APIRouter, Body, Depends, Response, status
+from presentation.rest.cookies.auth_cookies import clear_auth_cookies, set_auth_cookies
+from presentation.rest.dependencies.auth import get_current_token_payload, get_raw_access_token, get_raw_refresh_token
 from presentation.rest.dependencies.request_meta import RequestMeta, get_request_meta
 from presentation.rest.dependencies.services import get_account_service, get_auth_service
 
@@ -39,6 +39,7 @@ async def cookie_login(
 
     При успешной авторизации в cookie кладутся токены для удобной работы на клиенте
     """
+
     command: LoginCommand = payload.to_command(meta=meta)
     token_pair: TokenPair = await auth_service.login(command=command)
 
@@ -52,21 +53,13 @@ async def cookie_login(
 
 @router.post("/refresh", status_code=status.HTTP_200_OK)
 async def cookie_refresh(
-    request: Request,
     response: Response,
+    raw_token: str = Depends(get_raw_refresh_token),
     service: AuthService = Depends(get_auth_service),
 ) -> dict:
     """Обновление refresh_token в cookie"""
 
-    refresh_token: str | None = get_refresh_token(request=request)
-
-    if not refresh_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Отсутствует refresh_token в cookies",
-        )
-
-    token_pair: TokenPair = await service.refresh(refresh_token)
+    token_pair: TokenPair = await service.refresh(raw_token)
     set_auth_cookies(response, token_pair.access_token, token_pair.refresh_token)
 
     return {"detail": "refresh_token обновлен."}
@@ -76,15 +69,11 @@ async def cookie_refresh(
 async def cookie_logout(
     response: Response,
     raw_token: str = Depends(get_raw_access_token),
-    token_payload: AccessTokenPayload = Depends(get_current_token_payload),
     service: AuthService = Depends(get_auth_service),
 ) -> None:
     """Logout из текущей сессии."""
 
-    await service.logout(
-        session_id=token_payload.session_id,
-        access_token=raw_token,
-    )
+    await service.logout(raw_token=raw_token)
     clear_auth_cookies(response=response)
 
 

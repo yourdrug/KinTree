@@ -70,14 +70,16 @@ class IdentityUoW:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
-        with suppress(Exception):
+        try:
             if exc_type is None:
                 await self._session.commit()
             else:
+                with suppress(Exception):
+                    await self._session.rollback()
+        except DBAPIError as e:
+            with suppress(Exception):
                 await self._session.rollback()
-
-        with suppress(Exception):
-            await self._session.close()
-
-        if exc_type is not None and issubclass(exc_type, DBAPIError):
-            raise DatabaseError(detail=str(exc_val)) from exc_val
+            raise DatabaseError(detail=str(e)) from e
+        finally:
+            with suppress(Exception):
+                await self._session.close()

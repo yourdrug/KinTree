@@ -29,12 +29,12 @@ def set_auth_cookies(response: Response, access_token: str, refresh_token: str) 
 
 
 def get_refresh_token(request: Request) -> str | None:
-    refresh_token: str = request.cookies.get(_COOKIE_REFRESH)
+    refresh_token: str | None = request.cookies.get(_COOKIE_REFRESH)
     return refresh_token
 
 
 def get_access_token(request: Request) -> str | None:
-    access_token: str = request.cookies.get(_COOKIE_ACCESS)
+    access_token: str | None = request.cookies.get(_COOKIE_ACCESS)
     return access_token
 
 

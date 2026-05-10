@@ -25,7 +25,7 @@ class AccountRole:
 
     id: str
     account_id: str
-    role_id: str
+    role_id: str  # TODO переделать на текст, а проверять наличие уже перед сохранением в бд
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, AccountRole):

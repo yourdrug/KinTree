@@ -14,7 +14,7 @@ from identity.domain.ports.token_service import AccessTokenPayload, ITokenServic
 from identity.infrastructure.auth.blacklist_service import is_blacklisted, is_session_blacklisted
 from shared.domain.exceptions import AuthenticationError
 
-from presentation.rest.cookies.auth_cookies import get_access_token
+from presentation.rest.cookies.auth_cookies import get_access_token, get_refresh_token
 from presentation.rest.dependencies.services import bearer, get_account_service, get_token_service_dep
 
 
@@ -36,39 +36,62 @@ async def get_raw_access_token(
     """
     Dependency: сырая строка access token (cookie или Bearer).
 
-    Нужна для logout/logout-all где токен надо передать в blacklist.
-    Не валидирует подпись — только извлекает строку.
-    Бросает AuthenticationError если токен отсутствует.
+    Raises
+        AuthenticationError если токен отсутствует.
     """
     token = extract_token(request, credentials)
 
     if not token:
-        raise AuthenticationError(message="Not authenticated")
+        raise AuthenticationError(message="Не авторизован.")
 
     return token
 
 
-async def get_current_account_id(
+async def get_raw_refresh_token(request: Request) -> str:
+    """
+    Dependency: сырая строка refresh token из cookie.
+    """
+
+    token = get_refresh_token(request=request)
+
+    if not token:
+        raise AuthenticationError(message="Refresh token не передан.")
+
+    return token
+
+
+async def get_current_token_payload(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
     token_service: ITokenService = Depends(get_token_service_dep),
-) -> str:
+) -> AccessTokenPayload:
     """
-    Dependency: account_id из валидного, не отозванного access_token.
+    Dependency: полный payload access token как typed VO.
 
     Работает одинаково для cookie и Bearer авторизации.
-
-    Проверки:
-      1. Токен присутствует (cookie или Authorization header)
-      2. Подпись и TTL валидны (decode_access_token)
-      3. jti не в Redis blacklist (fail-open при недоступности Redis)
     """
     token = extract_token(request, credentials)
 
     if not token:
         raise AuthenticationError(message="Not authenticated")
 
-    payload: AccessTokenPayload = token_service.decode_access_token(token)
+    return token_service.decode_access_token(token)
+
+
+async def get_current_token_payload_verified(
+    payload: AccessTokenPayload = Depends(get_current_token_payload),
+) -> AccessTokenPayload:
+    """
+    Dependency: полный payload access token как typed VO.
+
+    Работает одинаково для cookie и Bearer авторизации.
+
+    Проверки:
+        1. Токен присутствует (cookie или Authorization header)
+        2. Подпись и TTL валидны (decode_access_token)
+        3. jti не в Redis blacklist (fail-open при недоступности Redis)
+
+    """
 
     if payload.jti and await is_blacklisted(payload.jti):
         raise AuthenticationError(
@@ -82,27 +105,19 @@ async def get_current_account_id(
             errors={"token": "session_revoked"},
         )
 
-    return payload.account_id
+    return payload
 
 
-async def get_current_token_payload(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
-    token_service: ITokenService = Depends(get_token_service_dep),
-) -> AccessTokenPayload:
+async def get_current_account_id(
+    payload: AccessTokenPayload = Depends(get_current_token_payload_verified),
+) -> str:
     """
-    Dependency: полный payload access token как typed VO.
+    Dependency: account_id из валидного, не отозванного access_token.
 
     Работает одинаково для cookie и Bearer авторизации.
-    Нужен в logout для извлечения jti и session_id и в revoke session.
-    Не проверяет blacklist — это намеренно, logout сам кладёт в blacklist.
     """
-    token = extract_token(request, credentials)
 
-    if not token:
-        raise AuthenticationError(message="Not authenticated")
-
-    return token_service.decode_access_token(token)
+    return payload.account_id
 
 
 async def get_current_account(
@@ -114,25 +129,4 @@ async def get_current_account(
     Бросает AuthenticationError если токен невалиден или в blacklist.
     Бросает NotFoundError если аккаунт не найден (аномалия).
     """
-    return await service.get_account(account_id)
-
-
-async def get_optional_account(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
-    service: AccountService = Depends(get_account_service),
-    token_service: ITokenService = Depends(get_token_service_dep),
-) -> Account | None:
-    """
-    Dependency: необязательная аутентификация.
-    None для гостей, Account для аутентифицированных.
-    Blacklist не проверяется — оптимизация для публичных эндпоинтов.
-    """
-    token = extract_token(request, credentials)
-    if not token:
-        return None
-
-    payload = token_service.decode_access_token(token)
-    account_id: str = payload.account_id
-
     return await service.get_account(account_id)

@@ -82,7 +82,7 @@ class OAuthService:
             username=command.username,
             photo_url=command.photo_url,
             auth_date=command.auth_date,
-            hash=command.hash,
+            received_hash=command.hash,
         )
 
         # Telegram может не давать email.
@@ -163,9 +163,6 @@ class OAuthService:
                     provider_user_id=provider_user_id,
                 )
                 await uow.oauth_accounts.create(new_oauth)
-
-                # Загрузить аккаунт с пермишенами
-                account = await uow.accounts.get_by_id(account.id)
 
             # 2. Создать сессию и выдать токены
             session_id: str = self._tokens.generate_session_id_hex()

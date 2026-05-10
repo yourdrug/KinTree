@@ -64,8 +64,8 @@ class PasswordService:
             active_sessions = await uow.refresh_tokens.get_active_by_account(account.id)
             await uow.refresh_tokens.revoke_all_by_account(account.id)
 
-        for session in active_sessions:
-            await blacklist_session(session.session_id, ttl)
+            for session in active_sessions:
+                await blacklist_session(session.session_id, ttl)
 
         logger.info("Password reset completed for account_id=%s", email_token.account_id)
 

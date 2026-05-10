@@ -56,6 +56,15 @@ class ITokenService(Protocol):
         """
         ...
 
+    def decode_access_token_unverified(self, token: str) -> AccessTokenPayload:
+        """
+        Декодирует payload без проверки exp. Только для logout.
+
+        Raises:
+            AuthenticationError — если токен невалиден (истечение тут не проверяется)
+        """
+        ...
+
     def decode_refresh_token(self, token: str) -> dict:
         """
         Декодирует и валидирует refresh token.

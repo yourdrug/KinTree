@@ -61,7 +61,9 @@ class Account:
 
     @property
     def hashed_password_str(self) -> str | None:
-        return str(self.hashed_password) if self.hashed_password else None
+        if self.hashed_password is None or self.hashed_password.value is None:
+            return None
+        return str(self.hashed_password)
 
 
 def create_account(email: Email, hashed_password: HashedPassword | None) -> Account:

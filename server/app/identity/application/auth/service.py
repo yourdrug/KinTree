@@ -2,10 +2,6 @@
 identity/application/auth/service.py
 
 AuthService — application-сервис аутентификации.
-
-DIP (Dependency Inversion Principle):
-  AuthService зависит от портов IPasswordHasher и ITokenService.
-  Конкретные реализации (bcrypt, PyJWT) передаются через конструктор.
 """
 
 from __future__ import annotations
@@ -52,7 +48,7 @@ class AuthService:
 
         hashed = HashedPassword(value=self._hasher.hash(command.password))
 
-        async with self._uow_factory.create() as uow:
+        async with self._uow_factory.create(master=True) as uow:
             existing: Account | None = await uow.accounts.get_by_email(email.value)
 
             if existing is not None:
@@ -79,7 +75,7 @@ class AuthService:
     async def login(self, command: LoginCommand) -> TokenPair:
         email = Email.create(command.email)
 
-        async with self._uow_factory.create() as uow:
+        async with self._uow_factory.create(master=True) as uow:
             account: Account | None = await uow.accounts.get_by_email(email.value)
 
             if account is None or not self._hasher.verify(command.password, str(account.hashed_password)):
@@ -124,7 +120,7 @@ class AuthService:
         account_id: str = payload.get("sub", "")
         raw_jti: str = payload.get("jti", "")
 
-        async with self._uow_factory.create() as uow:
+        async with self._uow_factory.create(master=True) as uow:
             refresh_token: RefreshToken | None = await uow.refresh_tokens.get_by_session_id(session_id)
 
             if refresh_token is None:
@@ -156,6 +152,10 @@ class AuthService:
             await uow.refresh_tokens.revoke_by_session_id(session_id)
 
             account: Account = await uow.accounts.get_by_id(account_id)
+
+            if account.is_acc_blocked:
+                raise AccountBlockedError()
+
             new_token_pair: CreatedTokenPair = self._tokens.create_token_pair(
                 account_id=account_id,
                 email=account.email_str,
@@ -180,25 +180,20 @@ class AuthService:
             permissions=sorted(account.permissions),
         )
 
-    async def logout(
-        self,
-        session_id: str | None,
-        access_token: str | None = None,
-    ) -> None:
-        """
-        Logout из текущей сессии.
+    async def logout(self, raw_token: str) -> None:
+        """Logout из текущей сессии."""
 
-        access_token передаётся вместо payload — сервис сам вычисляет TTL.
-        session_id=None допустим (только blacklist без revoke refresh).
-        """
-        if access_token:
-            payload: AccessTokenPayload = self._tokens.decode_access_token(access_token)
-            ttl: int = self._tokens.get_access_token_ttl(access_token)
-            await blacklist_token(payload.jti, ttl)
+        try:
+            payload: AccessTokenPayload = self._tokens.decode_access_token_unverified(raw_token)
+        except AuthenticationError:
+            # Токен вообще невалиден (испорчен, не наш) — ничего не делаем
+            return
 
-        if session_id is not None:
-            async with self._uow_factory.create() as uow:
-                await uow.refresh_tokens.revoke_by_session_id(session_id)
+        ttl: int = self._tokens.get_access_token_ttl(raw_token)
+        await blacklist_token(payload.jti, ttl)
+
+        async with self._uow_factory.create(master=True) as uow:
+            await uow.refresh_tokens.revoke_by_session_id(payload.session_id)
 
     async def logout_all(
         self,

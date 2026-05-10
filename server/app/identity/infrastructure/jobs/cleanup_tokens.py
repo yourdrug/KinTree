@@ -20,7 +20,7 @@ async def cleanup_expired_refresh_tokens() -> None:
     """Удаляет истёкшие записи из refresh_tokens."""
     uow_factory: IdentityUoWFactory = IdentityUoWFactory(database=database)
 
-    async with uow_factory.create() as uow:
+    async with uow_factory.create(master=True) as uow:
         deleted = await uow.refresh_tokens.delete_expired()
 
     if deleted:
