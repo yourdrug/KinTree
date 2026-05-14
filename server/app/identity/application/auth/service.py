@@ -57,7 +57,7 @@ class AuthService:
                 )
 
             account: Account = create_account(email=email, hashed_password=hashed)
-            role: Role | None = await uow.roles.get_by_name(name=account.role_name)
+            role: Role | None = await uow.roles.get_by_name_with_permissions(name=account.role_name)
 
             if role is None:
                 raise RoleDomainError(
@@ -65,12 +65,14 @@ class AuthService:
                 )
 
             account_role: AccountRole = create_account_role(account_id=account.id, role_id=role.id)
-            await uow.accounts.save(account=account)
+            saved: Account = await uow.accounts.save(account=account)
             await uow.account_roles.assign_role(account_role=account_role)
 
-            account_with_permissions: Account = await uow.accounts.get_by_id(account.id)
-
-            return account_with_permissions
+            return Account(
+                **saved.__dict__,
+                permissions=role.codenames,
+                role_name=account.role_name,
+            )
 
     async def login(self, command: LoginCommand) -> TokenPair:
         email = Email.create(command.email)
@@ -202,19 +204,19 @@ class AuthService:
         """Logout со всех устройств. Revoke всех refresh tokens аккаунта."""
         ttl = settings.JWT_TOKEN_ACCESS_LIFETIME_MINUTES * 60
 
-        async with self._uow_factory.create() as uow:
+        async with self._uow_factory.create(master=True) as uow:
             active_sessions: list[RefreshToken] = await uow.refresh_tokens.get_active_by_account(account_id)
             await uow.refresh_tokens.revoke_all_by_account(account_id)
 
-        for session in active_sessions:
-            await blacklist_session(session.session_id, ttl)
+            for session in active_sessions:
+                await blacklist_session(session.session_id, ttl)
 
     async def get_sessions(self, account_id: str) -> list[RefreshToken]:
         async with self._uow_factory.create(master=False) as uow:
             return await uow.refresh_tokens.get_active_by_account(account_id)
 
     async def revoke_session(self, account_id: str, session_id: str) -> None:
-        async with self._uow_factory.create() as uow:
+        async with self._uow_factory.create(master=True) as uow:
             refresh_token: RefreshToken | None = await uow.refresh_tokens.get_by_session_id(session_id)
 
             if refresh_token is None or refresh_token.account_id != account_id:

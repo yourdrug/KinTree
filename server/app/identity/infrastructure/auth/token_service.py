@@ -13,7 +13,7 @@ Adapter: реализация ITokenService через PyJWT + secrets.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 import hashlib
 import secrets
 
@@ -44,7 +44,7 @@ class JWTTokenService:
         role: str,
         session_id: str,
     ) -> CreatedTokenPair:
-        now = datetime.now(tz=settings.tz)
+        now = datetime.now(tz=UTC)
 
         # Access token
         access_jti = self.generate_access_hex()
@@ -136,7 +136,7 @@ class JWTTokenService:
             payload = self._decode(token)
         except AuthenticationError:
             return 0
-        now = int(datetime.now(tz=settings.tz).timestamp())
+        now = int(datetime.now(tz=UTC).timestamp())
         return max(payload.get("exp", now) - now, 0)
 
     def generate_access_hex(self) -> str:

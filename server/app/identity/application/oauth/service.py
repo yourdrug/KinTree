@@ -108,7 +108,7 @@ class OAuthService:
         """
         Общая логика: найти или создать аккаунт, выдать токены.
         """
-        async with self._uow_factory.create() as uow:
+        async with self._uow_factory.create(master=True) as uow:
             # 1. Ищем существующую OAuth-привязку
             oauth_account: OAuthAccount | None = await uow.oauth_accounts.get_by_provider(
                 provider=provider,
@@ -135,7 +135,7 @@ class OAuthService:
                         )
 
                 # Регистрация нового аккаунта
-                validated_email = Email.create(email)
+                validated_email = Email(value=email)
 
                 account = create_account(
                     email=validated_email,

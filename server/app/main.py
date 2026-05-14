@@ -22,6 +22,7 @@ from identity.api.routes.auth import (
     cookie_routes as auth_cookie_routes,
 )
 from identity.api.routes.auth import oauth_routes
+from identity.infrastructure.permissions.startup_sync import sync_permissions
 from presentation.cli.cli import cli
 from presentation.rest.api import internal_routes
 from presentation.rest.api.openapi import ApplicationOpenAPIDescription
@@ -51,6 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     await database.connect()
     await scheduler.startup()
     await RedisClient.init()
+    await sync_permissions()
 
     yield  # приложение работает
 

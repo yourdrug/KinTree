@@ -7,11 +7,7 @@ identity/domain/services/permission_sync.py
 from __future__ import annotations
 
 from identity.domain.entities.permission import Permission, Role, create_permission, create_role
-from identity.domain.permissions.constants import (
-    PERMISSION_DESCRIPTIONS,
-    ROLE_DESCRIPTIONS,
-    ROLE_PERMISSIONS,
-)
+from identity.domain.permissions.constants import ROLE_PERMISSIONS
 from identity.domain.permissions.enums import PermissionCodename, RoleName
 
 
@@ -23,7 +19,7 @@ class PermissionSyncService:
         return [
             create_permission(
                 codename=perm.value,
-                description=PERMISSION_DESCRIPTIONS.get(perm, ""),
+                description=perm.description,
             )
             for perm in PermissionCodename
         ]
@@ -33,20 +29,16 @@ class PermissionSyncService:
         return [
             create_role(
                 name=role.value,
-                description=ROLE_DESCRIPTIONS.get(role, ""),
+                description=role.description,
             )
             for role in RoleName
         ]
 
-    def get_role_permission_codenames(self, role_name: str) -> list[str]:
+    def get_role_permission_codenames(self, role: Role) -> list[str]:
         """
         Возвращает список codename пермишенов для роли.
 
         Возвращает [] если роль не найдена в словаре.
         """
-        try:
-            role_enum = RoleName(role_name)
-        except ValueError:
-            return []
-
-        return [p.value for p in ROLE_PERMISSIONS.get(role_enum, [])]
+        role_name: RoleName = RoleName.get_by_name(name=role.name)
+        return [p.value for p in ROLE_PERMISSIONS.get(role_name, [])]

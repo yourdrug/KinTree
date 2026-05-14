@@ -20,6 +20,7 @@ from shared.domain.exceptions import DomainValidationError
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
 _MAX_LENGTH = 254  # RFC 5321
+_RESERVED_DOMAINS = {"telegram.oauth", "oauth.internal"}
 
 
 @dataclass(frozen=True)
@@ -49,7 +50,12 @@ class Email:
         Raises:
             DomainValidationError — если формат невалиден.
         """
-        return cls(value=raw.strip().lower())
+        normalized = raw.strip().lower()
+        domain = normalized.split("@")[-1] if "@" in normalized else ""
+
+        if domain in _RESERVED_DOMAINS:
+            raise DomainValidationError(field="email", message="Зарезервированный домен")
+        return cls(value=normalized)
 
     def __str__(self) -> str:
         return self.value

@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from enum import StrEnum
 
+from shared.domain.exceptions import DomainValidationError
+
 
 class PermissionCodename(StrEnum):
     """
@@ -71,15 +73,26 @@ class RoleName(StrEnum):
     Новые роли добавляются через Alembic-миграцию.
     """
 
-    description: str | None
+    GUEST = "guest"
+    USER = "user"
+    MODERATOR = "moderator"
+    ADMIN = "admin"
 
-    def __new__(cls, value: str, description: str | None = None) -> RoleName:
-        obj = str.__new__(cls, value)
-        obj._value_ = value
-        obj.description = description
-        return obj
+    @property
+    def description(self) -> str:
+        return {
+            RoleName.GUEST: "Только чтение публичных данных",
+            RoleName.USER: "Базовые операции со своими данными",
+            RoleName.MODERATOR: "Расширенные права на управление контентом",
+            RoleName.ADMIN: "Полные права",
+        }[self]
 
-    GUEST = ("guest", "Только чтение публичных данных")
-    USER = ("user", "Базовые операции со своими данными")
-    MODERATOR = ("moderator", "Расширенные права на управление контентом")
-    ADMIN = ("admin", "Полные права")
+    @classmethod
+    def get_by_name(cls, name: str) -> RoleName:
+        try:
+            return cls(name)
+        except ValueError as e:
+            raise DomainValidationError(
+                message="Не найдена такая роль",
+                field="name",
+            ) from e

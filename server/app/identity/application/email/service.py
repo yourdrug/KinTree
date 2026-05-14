@@ -112,6 +112,9 @@ class EmailService:
 
             account = await uow.accounts.get_by_id(email_token.account_id)
 
+            if account.is_acc_blocked:
+                raise AccountBlockedError()
+
             # Идемпотентно: уже подтверждён → просто отметить токен использованным
             if not account.is_verified:
                 account.is_verified = True

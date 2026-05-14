@@ -26,11 +26,15 @@ logger = logging.getLogger(__name__)
 
 _cache = RedisClient.namespace("ratelimit")
 
+
 # action → (max_requests, window_seconds)
 _LIMITS: dict[str, tuple[int, int]] = {
     "login": (5, 60),
     "refresh": (10, 60),
     "register": (3, 600),
+    "forgot_password": (3, 3600),
+    "verify_email": (10, 60),
+    "resend_verification": (3, 3600),
 }
 
 # path suffix → action
@@ -41,6 +45,9 @@ _PATH_MAP: dict[str, str] = {
     "/auth/cookie/refresh": "refresh",
     "/auth/register": "register",
     "/auth/cookie/register": "register",
+    "/auth/forgot-password": "forgot_password",
+    "/auth/verify-email": "verify_email",
+    "/auth/resend-verification": "resend_verification",
 }
 
 

@@ -25,10 +25,9 @@ class CircuitBreaker:
             return True
         if self._state == CircuitBreakerState.OPEN:
             if time.monotonic() - self._opened_at >= _RECOVERY_TIMEOUT:
-                self._state = CircuitBreakerState.HALF_OPEN
-                return True
+                return True  # один probe пройдёт, record_success/failure обработают
             return False
-        return True  # HALF_OPEN — один probe
+        return True
 
     async def record_success(self) -> None:
         async with self._lock:
@@ -38,7 +37,7 @@ class CircuitBreaker:
     async def record_failure(self) -> None:
         async with self._lock:
             self._failures += 1
-            if self._failures >= _FAILURE_THRESHOLD or self._state == CircuitBreakerState.HALF_OPEN:
+            if self._failures >= _FAILURE_THRESHOLD:
                 self._state = CircuitBreakerState.OPEN
                 self._opened_at = time.monotonic()
                 logger.warning(
