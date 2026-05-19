@@ -53,7 +53,9 @@ FROM node:22-alpine AS node
 # Important environment variables
 ENV                                                                                 \
     # Root of the project
-    ROOT_DIR="/code/project"
+    ROOT_DIR="/code/project"                                                        \
+    # Flag for docker for correct build
+    CI=true
 
 # Set workdir
 WORKDIR $ROOT_DIR
@@ -74,7 +76,7 @@ RUN                                                                             
 	npm install -g pnpm
 
 # Copy package files
-COPY ./client/package.json ./client/pnpm-lock.yaml ./
+COPY ./client/package.json ./client/pnpm-lock.yaml ./client/pnpm-workspace.yaml ./
 
 # Install dependencies using npm
 RUN pnpm install --frozen-lockfile

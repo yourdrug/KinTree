@@ -1,7 +1,9 @@
+.idea
+.data
 server/.env
+server/.venv
 server/.python-version
 client/.env
 client/node_modules
-.idea
-.data
-server/.venv
+client/dist
+client/.git
