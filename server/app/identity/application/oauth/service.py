@@ -135,14 +135,16 @@ class OAuthService:
                         )
 
                 # Регистрация нового аккаунта
-                validated_email = Email(value=email)
+                validated_email = Email.create(email)
 
                 account = create_account(
                     email=validated_email,
                     hashed_password=None,  # OAuth-аккаунт без пароля
+                    is_verified=True,
                 )
 
-                role: Role | None = await uow.roles.get_by_name(name=account.role_name)
+                role: Role | None = await uow.roles.get_by_name_with_permissions(name=account.role_name)
+
                 if role is None:
                     raise RoleDomainError(
                         errors={"role": f"Не найдена роль {account.role_name}"},
@@ -187,5 +189,5 @@ class OAuthService:
             access_token=token_pair.access_token,
             refresh_token=token_pair.refresh_token,
             role=account.role_str,
-            permissions=sorted(account.permissions),
+            permissions=sorted(role.codenames) if role else [],
         )

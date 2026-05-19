@@ -1,17 +1,13 @@
 """
 identity/infrastructure/account/repositories.py
-
-Итоговая версия с обоими улучшениями:
-1. save() — upsert, без двойного exists() SELECT
-2. _load_role_and_permissions() — использует role_cache для permissions.
-   Первый запрос роли → SELECT в БД + запись в кэш.
-   Все последующие запросы той же роли → из кэша, 0 SELECT к permissions.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 from shared.domain.exceptions import NotFoundError
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine.result import Result
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,24 +38,14 @@ class AccountRepositoryImpl:
         return result.scalar() or False
 
     async def get_by_id(self, account_id: str) -> DomainAccount:
-        result: Result = await self._session.execute(select(ORMAccount).where(ORMAccount.id == account_id))
-        orm: ORMAccount | None = result.scalar_one_or_none()
+        account = await self._fetch_with_role(ORMAccount.id == account_id)
 
-        if orm is None:
+        if account is None:
             raise NotFoundError(resource="Account", resource_id=account_id)
-
-        role_name, permissions = await self._load_role_and_permissions(account_id)
-        return AccountMapper.to_domain(orm, permissions=permissions, role_name=role_name)
+        return account
 
     async def get_by_email(self, email: str) -> DomainAccount | None:
-        result: Result = await self._session.execute(select(ORMAccount).where(ORMAccount.email == email))
-        orm: ORMAccount | None = result.scalar_one_or_none()
-
-        if orm is None:
-            return None
-
-        role_name, permissions = await self._load_role_and_permissions(orm.id)
-        return AccountMapper.to_domain(orm, permissions=permissions, role_name=role_name)
+        return await self._fetch_with_role(ORMAccount.email == email)
 
     async def save(self, account: DomainAccount) -> DomainAccount:
         data = AccountMapper.to_persistence(account)
@@ -78,21 +64,51 @@ class AccountRepositoryImpl:
         role_name, permissions = await self._load_role_and_permissions(orm.id)
         return AccountMapper.to_domain(orm, permissions=permissions, role_name=role_name)
 
-    async def _load_role_and_permissions(self, account_id: str) -> tuple[str, frozenset[str]]:
-        """
-        Загружает роль аккаунта (1 SELECT всегда).
-        Permissions — из глобального in-process кэша или из БД (1 SELECT при промахе).
+    # ── Private ───────────────────────────────────────────────────────────────
 
-        Типичный сценарий после прогрева:
-          - 1 SELECT (роль аккаунта)
-          - 0 SELECT (permissions из кэша)
+    async def _fetch_with_role(self, where_clause: Any) -> DomainAccount | None:
         """
-        role_result = await self._session.execute(
+        Один SELECT: account + role_id + role_name через LEFT JOIN.
+
+        Путь при попадании в кэш (типичный): 1 запрос.
+        Путь при промахе кэша: 2 запроса (+ array_agg permissions).
+
+        array_agg не включаем в основной запрос намеренно:
+        после прогрева кэша агрегация никогда не нужна, а JOIN с group_by
+        усложняет план запроса и замедляет выборку account-полей.
+        """
+        stmt = (
+            select(ORMAccount, Role.id.label("role_id"), Role.name.label("role_name"))
+            .outerjoin(AccountRole, AccountRole.account_id == ORMAccount.id)
+            .outerjoin(Role, Role.id == AccountRole.role_id)
+            .where(where_clause)
+        )
+        result: Result = await self._session.execute(stmt)
+        row = result.one_or_none()
+
+        if row is None:
+            return None
+
+        orm, role_id, role_name = row
+        if role_name is None:
+            role_name = get_default_role_name().value
+
+        cached = get_cached_permissions(role_name)
+        if cached is not None:
+            return AccountMapper.to_domain(orm, permissions=cached, role_name=role_name)
+
+        permissions = await self._fetch_permissions_for_role(role_id) if role_id else frozenset()
+        set_cached_permissions(role_name, permissions)
+        return AccountMapper.to_domain(orm, permissions=permissions, role_name=role_name)
+
+    async def _load_role_and_permissions(self, account_id: str) -> tuple[str, frozenset[str]]:
+        """Только для save(): account уже сохранён, нужно загрузить роль."""
+        result = await self._session.execute(
             select(Role.id, Role.name)
             .join(AccountRole, AccountRole.role_id == Role.id)
             .where(AccountRole.account_id == account_id)
         )
-        row = role_result.one_or_none()
+        row = result.one_or_none()
 
         if row is None:
             return get_default_role_name().value, frozenset()
@@ -100,17 +116,22 @@ class AccountRepositoryImpl:
         role_id, role_name = row
 
         cached = get_cached_permissions(role_name)
-
         if cached is not None:
             return role_name, cached
 
-        # Если нет в кэше: загружаем из БД и кэшируем
-        perm_result = await self._session.execute(
-            select(Permission.codename)
+        permissions = await self._fetch_permissions_for_role(role_id)
+        set_cached_permissions(role_name, permissions)
+        return role_name, permissions
+
+    async def _fetch_permissions_for_role(self, role_id: str) -> frozenset[str]:
+        """
+        Все codenames для роли одним SELECT через array_agg.
+        Возвращает одну строку вместо N строк — меньше data transfer.
+        """
+        result = await self._session.execute(
+            select(func.array_agg(Permission.codename))
             .join(RolePermission, RolePermission.permission_id == Permission.id)
             .where(RolePermission.role_id == role_id)
         )
-        permissions = frozenset(perm_result.scalars().all())
-        set_cached_permissions(role_name, permissions)
-
-        return role_name, permissions
+        raw = result.scalar()
+        return frozenset(raw) if raw else frozenset()

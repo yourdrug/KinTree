@@ -1,7 +1,5 @@
 """
 identity/application/auth/service.py
-
-AuthService — application-сервис аутентификации.
 """
 
 from __future__ import annotations
@@ -10,7 +8,12 @@ from datetime import UTC, datetime, timedelta
 import logging
 import secrets
 
-from shared.domain.exceptions import AccountBlockedError, AccountDomainError, AuthenticationError, RoleDomainError
+from shared.domain.exceptions import (
+    AccountBlockedError,
+    AccountDomainError,
+    AuthenticationError,
+    RoleDomainError,
+)
 from shared.infrastructure.db.settings import settings
 
 from identity.application.auth.commands import LoginCommand, RegisterCommand, TokenPair
@@ -30,8 +33,6 @@ logger = logging.getLogger(__name__)
 
 
 class AuthService:
-    """Сервис аутентификации"""
-
     def __init__(
         self,
         uow_factory: IdentityUoWFactory,
@@ -45,7 +46,6 @@ class AuthService:
     async def register(self, command: RegisterCommand) -> Account:
         HashedPassword.validate_strength(command.password)
         email = Email.create(command.email)
-
         hashed = HashedPassword(value=self._hasher.hash(command.password))
 
         async with self._uow_factory.create(master=True) as uow:
@@ -60,16 +60,18 @@ class AuthService:
             role: Role | None = await uow.roles.get_by_name_with_permissions(name=account.role_name)
 
             if role is None:
-                raise RoleDomainError(
-                    errors={"role": f"Не найдена роль {account.role_name}"},
-                )
+                raise RoleDomainError(errors={"role": f"Не найдена роль {account.role_name}"})
 
             account_role: AccountRole = create_account_role(account_id=account.id, role_id=role.id)
             saved: Account = await uow.accounts.save(account=account)
             await uow.account_roles.assign_role(account_role=account_role)
 
             return Account(
-                **saved.__dict__,
+                id=saved.id,
+                email=saved.email,
+                hashed_password=saved.hashed_password,
+                is_acc_blocked=saved.is_acc_blocked,
+                is_verified=saved.is_verified,
                 permissions=role.codenames,
                 role_name=account.role_name,
             )
@@ -116,7 +118,7 @@ class AuthService:
 
     async def refresh(self, raw_refresh_token: str) -> TokenPair:
         """Token rotation с детектом компрометации."""
-        payload: dict = self._tokens.decode_refresh_token(raw_refresh_token)  # TODO доработать типизацию
+        payload: dict = self._tokens.decode_refresh_token(raw_refresh_token)
 
         session_id: str = payload.get("sid", "")
         account_id: str = payload.get("sub", "")
@@ -133,8 +135,7 @@ class AuthService:
 
             if refresh_token.revoked:
                 logger.warning(
-                    "Обнаружено повторное использование токена обновления для учетной записи %s в сеансе %s. "
-                    "Аннулирование всех сеансов.",
+                    "Token reuse detected for account_id=%s session_id=%s — revoking all sessions.",
                     account_id,
                     session_id,
                 )
@@ -197,19 +198,17 @@ class AuthService:
         async with self._uow_factory.create(master=True) as uow:
             await uow.refresh_tokens.revoke_by_session_id(payload.session_id)
 
-    async def logout_all(
-        self,
-        account_id: str,
-    ) -> None:
+    async def logout_all(self, account_id: str) -> None:
         """Logout со всех устройств. Revoke всех refresh tokens аккаунта."""
+
         ttl = settings.JWT_TOKEN_ACCESS_LIFETIME_MINUTES * 60
 
         async with self._uow_factory.create(master=True) as uow:
             active_sessions: list[RefreshToken] = await uow.refresh_tokens.get_active_by_account(account_id)
             await uow.refresh_tokens.revoke_all_by_account(account_id)
 
-            for session in active_sessions:
-                await blacklist_session(session.session_id, ttl)
+        for session in active_sessions:
+            await blacklist_session(session.session_id, ttl)
 
     async def get_sessions(self, account_id: str) -> list[RefreshToken]:
         async with self._uow_factory.create(master=False) as uow:

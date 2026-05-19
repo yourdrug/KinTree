@@ -1,7 +1,5 @@
 """
 identity/application/password/service.py
-
-PasswordService — управление паролями аккаунта.
 """
 
 from __future__ import annotations
@@ -14,6 +12,7 @@ from shared.infrastructure.utils import hash_raw_str
 
 from identity.application.password.commands import ChangePasswordCommand, ResetPasswordCommand
 from identity.domain.entities.email_token import EmailTokenType
+from identity.domain.entities.refresh_token import RefreshToken
 from identity.domain.ports.password_hasher import IPasswordHasher
 from identity.domain.value_objects.hashed_password import HashedPassword
 from identity.infrastructure.auth.blacklist_service import blacklist_session
@@ -47,6 +46,9 @@ class PasswordService:
         HashedPassword.validate_strength(command.new_password)
         token_hash = hash_raw_str(command.token)
 
+        active_sessions: list[RefreshToken] = []
+        account_id: str = ""
+
         async with self._uow_factory.create(master=True) as uow:
             email_token = await uow.email_tokens.get_valid_by_hash(
                 token_hash=token_hash,
@@ -55,19 +57,22 @@ class PasswordService:
             if email_token is None:
                 raise InvalidEmailTokenError()
 
-            account = await uow.accounts.get_by_id(email_token.account_id)
+            account_id = email_token.account_id
+            account = await uow.accounts.get_by_id(account_id)
             account.hashed_password = HashedPassword(value=self._hasher.hash(command.new_password))
+
+            active_sessions = await uow.refresh_tokens.get_active_by_account(account_id)
+
             await uow.accounts.save(account)
             await uow.email_tokens.mark_used(email_token.id)
+            await uow.refresh_tokens.revoke_all_by_account(account_id)
 
-            ttl = settings.JWT_TOKEN_ACCESS_LIFETIME_MINUTES * 60
-            active_sessions = await uow.refresh_tokens.get_active_by_account(account.id)
-            await uow.refresh_tokens.revoke_all_by_account(account.id)
+        ttl = settings.JWT_TOKEN_ACCESS_LIFETIME_MINUTES * 60
 
-            for session in active_sessions:
-                await blacklist_session(session.session_id, ttl)
+        for session in active_sessions:
+            await blacklist_session(session.session_id, ttl)
 
-        logger.info("Password reset completed for account_id=%s", email_token.account_id)
+        logger.info("Password reset completed for account_id=%s", account_id)
 
     async def change_password(self, command: ChangePasswordCommand) -> None:
         """Смена пароля аутентифицированным пользователем."""

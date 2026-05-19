@@ -33,7 +33,7 @@ class PermissionService:
         permissions_to_sync: list[Permission] = self._sync_service.build_permissions()
         roles_to_sync: list[Role] = self._sync_service.build_roles()
 
-        async with self._uow_factory.create(master=False) as uow:
+        async with self._uow_factory.create(master=True) as uow:
             synced_permissions: list[Permission] = await uow.permissions.upsert_many(permissions_to_sync)
             perm_by_codename: dict[str, Permission] = {p.codename: p for p in synced_permissions}
             logger.info("Синхронизировано пермишенов: %d", len(synced_permissions))

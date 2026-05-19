@@ -65,6 +65,9 @@ class EmailService:
             if account.is_acc_blocked:
                 raise AccountBlockedError()
 
+            if account.email_str.endswith("@telegram.oauth"):
+                return  # Telegram-аккаунты не верифицируются по email
+
             raw_token = secrets.token_urlsafe(32)
             token_hash = hash_raw_str(raw_token)
 

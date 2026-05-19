@@ -66,7 +66,7 @@ class Account:
         return str(self.hashed_password)
 
 
-def create_account(email: Email, hashed_password: HashedPassword | None) -> Account:
+def create_account(email: Email, hashed_password: HashedPassword | None, is_verified: bool = False) -> Account:
     """
     Фабрика Account.
 
@@ -78,6 +78,7 @@ def create_account(email: Email, hashed_password: HashedPassword | None) -> Acco
         id=generate_uuid(),
         email=email,
         hashed_password=hashed_password,
+        is_verified=is_verified,
         role_name=get_default_role_name(),
         permissions=frozenset(),
     )

@@ -1,12 +1,11 @@
 """
-identity/infrastructure/db/repositories/oauth_account.py
-
-SQLAlchemy-реализация OAuthAccountRepository.
+identity/infrastructure/oauth/repositories.py
 """
 
 from __future__ import annotations
 
-from sqlalchemy import Insert, ScalarResult, Select, insert, select
+from sqlalchemy import Insert, Select, delete, insert, select
+from sqlalchemy.engine import ScalarResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from identity.domain.entities.oauth_account import OAuthAccount as DomainOAuthAccount
@@ -24,11 +23,12 @@ class OAuthAccountRepositoryImpl:
         provider: OAuthProvider,
         provider_user_id: str,
     ) -> DomainOAuthAccount | None:
-        statement: Select = select(ORMOAuthAccount).where(
-            ORMOAuthAccount.provider == str(provider),
-            ORMOAuthAccount.provider_user_id == provider_user_id,
+        result = await self._session.scalar(
+            select(ORMOAuthAccount).where(
+                ORMOAuthAccount.provider == str(provider),
+                ORMOAuthAccount.provider_user_id == provider_user_id,
+            )
         )
-        result: ORMOAuthAccount | None = await self._session.scalar(statement)
         return OAuthAccountMapper.to_domain(result) if result else None
 
     async def get_by_account_id(self, account_id: str) -> list[DomainOAuthAccount]:
@@ -42,8 +42,4 @@ class OAuthAccountRepositoryImpl:
         await self._session.execute(statement)
 
     async def delete(self, oauth_account_id: str) -> None:
-        statement: Select = select(ORMOAuthAccount).where(ORMOAuthAccount.id == oauth_account_id)
-        model = await self._session.scalar(statement)
-
-        if model:
-            await self._session.delete(model)
+        await self._session.execute(delete(ORMOAuthAccount).where(ORMOAuthAccount.id == oauth_account_id))
