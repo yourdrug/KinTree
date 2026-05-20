@@ -7,13 +7,13 @@ from __future__ import annotations
 from typing import Any
 
 from shared.domain.exceptions import NotFoundError
+from shared.domain.permissions.enums import RoleName
 from sqlalchemy import exists, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine.result import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from identity.domain.entities.account import Account as DomainAccount
-from identity.domain.entities.permission import get_default_role_name
 from identity.infrastructure.account.mapper import AccountMapper
 from identity.infrastructure.db.models.account import Account as ORMAccount
 from identity.infrastructure.db.models.permission import (
@@ -91,7 +91,7 @@ class AccountRepositoryImpl:
 
         orm, role_id, role_name = row
         if role_name is None:
-            role_name = get_default_role_name().value
+            role_name = RoleName.USER.value
 
         cached = get_cached_permissions(role_name)
         if cached is not None:
@@ -111,7 +111,7 @@ class AccountRepositoryImpl:
         row = result.one_or_none()
 
         if row is None:
-            return get_default_role_name().value, frozenset()
+            return RoleName.USER.value, frozenset()
 
         role_id, role_name = row
 

@@ -1,5 +1,7 @@
 """
 identity/application/permissions/service.py
+
+PermissionService — application-сервис синхронизации прав.
 """
 
 from __future__ import annotations
@@ -7,7 +9,7 @@ from __future__ import annotations
 import logging
 
 from identity.domain.entities.permission import Permission, Role
-from identity.domain.services.permission_sync import PermissionSyncService
+from identity.domain.services.permission_sync import PermissionSyncPolicy
 from identity.infrastructure.permissions.role_cache import invalidate as invalidate_role_cache
 from identity.infrastructure.uow_factory import IdentityUoWFactory
 
@@ -17,37 +19,34 @@ logger = logging.getLogger("default")
 
 class PermissionService:
     def __init__(self, uow_factory: IdentityUoWFactory) -> None:
-        self._uow_factory: IdentityUoWFactory = uow_factory
-        self._sync_service: PermissionSyncService = PermissionSyncService()
+        self._uow_factory = uow_factory
+        self._sync_policy = PermissionSyncPolicy()
 
     async def sync_permissions(self) -> None:
         """
         Синхронизировать пермишены и роли из кода → БД.
-
         Идемпотентно: безопасно запускать при каждом старте.
-        После синхронизации инвалидирует in-process кэш пермишенов,
-        чтобы следующие запросы подтянули актуальные данные.
         """
         logger.info("Синхронизация пермишенов и ролей...")
 
-        permissions_to_sync: list[Permission] = self._sync_service.build_permissions()
-        roles_to_sync: list[Role] = self._sync_service.build_roles()
+        permissions_to_sync = self._sync_policy.build_permissions()
+        roles_to_sync = self._sync_policy.build_roles()
 
         async with self._uow_factory.create(master=True) as uow:
-            synced_permissions: list[Permission] = await uow.permissions.upsert_many(permissions_to_sync)
+            synced_permissions = await uow.permissions.upsert_many(permissions_to_sync)
             perm_by_codename: dict[str, Permission] = {p.codename: p for p in synced_permissions}
             logger.info("Синхронизировано пермишенов: %d", len(synced_permissions))
 
-            synced_roles: list[Role] = await uow.roles.upsert_many(roles_to_sync)
+            synced_roles = await uow.roles.upsert_many(roles_to_sync)
             logger.info("Синхронизировано ролей: %d", len(synced_roles))
 
             for role in synced_roles:
-                codenames = self._sync_service.get_role_permission_codenames(role)
+                codenames = self._sync_policy.get_role_permission_codenames(role)
                 permission_ids = [perm_by_codename[cn].id for cn in codenames if cn in perm_by_codename]
                 await uow.roles.set_permissions(role.id, permission_ids)
 
         invalidate_role_cache()
-        logger.info("Синхронизация пермишенов завершена успешно")
+        logger.info("Синхронизация пермишенов завершена")
 
     async def get_all_permissions(self) -> list[Permission]:
         async with self._uow_factory.create(master=False) as uow:

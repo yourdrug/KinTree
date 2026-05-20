@@ -16,7 +16,7 @@ domain/permissions/constants.py
 
 from __future__ import annotations
 
-from identity.domain.permissions.enums import PermissionCodename, RoleName
+from shared.domain.permissions.enums import PermissionCodename, RoleName
 
 
 # ── Маппинг роль → пермишены ──────────────────────────────────────────────────

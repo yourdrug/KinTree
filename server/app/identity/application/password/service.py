@@ -6,13 +6,12 @@ from __future__ import annotations
 
 import logging
 
-from shared.domain.exceptions import InvalidEmailTokenError
+from shared.domain.exceptions import AuthenticationError, InvalidEmailTokenError
 from shared.infrastructure.db.settings import settings
 from shared.infrastructure.utils import hash_raw_str
 
 from identity.application.password.commands import ChangePasswordCommand, ResetPasswordCommand
 from identity.domain.entities.email_token import EmailTokenType
-from identity.domain.entities.refresh_token import RefreshToken
 from identity.domain.ports.password_hasher import IPasswordHasher
 from identity.domain.value_objects.hashed_password import HashedPassword
 from identity.infrastructure.auth.blacklist_service import blacklist_session
@@ -33,21 +32,19 @@ class PasswordService:
 
     async def reset_password(self, command: ResetPasswordCommand) -> None:
         """
-        Сбросить пароль по токену из письма.
+        Сброс пароля по токену из письма.
 
-        1. Валидирует силу пароля (доменный инвариант).
-        2. Проверяет токен — не истёк, не использован, тип RESET_PASSWORD.
-        3. Меняет пароль.
-        4. Отзывает все активные сессии + blacklist в Redis.
+        1. Валидирует силу нового пароля.
+        2. Проверяет токен.
+        3. Обновляет пароль через агрегат.
+        4. Отзывает все сессии + blacklist в Redis.
 
         Raises:
-            InvalidEmailTokenError: токен не найден, использован или истёк.
+            AccountDomainError: пароль слишком слабый.
+            InvalidEmailTokenError: токен невалиден/использован/истёк.
         """
         HashedPassword.validate_strength(command.new_password)
         token_hash = hash_raw_str(command.token)
-
-        active_sessions: list[RefreshToken] = []
-        account_id: str = ""
 
         async with self._uow_factory.create(master=True) as uow:
             email_token = await uow.email_tokens.get_valid_by_hash(
@@ -57,23 +54,51 @@ class PasswordService:
             if email_token is None:
                 raise InvalidEmailTokenError()
 
-            account_id = email_token.account_id
-            account = await uow.accounts.get_by_id(account_id)
-            account.hashed_password = HashedPassword(value=self._hasher.hash(command.new_password))
+            account = await uow.accounts.get_by_id(email_token.account_id)
+            account.check_not_blocked()
 
-            active_sessions = await uow.refresh_tokens.get_active_by_account(account_id)
+            # Агрегат валидирует инвариант хэша
+            account.set_password(HashedPassword(value=self._hasher.hash(command.new_password)))
+
+            active_sessions = await uow.refresh_tokens.get_active_by_account(account.id)
 
             await uow.accounts.save(account)
             await uow.email_tokens.mark_used(email_token.id)
-            await uow.refresh_tokens.revoke_all_by_account(account_id)
+            await uow.refresh_tokens.revoke_all_by_account(account.id)
 
         ttl = settings.JWT_TOKEN_ACCESS_LIFETIME_MINUTES * 60
-
         for session in active_sessions:
             await blacklist_session(session.session_id, ttl)
 
-        logger.info("Password reset completed for account_id=%s", account_id)
+        logger.info("Password reset completed for account_id=%s", account.id)
 
     async def change_password(self, command: ChangePasswordCommand) -> None:
-        """Смена пароля аутентифицированным пользователем."""
-        ...
+        """
+        Смена пароля аутентифицированным пользователем.
+
+        Raises:
+            AuthenticationError: старый пароль неверен.
+            AccountDomainError: новый пароль слишком слабый.
+        """
+        HashedPassword.validate_strength(command.new_password)
+
+        async with self._uow_factory.create(master=True) as uow:
+            account = await uow.accounts.get_by_id(command.account_id)
+            account.check_not_blocked()
+
+            if not account.has_password():
+                raise AuthenticationError(
+                    message="У аккаунта нет пароля (OAuth-аккаунт)",
+                    errors={"password": "no_password_set"},
+                )
+
+            if not self._hasher.verify(command.old_password, account.hashed_password_str):  # type: ignore
+                raise AuthenticationError(
+                    message="Неверный текущий пароль",
+                    errors={"old_password": "invalid"},
+                )
+
+            account.set_password(HashedPassword(value=self._hasher.hash(command.new_password)))
+            await uow.accounts.save(account)
+
+        logger.info("Password changed for account_id=%s", command.account_id)

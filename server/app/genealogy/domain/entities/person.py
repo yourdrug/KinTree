@@ -1,14 +1,5 @@
 """
 domain/entities/person.py
-
-Person aggregate root.
-
-Design decisions:
-- Person owns all mutation via explicit methods (update_*, apply_patch, apply_put).
-- Application services call these methods — they never construct PersonName directly.
-- reconstruct() is the factory for loading from persistence (no validation side-effects
-  that would break on legacy data).
-- create_person() is the factory for brand-new persons (full validation).
 """
 
 from __future__ import annotations
@@ -59,7 +50,6 @@ class Person:
     def last_name(self) -> str | None:
         return self.name.last_name
 
-    # Обратная совместимость для репозиториев и маппера
     @property
     def family_id(self) -> str:
         return self.family_ref.family_id
@@ -70,7 +60,7 @@ class Person:
     def is_alive(self) -> bool:
         return self.death_date is None or self.death_date.year is None
 
-    # ── Commands (mutations owned by the entity) ──────────────────────────────
+    # ── Commands ──────────────────────────────────────────────────────────────
 
     def apply_put(
         self,
@@ -83,16 +73,13 @@ class Person:
         birth_date_raw: str | None,
         death_date_raw: str | None,
     ) -> None:
-        """
-        Full replacement (PUT semantics).
-        Validates all invariants after update.
-        """
+        """Full replacement (PUT semantics). Validates all invariants after update."""
         self.name = PersonName(first_name=first_name, last_name=last_name)
         self.gender = gender
         self.birth_date = birth_date
         self.death_date = death_date
-        self.birth_date_raw = birth_date_raw if birth_date_raw is None or birth_date_raw.strip() else birth_date_raw
-        self.death_date_raw = death_date_raw if death_date_raw is None or death_date_raw.strip() else death_date_raw
+        self.birth_date_raw = birth_date_raw
+        self.death_date_raw = death_date_raw
         self._validate()
 
     def apply_patch(
@@ -106,10 +93,7 @@ class Person:
         birth_date_raw: str | None | UnsetType = UNSET,
         death_date_raw: str | None | UnsetType = UNSET,
     ) -> None:
-        """
-        Partial update (PATCH semantics).
-        UNSET fields are left untouched.
-        """
+        """Partial update (PATCH semantics). UNSET fields are left untouched."""
         new_first = self.first_name if isinstance(first_name, UnsetType) else first_name
         new_last = self.last_name if isinstance(last_name, UnsetType) else last_name
         self.name = PersonName(first_name=new_first, last_name=new_last)
@@ -134,11 +118,6 @@ class Person:
         last_name: str | None | UnsetType,
         birth_date: PartialDate | None | UnsetType,
     ) -> bool:
-        """
-        Returns True if any field that affects family-level duplicate detection
-        is being modified. Used by PersonService to decide whether to re-check
-        the family invariant after a PATCH.
-        """
         return not (
             isinstance(first_name, UnsetType) and isinstance(last_name, UnsetType) and isinstance(birth_date, UnsetType)
         )
@@ -147,23 +126,11 @@ class Person:
 
     def _validate(self) -> None:
         if not self.family_id:
-            raise PersonDomainError(
-                field="family_id",
-                message="Person must belong to a family.",
-            )
-
+            raise PersonDomainError(field="family_id", message="Person must belong to a family.")
         if not self.id or not self.id.strip():
-            raise PersonDomainError(
-                field="id",
-                message="Person ID cannot be empty.",
-            )
-
+            raise PersonDomainError(field="id", message="Person ID cannot be empty.")
         if not isinstance(self.gender, PersonGender):
-            raise PersonDomainError(
-                field="gender",
-                message="Некорректное значение пола.",
-            )
-
+            raise PersonDomainError(field="gender", message="Некорректное значение пола.")
         self._validate_raw_strings()
         self._validate_dates()
 
@@ -188,10 +155,6 @@ class Person:
                     field="death_date",
                     message="Death date cannot precede birth date.",
                 )
-        # Cannot be dead before being born even with partial info
-        if self.death_date and not self.birth_date and self.death_date.year:
-            # death with no birth is valid (unknown birth)
-            pass
 
 
 def create_person(
@@ -205,10 +168,7 @@ def create_person(
     birth_date_raw: str | None = None,
     death_date_raw: str | None = None,
 ) -> Person:
-    """
-    Factory for brand-new persons.
-    Generates a fresh ID and runs all invariants.
-    """
+    """Factory for brand-new persons. Generates a fresh ID and runs all invariants."""
     return Person(
         id=generate_uuid(),
         name=PersonName(first_name=first_name, last_name=last_name),
@@ -219,33 +179,3 @@ def create_person(
         birth_date_raw=birth_date_raw,
         death_date_raw=death_date_raw,
     )
-
-
-def reconstruct_person(
-    *,
-    id: str,
-    family_id: str,
-    gender: PersonGender,
-    first_name: str | None,
-    last_name: str | None,
-    birth_date: PartialDate | None,
-    death_date: PartialDate | None,
-    birth_date_raw: str | None,
-    death_date_raw: str | None,
-) -> Person:
-    """
-    Factory for rehydrating a Person from persistence.
-    Bypasses __post_init__ validation — data is assumed to be already valid
-    (it passed validation when it was first saved).
-    Use this in mappers only.
-    """
-    person = object.__new__(Person)
-    person.id = id
-    person.name = PersonName(first_name=first_name, last_name=last_name)
-    person.gender = gender
-    person.family_ref = FamilyRef(family_id=family_id)
-    person.birth_date = birth_date
-    person.death_date = death_date
-    person.birth_date_raw = birth_date_raw
-    person.death_date_raw = death_date_raw
-    return person

@@ -1,7 +1,5 @@
 """
 presentation/rest/dependencies/services.py
-
-Единственная точка DI для FastAPI.
 """
 
 from __future__ import annotations
@@ -31,6 +29,9 @@ from shared.infrastructure.db.database import database
 bearer = HTTPBearer(auto_error=False)
 
 
+# ── Фабрики UoW ───────────────────────────────────────────────────────────────
+
+
 def get_identity_uow_factory() -> IdentityUoWFactory:
     return IdentityUoWFactory(database=database)
 
@@ -39,7 +40,7 @@ def get_genealogy_uow_factory() -> GenealogyUoWFactory:
     return GenealogyUoWFactory(database=database)
 
 
-# ── Adapters ───────────────────────────────────────────────────────────────────
+# ── Адаптеры (синглтоны через фабрики) ───────────────────────────────────────
 
 
 def get_password_hasher_dep() -> IPasswordHasher:
@@ -50,7 +51,7 @@ def get_token_service_dep() -> ITokenService:
     return get_token_service()
 
 
-def get_email_sender_service_dep() -> IEmailSender:
+def get_email_sender_dep() -> IEmailSender:
     return get_email_sender()
 
 
@@ -93,7 +94,7 @@ def get_permission_service(
 
 def get_email_service(
     uow_factory: IdentityUoWFactory = Depends(get_identity_uow_factory),
-    email_sender: IEmailSender = Depends(get_email_sender_service_dep),
+    email_sender: IEmailSender = Depends(get_email_sender_dep),
     password_hasher: IPasswordHasher = Depends(get_password_hasher_dep),
 ) -> EmailService:
     return EmailService(

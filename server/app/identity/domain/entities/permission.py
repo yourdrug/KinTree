@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 
 from shared.domain.utils import generate_uuid
 
-from identity.domain.permissions.enums import RoleName
 from identity.domain.value_objects.permission import Permission
 
 
@@ -73,8 +72,3 @@ def create_role(
         description=description,
         permissions=frozenset(permissions or []),
     )
-
-
-def get_default_role_name() -> RoleName:
-    """Роль по умолчанию для новых пользователей."""
-    return RoleName.USER

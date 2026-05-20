@@ -1,25 +1,17 @@
 """
 identity/domain/entities/account.py
 
-Account — корневой агрегат Identity bounded context.
-
-Изменения относительно предыдущей версии:
-- email хранится как Email VO (нормализация и валидация в домене)
-- hashed_password хранится как HashedPassword VO (инварианты хэша в домене)
-- role_name типизирован как RoleName (не сырая строка)
-- Убрана _validate() — инварианты теперь в VO через __post_init__
-- create_account принимает уже готовые VO — фабрика не дублирует валидацию
-- permissions остаётся frozenset[str] — O(1) поиск важнее типизации здесь
+Account — корневой агрегат Identity.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from shared.domain.exceptions import AccountBlockedError, AccountDomainError
+from shared.domain.permissions.enums import RoleName
 from shared.domain.utils import generate_uuid
 
-from identity.domain.entities.permission import get_default_role_name
-from identity.domain.permissions.enums import RoleName
 from identity.domain.value_objects.email import Email
 from identity.domain.value_objects.hashed_password import HashedPassword
 
@@ -29,13 +21,10 @@ class Account:
     id: str
     email: Email
     role_name: RoleName
-    hashed_password: HashedPassword | None = None  # для oauth аккаунтов
+    hashed_password: HashedPassword | None = None
     is_acc_blocked: bool = False
     is_verified: bool = False
-    # frozenset[str] — codenames для O(1) has_permission. Загружаются JOIN-ом.
     permissions: frozenset[str] = field(default_factory=frozenset)
-
-    # ── Queries ───────────────────────────────────────────────────────────────
 
     def is_active(self) -> bool:
         return not self.is_acc_blocked
@@ -49,36 +38,80 @@ class Account:
     def has_all_permissions(self, codenames: list[str]) -> bool:
         return all(c in self.permissions for c in codenames)
 
+    def check_not_blocked(self) -> None:
+        """Бросает AccountBlockedError если аккаунт заблокирован."""
+        if self.is_acc_blocked:
+            raise AccountBlockedError()
+
+    def block(self) -> Account:
+        """
+        Заблокировать аккаунт.
+        Идемпотентно: повторный вызов не бросает исключение.
+        """
+        self.is_acc_blocked = True
+        return self
+
+    def unblock(self) -> Account:
+        self.is_acc_blocked = False
+        return self
+
+    def verify_email(self) -> Account:
+        """
+        Подтвердить email.
+        Идемпотентно: если уже подтверждён — no-op.
+        """
+        self.is_verified = True
+        return self
+
+    def set_password(self, hashed_password: HashedPassword) -> Account:
+        """
+        Установить новый хэш пароля.
+
+        Raises:
+            AccountDomainError: если передан пустой хэш.
+        """
+        if hashed_password.value is None:
+            raise AccountDomainError(
+                errors={"password": "Хэш пароля не может быть пустым"},
+            )
+        self.hashed_password = hashed_password
+        return self
+
+    def has_password(self) -> bool:
+        """OAuth-аккаунты создаются без пароля."""
+        return self.hashed_password is not None and self.hashed_password.value is not None
+
     @property
     def email_str(self) -> str:
-        """Нормализованный email как строка — для JWT payload, логов и т.д."""
         return str(self.email)
 
     @property
     def role_str(self) -> str:
-        """Строковое имя роли — для JWT payload и API-ответов."""
         return self.role_name.value
 
     @property
     def hashed_password_str(self) -> str | None:
-        if self.hashed_password is None or self.hashed_password.value is None:
+        if not self.has_password():
             return None
         return str(self.hashed_password)
 
 
-def create_account(email: Email, hashed_password: HashedPassword | None, is_verified: bool = False) -> Account:
+def create_account(
+    email: Email,
+    hashed_password: HashedPassword | None,
+    is_verified: bool = False,
+) -> Account:
     """
     Фабрика Account.
 
-    Принимает уже валидированные VO — не дублирует валидацию.
-    Новый аккаунт всегда создаётся с ролью USER и пустыми permissions
-    (роль назначается отдельно после регистрации через AccountRoleRepository).
+    Новый аккаунт создаётся с ролью USER и пустыми permissions.
+    Роль назначается отдельно через AccountRoleRepository после сохранения.
     """
     return Account(
         id=generate_uuid(),
         email=email,
         hashed_password=hashed_password,
         is_verified=is_verified,
-        role_name=get_default_role_name(),
+        role_name=RoleName.USER,
         permissions=frozenset(),
     )

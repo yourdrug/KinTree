@@ -2,42 +2,45 @@
 identity/application/oauth/service.py
 
 OAuthService — application-сервис OAuth авторизации.
-
-Логика одинакова для всех провайдеров:
-  1. Верифицировать данные от провайдера (за это отвечают верификаторы)
-  2. Найти существующую OAuth-привязку по (provider, provider_user_id)
-  3а. Привязка найдена → логин: загрузить Account, выдать токены
-  3б. Привязки нет, но email найден → ConflictError (войдите по паролю)
-  3в. Привязки нет, email не найден → регистрация: создать Account + привязку
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 import logging
+from typing import TYPE_CHECKING, Any
 
-from shared.domain.exceptions import AccountBlockedError, ConflictError, RoleDomainError
+from shared.domain.exceptions import ConflictError, RoleDomainError
 from shared.infrastructure.db.settings import settings
 
 from identity.application.auth.commands import TokenPair
-from identity.application.oauth.commands import GoogleCallbackCommand, TelegramCallbackCommand
 from identity.domain.entities.account import Account, create_account
-from identity.domain.entities.account_role import AccountRole, create_account_role
+from identity.domain.entities.account_role import create_account_role
 from identity.domain.entities.oauth_account import OAuthAccount, OAuthProvider, create_oauth_account
 from identity.domain.entities.permission import Role
-from identity.domain.entities.refresh_token import RefreshToken, create_refresh_token
-from identity.domain.ports.token_service import CreatedTokenPair, ITokenService
+from identity.domain.ports.oauth_provider import IOAuthProvider, OAuthUserInfo
+from identity.domain.ports.token_service import ITokenService
+from identity.domain.services.session_service import SessionDomainService
 from identity.domain.value_objects.email import Email
-from identity.infrastructure.oauth.google_verifier import GoogleUserInfo, get_google_user_info
-from identity.infrastructure.oauth.telegram_verifier import TelegramUserInfo, verify_telegram_auth
 from identity.infrastructure.uow_factory import IdentityUoWFactory
+
+
+if TYPE_CHECKING:
+    from identity.application.uow import IdentityUoW
 
 
 logger = logging.getLogger(__name__)
 
+# Домен синтетических email (Telegram и будущие провайдеры без email).
+# Совпадает с _RESERVED_DOMAINS в Email VO.
+_SYNTHETIC_EMAIL_DOMAINS = frozenset({"telegram.oauth", "oauth.internal"})
+
 
 class OAuthService:
-    """Application-сервис OAuth авторизации."""
+    """
+    Application-сервис OAuth авторизации.
+
+    Не знает о конкретных провайдерах — работает через IOAuthProvider.
+    """
 
     def __init__(
         self,
@@ -45,149 +48,129 @@ class OAuthService:
         token_service: ITokenService,
     ) -> None:
         self._uow_factory = uow_factory
-        self._tokens = token_service
+        self._session_service = SessionDomainService(
+            token_service=token_service,
+            refresh_ttl_days=settings.JWT_TOKEN_REFRESH_LIFETIME_DAYS,
+        )
 
-    async def google_callback(self, command: GoogleCallbackCommand) -> TokenPair:
+    async def handle_callback(
+        self,
+        provider: IOAuthProvider,
+        raw_data: dict[str, Any],
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+    ) -> TokenPair:
         """
-        Обработать callback от Google (Authorization Code flow).
+        Единая точка входа для всех OAuth-провайдеров.
 
         Raises:
-            ConflictError: email уже зарегистрирован через пароль
-            AccountBlockedError: аккаунт заблокирован
-            ValueError: невалидный code или id_token
+            ValueError: невалидные данные от провайдера.
+            ConflictError: email уже зарегистрирован через пароль.
+            AccountBlockedError: аккаунт заблокирован.
         """
-        user_info: GoogleUserInfo = await get_google_user_info(command.code)
+        user_info = await provider.get_user_info(raw_data)
+        oauth_provider = OAuthProvider(provider.provider_name)
 
         return await self._login_or_register(
-            provider=OAuthProvider.GOOGLE,
-            provider_user_id=user_info.sub,
-            email=user_info.email,
-            user_agent=command.user_agent,
-            ip_address=command.ip_address,
+            provider=oauth_provider,
+            user_info=user_info,
+            user_agent=user_agent,
+            ip_address=ip_address,
         )
 
-    async def telegram_callback(self, command: TelegramCallbackCommand) -> TokenPair:
-        """
-        Обработать данные от Telegram Login Widget.
-
-        Raises:
-            ConflictError: крайне редко — если telegram_id уже привязан к другому аккаунту
-            AccountBlockedError: аккаунт заблокирован
-            ValueError: невалидная подпись Telegram
-        """
-        user_info: TelegramUserInfo = verify_telegram_auth(
-            telegram_id=command.telegram_id,
-            first_name=command.first_name,
-            last_name=command.last_name,
-            username=command.username,
-            photo_url=command.photo_url,
-            auth_date=command.auth_date,
-            received_hash=command.hash,
-        )
-
-        # Telegram может не давать email.
-        # Используем синтетический email-like идентификатор для создания аккаунта.
-        synthetic_email: str = f"tg_{user_info.telegram_id}@telegram.oauth"
-
-        return await self._login_or_register(
-            provider=OAuthProvider.TELEGRAM,
-            provider_user_id=user_info.telegram_id,
-            email=synthetic_email,
-            user_agent=command.user_agent,
-            ip_address=command.ip_address,
-        )
+    # ── Private ───────────────────────────────────────────────────────────────
 
     async def _login_or_register(
         self,
         provider: OAuthProvider,
-        provider_user_id: str,
-        email: str,
+        user_info: OAuthUserInfo,
         user_agent: str | None,
         ip_address: str | None,
     ) -> TokenPair:
-        """
-        Общая логика: найти или создать аккаунт, выдать токены.
-        """
         async with self._uow_factory.create(master=True) as uow:
-            # 1. Ищем существующую OAuth-привязку
             oauth_account: OAuthAccount | None = await uow.oauth_accounts.get_by_provider(
                 provider=provider,
-                provider_user_id=provider_user_id,
+                provider_user_id=user_info.provider_user_id,
             )
 
             if oauth_account is not None:
-                # Привязка есть → логин
-                account: Account = await uow.accounts.get_by_id(oauth_account.account_id)
-
-                if account.is_acc_blocked:
-                    raise AccountBlockedError()
-
+                account, role = await self._login(uow, oauth_account)
             else:
-                # Привязки нет — проверяем email (только для провайдеров с реальным email)
-                if not email.endswith("@telegram.oauth"):
-                    existing: Account | None = await uow.accounts.get_by_email(email)
-                    if existing is not None:
-                        raise ConflictError(
-                            message="Email уже зарегистрирован",
-                            errors={
-                                "email": "Аккаунт с этим email уже существует. Войдите по паролю.",
-                            },
-                        )
+                account, role = await self._register(uow, provider, user_info)
 
-                # Регистрация нового аккаунта
-                validated_email = Email.create(email)
-
-                account = create_account(
-                    email=validated_email,
-                    hashed_password=None,  # OAuth-аккаунт без пароля
-                    is_verified=True,
-                )
-
-                role: Role | None = await uow.roles.get_by_name_with_permissions(name=account.role_name)
-
-                if role is None:
-                    raise RoleDomainError(
-                        errors={"role": f"Не найдена роль {account.role_name}"},
-                    )
-
-                account_role: AccountRole = create_account_role(
-                    account_id=account.id,
-                    role_id=role.id,
-                )
-
-                await uow.accounts.save(account=account)
-                await uow.account_roles.assign_role(account_role=account_role)
-
-                # Создать OAuth-привязку
-                new_oauth = create_oauth_account(
-                    account_id=account.id,
-                    provider=provider,
-                    provider_user_id=provider_user_id,
-                )
-                await uow.oauth_accounts.create(new_oauth)
-
-            # 2. Создать сессию и выдать токены
-            session_id: str = self._tokens.generate_session_id_hex()
-            token_pair: CreatedTokenPair = self._tokens.create_token_pair(
-                account_id=account.id,
-                email=account.email_str,
-                role=account.role_str,
-                session_id=session_id,
-            )
-
-            refresh_token: RefreshToken = create_refresh_token(
-                account_id=account.id,
-                session_id=session_id,
-                token_hash=token_pair.refresh_token_hash,
-                expires_at=datetime.now(tz=UTC) + timedelta(days=settings.JWT_TOKEN_REFRESH_LIFETIME_DAYS),
+            session = self._session_service.create_session(
+                account=account,
                 user_agent=user_agent,
                 ip_address=ip_address,
             )
-            await uow.refresh_tokens.create(refresh_token)
+            await uow.refresh_tokens.create(session.refresh_token)
 
         return TokenPair(
-            access_token=token_pair.access_token,
-            refresh_token=token_pair.refresh_token,
+            access_token=session.access_token,
+            refresh_token=session.raw_refresh_token,
             role=account.role_str,
-            permissions=sorted(role.codenames) if role else [],
+            permissions=sorted(role.codenames),
         )
+
+    async def _login(self, uow: IdentityUoW, oauth_account: OAuthAccount) -> tuple[Account, Role]:
+        """Логин существующего OAuth-пользователя."""
+        account = await uow.accounts.get_by_id(oauth_account.account_id)
+        account.check_not_blocked()
+
+        # Загружаем роль с пермишенами — нужна для TokenPair.permissions
+        role = await uow.roles.get_by_name_with_permissions(name=account.role_name)
+        if role is None:
+            raise RoleDomainError(errors={"role": f"Роль {account.role_name} не найдена"})
+
+        return account, role
+
+    async def _register(
+        self,
+        uow: IdentityUoW,
+        provider: OAuthProvider,
+        user_info: OAuthUserInfo,
+    ) -> tuple[Account, Role]:
+        """Регистрация нового OAuth-пользователя."""
+        email_str = user_info.email or ""
+
+        # Проверяем конфликт только для реальных email (не синтетических)
+        if not _is_synthetic_email(email_str):
+            existing = await uow.accounts.get_by_email(email_str)
+            if existing is not None:
+                raise ConflictError(
+                    message="Email уже зарегистрирован",
+                    errors={"email": "Войдите по паролю или привяжите аккаунт."},
+                )
+
+        validated_email = Email.create(email_str)
+        is_verified = user_info.is_email_verified and not _is_synthetic_email(email_str)
+
+        account = create_account(
+            email=validated_email,
+            hashed_password=None,
+            is_verified=is_verified,
+        )
+
+        role: Role | None = await uow.roles.get_by_name_with_permissions(name=account.role_name)
+        if role is None:
+            raise RoleDomainError(errors={"role": f"Роль {account.role_name} не найдена"})
+
+        account_role = create_account_role(account_id=account.id, role_id=role.id)
+
+        await uow.accounts.save(account=account)
+        await uow.account_roles.assign_role(account_role=account_role)
+        await uow.oauth_accounts.create(
+            create_oauth_account(
+                account_id=account.id,
+                provider=provider,
+                provider_user_id=user_info.provider_user_id,
+            )
+        )
+
+        return account, role
+
+
+def _is_synthetic_email(email: str) -> bool:
+    """Синтетический email — от провайдера без реального email (Telegram)."""
+    domain = email.split("@")[-1] if "@" in email else ""
+    return domain in _SYNTHETIC_EMAIL_DOMAINS

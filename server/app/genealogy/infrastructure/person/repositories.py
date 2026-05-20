@@ -1,14 +1,5 @@
 """
 infrastructure/person/repositories.py
-
-Реализация репозитория Person через SQLAlchemy.
-
-Принципы:
-- Реализует Protocol PersonRepository — структурное соответствие.
-- Знает о ORM-моделях и маппере, не знает о доменной логике.
-- save() = upsert: если id существует — UPDATE, иначе INSERT.
-- get_by_id() бросает NotFoundError (доменное исключение), не sqlalchemy.exc.
-- Пагинация и фильтрация делегируются FilterTranslator.
 """
 
 from __future__ import annotations
@@ -16,7 +7,8 @@ from __future__ import annotations
 from shared.domain.exceptions import NotFoundError
 from shared.domain.value_objects.pagination import BaseFilterSpec
 from shared.infrastructure.db.filters.translator import FilterTranslator
-from sqlalchemy import delete, exists, func, insert, select, update
+from sqlalchemy import delete, exists, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine.result import Result
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import Select
@@ -64,18 +56,19 @@ class PersonRepositoryImpl:
         return Page(result=persons, total=total, limit=spec.limit, offset=spec.offset)
 
     async def save(self, person: Person) -> Person:
-        """
-        Upsert: INSERT если новый, UPDATE если существует.
-        Определяем по exists() — избегаем ошибок при ON CONFLICT.
-        """
+        """Атомарный UPSERT через PostgreSQL INSERT ... ON CONFLICT DO UPDATE."""
         data = PersonMapper.to_persistence(person)
-        already_exists = await self.exists(person.id)
+        update_data = {k: v for k, v in data.items() if k != "id"}
 
-        if already_exists:
-            stmt = update(ORMPerson).where(ORMPerson.id == person.id).values(**data).returning(ORMPerson)
-        else:
-            stmt = insert(ORMPerson).values(**data).returning(ORMPerson)
-
+        stmt = (
+            pg_insert(ORMPerson)
+            .values(**data)
+            .on_conflict_do_update(
+                index_elements=["id"],
+                set_=update_data,
+            )
+            .returning(ORMPerson)
+        )
         result: Result = await self._session.execute(stmt)
         orm = result.scalar_one()
         return PersonMapper.to_domain(orm)

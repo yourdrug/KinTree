@@ -1,13 +1,6 @@
 """
 application/person/service.py
 
-Application service for the Person aggregate.
-
-Rules:
-- Never constructs PersonName or PartialDate directly — those are domain concerns.
-- Mutation is delegated to Person.apply_put() / Person.apply_patch().
-- Family-level duplicate check uses FamilyMemberSpec — Family does not know about Person.
-- Each use-case opens exactly one UoW context.
 """
 
 from __future__ import annotations
@@ -25,8 +18,6 @@ class PersonService:
     def __init__(self, uow_factory: GenealogyUoWFactory) -> None:
         self._uow_factory = uow_factory
 
-    # ── Queries ───────────────────────────────────────────────────────────────
-
     async def get_person(self, person_id: str) -> Person:
         async with self._uow_factory.create(master=False) as uow:
             return await uow.persons.get_by_id(person_id)
@@ -35,11 +26,10 @@ class PersonService:
         async with self._uow_factory.create(master=False) as uow:
             return await uow.persons.list(spec)
 
-    # ── Commands ──────────────────────────────────────────────────────────────
-
     async def create_person(self, command: CreatePersonCommand) -> Person:
         async with self._uow_factory.create(master=True) as uow:
-            # Строим кандидата
+            await uow.families.get_by_id(command.family_id)
+
             person = create_person(
                 gender=command.gender,
                 family_id=command.family_id,
@@ -51,7 +41,6 @@ class PersonService:
                 death_date_raw=command.death_date_raw,
             )
 
-            # Проверяем инвариант дублирования через Family + FamilyMemberSpec
             await self._check_family_duplicate(
                 uow=uow,
                 family_id=command.family_id,
@@ -69,7 +58,6 @@ class PersonService:
         async with self._uow_factory.create(master=True) as uow:
             person = await uow.persons.get_by_id(command.person_id)
 
-            # Делегируем мутацию сущности — она владеет своими инвариантами
             person.apply_put(
                 gender=command.gender,
                 first_name=command.first_name,
@@ -80,7 +68,6 @@ class PersonService:
                 death_date_raw=command.death_date_raw,
             )
 
-            # Проверяем family-level инвариант, исключая саму персону
             await self._check_family_duplicate(
                 uow=uow,
                 family_id=person.family_id,
@@ -104,7 +91,6 @@ class PersonService:
                 birth_date=command.birth_date,
             )
 
-            # Делегируем мутацию сущности
             person.apply_patch(
                 first_name=command.first_name,
                 last_name=command.last_name,
@@ -115,7 +101,6 @@ class PersonService:
                 death_date_raw=command.death_date_raw,
             )
 
-            # Проверяем только если изменились identity-поля
             if needs_duplicate_check:
                 await self._check_family_duplicate(
                     uow=uow,
@@ -134,8 +119,6 @@ class PersonService:
         async with self._uow_factory.create(master=True) as uow:
             await uow.persons.remove(person_id)
 
-    # ── Helpers ───────────────────────────────────────────────────────────────
-
     @staticmethod
     async def _check_family_duplicate(
         uow: GenealogyUoW,
@@ -143,18 +126,9 @@ class PersonService:
         candidate: FamilyMemberSpec,
         exclude_id: str | None,
     ) -> None:
-        """
-        Загружает Family, наполняет спецификациями существующих членов
-        и проверяет инвариант дублирования.
-
-        Family не знает о Person — получает только FamilyMemberSpec.
-        exclude_id: исключить одну персону из проверки (используется при
-        обновлении, чтобы персона не сравнивалась сама с собой).
-        """
         family = await uow.families.get_by_id(family_id)
         existing_persons = await uow.persons.find_by_family(family_id)
 
-        # Строим список спецификаций, исключая обновляемую персону
         specs = [
             FamilyMemberSpec(
                 first_name=p.first_name,

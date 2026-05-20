@@ -1,9 +1,14 @@
+"""
+genealogy/infrastructure/family/mapper.py
+"""
+
 from genealogy.domain.entities.family import Family as DomainFamily
 from genealogy.infrastructure.db.models.family import Family as ORMFamily
 
 
 class FamilyMapper:
-    def to_domain(self, model: ORMFamily) -> DomainFamily:
+    @staticmethod
+    def to_domain(model: ORMFamily) -> DomainFamily:
         return DomainFamily(
             id=model.id,
             name=model.name,
@@ -14,7 +19,8 @@ class FamilyMapper:
             ended_year=model.ended_year,
         )
 
-    def to_persistence(self, entity: DomainFamily) -> dict:
+    @staticmethod
+    def to_persistence(entity: DomainFamily) -> dict:
         return {
             "id": entity.id,
             "name": entity.name,

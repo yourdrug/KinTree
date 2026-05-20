@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import logging
 
+from shared.domain.permissions.enums import RoleName
+
 from identity.domain.entities.account import Account as DomainAccount
-from identity.domain.entities.permission import get_default_role_name
-from identity.domain.permissions.enums import RoleName
 from identity.domain.value_objects.email import Email
 from identity.domain.value_objects.hashed_password import HashedPassword
 from identity.infrastructure.db.models.account import Account as ORMAccount
@@ -36,7 +36,7 @@ class AccountMapper:
                 role_name,
                 model.id,
             )
-            role = get_default_role_name()
+            role = RoleName.USER
 
         return DomainAccount(
             id=model.id,

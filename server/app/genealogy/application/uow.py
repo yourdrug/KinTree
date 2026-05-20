@@ -1,4 +1,8 @@
-# genealogy/application/uow.py
+"""
+genealogy/application/uow.py
+
+"""
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -12,21 +16,20 @@ from genealogy.domain.repositories.family import FamilyRepository
 from genealogy.domain.repositories.graph import FamilyGraphRepository
 from genealogy.domain.repositories.parent_child import ParentChildRepository
 from genealogy.domain.repositories.person import PersonRepository
+from genealogy.domain.repositories.sibling import SiblingRepository
 from genealogy.domain.repositories.spouse import SpouseRepository
 
 
 class GenealogyUoW:
     """
     Unit of Work для Genealogy контекста.
-
-    Содержит только репозитории, принадлежащие этому контексту.
-    Не знает об Identity — никакого accounts/permissions здесь.
     """
 
     persons: PersonRepository
     families: FamilyRepository
     parent_child: ParentChildRepository
     spouses: SpouseRepository
+    siblings: SiblingRepository
     family_graph: FamilyGraphRepository
 
     def __init__(
@@ -36,6 +39,7 @@ class GenealogyUoW:
         families: FamilyRepository,
         parent_child: ParentChildRepository,
         spouses: SpouseRepository,
+        siblings: SiblingRepository,
         family_graph: FamilyGraphRepository,
     ) -> None:
         self._session = session
@@ -43,6 +47,7 @@ class GenealogyUoW:
         self.families = families
         self.parent_child = parent_child
         self.spouses = spouses
+        self.siblings = siblings
         self.family_graph = family_graph
 
     async def __aenter__(self) -> GenealogyUoW:
@@ -55,14 +60,16 @@ class GenealogyUoW:
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
-        with suppress(Exception):
+        try:
             if exc_type is None:
                 await self._session.commit()
             else:
+                with suppress(Exception):
+                    await self._session.rollback()
+        except DBAPIError as db_err:
+            with suppress(Exception):
                 await self._session.rollback()
-
-        with suppress(Exception):
-            await self._session.close()
-
-        if exc_type is not None and issubclass(exc_type, DBAPIError):
-            raise DatabaseError(detail=str(exc_val)) from exc_val
+            raise DatabaseError(detail=str(db_err)) from db_err
+        finally:
+            with suppress(Exception):
+                await self._session.close()

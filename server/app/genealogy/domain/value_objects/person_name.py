@@ -1,4 +1,3 @@
-# genealogy/domain/value_objects/person_name.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,17 +17,14 @@ class PersonName:
     first_name: str | None
     last_name: str | None
 
-    def __new__(cls, first_name: str | None, last_name: str | None) -> PersonName:
-        # Нормализуем до вызова __post_init__
-        fn = first_name.strip() if first_name else None
-        ln = last_name.strip() if last_name else None
-        instance = object.__new__(cls)
-        # frozen=True, поэтому через object.__setattr__
-        object.__setattr__(instance, "first_name", fn or None)
-        object.__setattr__(instance, "last_name", ln or None)
-        return instance
-
     def __post_init__(self) -> None:
+        # Нормализация: пустые строки → None
+        fn = self.first_name.strip() if self.first_name else None
+        ln = self.last_name.strip() if self.last_name else None
+        # frozen=True, поэтому через object.__setattr__
+        object.__setattr__(self, "first_name", fn or None)
+        object.__setattr__(self, "last_name", ln or None)
+
         if not self.first_name and not self.last_name:
             raise PersonDomainError(
                 field="name",

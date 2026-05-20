@@ -1,19 +1,5 @@
 """
 domain/entities/family.py
-
-Family aggregate root.
-
-Family is the consistency boundary for its members.
-assert_can_add_member() enforces all cross-person invariants before persistence.
-
-Изменение (decoupling):
-  Раньше assert_can_add_member() принимал Person — объект другого агрегата.
-  Теперь принимает FamilyMemberSpec — VO из своего bounded context.
-  Family больше не импортирует Person. Зависимость разорвана.
-
-Исправление порядка полей dataclass:
-  _member_specs вынесен из полей dataclass в __post_init__ через object.__setattr__,
-  чтобы избежать проблем с порядком полей (non-default после default).
 """
 
 from __future__ import annotations
@@ -42,10 +28,7 @@ class Family:
     - owner_id is non-empty
     - founded_year <= ended_year (when both set)
     - both years in range [1, 9999]
-    - No duplicate members (same name + birth_date)
-
-    _member_specs is NOT a dataclass field — it is set in __post_init__
-    to avoid MRO / field-ordering issues with defaults.
+    - No duplicate members (same name + birth_date, or same name + no date for both)
     """
 
     id: str
@@ -57,39 +40,17 @@ class Family:
     ended_year: int | None = None
 
     def __post_init__(self) -> None:
-        # Not a dataclass field — managed manually to avoid ordering issues.
-        # Private; only mutated via load_member_specs().
         object.__setattr__(self, "_member_specs", [])
         self._validate()
-
-    # ── Queries ───────────────────────────────────────────────────────────────
 
     @property
     def members_count(self) -> int:
         return len(self._member_specs)  # type: ignore[attr-defined]
 
-    # ── Commands ──────────────────────────────────────────────────────────────
-
     def load_member_specs(self, specs: list[FamilyMemberSpec]) -> None:
-        """
-        Загружает спецификации существующих членов семьи для последующей
-        проверки дублирования.
-
-        Вызывается в PersonService ДО assert_can_add_member().
-        Не персистируется — только для проверки инвариантов в рамках use-case.
-        """
         object.__setattr__(self, "_member_specs", list(specs))
 
     def assert_can_add_member(self, candidate: FamilyMemberSpec) -> None:
-        """
-        Проверяет инварианты перед добавлением нового члена семьи.
-
-        Принимает FamilyMemberSpec, а не Person — Family не знает о Person.
-        Вызывается PersonService перед персистированием.
-
-        Raises:
-            FamilyDomainError: если кандидат является дубликатом.
-        """
         if not candidate.has_identity():
             return
         self._assert_no_duplicate(candidate)
@@ -103,7 +64,6 @@ class Family:
         founded_year: int | None,
         ended_year: int | None,
     ) -> None:
-        """Full replacement (PUT semantics). Validates after update."""
         self.name = name
         self.description = description
         self.origin_place = origin_place
@@ -120,7 +80,6 @@ class Family:
         founded_year: int | None | UnsetType = UNSET,
         ended_year: int | None | UnsetType = UNSET,
     ) -> None:
-        """Partial update (PATCH semantics). UNSET fields are untouched."""
         if not isinstance(name, UnsetType):
             self.name = name
         if not isinstance(description, UnsetType):
@@ -138,19 +97,15 @@ class Family:
     def _validate(self) -> None:
         if not self.name or not self.name.strip():
             raise FamilyDomainError(field="name", message="Family name cannot be empty.")
-
         if len(self.name) > _MAX_NAME_LENGTH:
             raise FamilyDomainError(
                 field="name",
                 message=f"Family name cannot exceed {_MAX_NAME_LENGTH} characters.",
             )
-
         if not self.owner_id or not self.owner_id.strip():
             raise FamilyDomainError(field="owner_id", message="Family must have an owner.")
-
         if not self.id or not self.id.strip():
             raise FamilyDomainError(field="id", message="Family ID cannot be empty.")
-
         self._validate_optional_strings()
         self._validate_years()
 
@@ -160,7 +115,6 @@ class Family:
                 field="description",
                 message="Description cannot be an empty string; use null to clear it.",
             )
-
         if self.origin_place is not None and not self.origin_place.strip():
             raise FamilyDomainError(
                 field="origin_place",
@@ -173,13 +127,11 @@ class Family:
                 field="founded_year",
                 message=f"Founded year must be between {_MIN_YEAR} and {_MAX_YEAR}.",
             )
-
         if self.ended_year is not None and not (_MIN_YEAR <= self.ended_year <= _MAX_YEAR):
             raise FamilyDomainError(
                 field="ended_year",
                 message=f"Ended year must be between {_MIN_YEAR} and {_MAX_YEAR}.",
             )
-
         if self.founded_year is not None and self.ended_year is not None and self.founded_year > self.ended_year:
             raise FamilyDomainError(
                 field="founded_year",
@@ -192,27 +144,28 @@ class Family:
                 name = " ".join(filter(None, [candidate.first_name, candidate.last_name]))
                 raise FamilyDomainError(
                     field="person",
-                    message=(f"A person named «{name}» with the same birth date already exists in this family."),
+                    message=f"A person named «{name}» with the same birth date already exists in this family.",
                 )
 
 
 def _is_duplicate(existing: FamilyMemberSpec, candidate: FamilyMemberSpec) -> bool:
-    """
-    Дубликат = совпадение (first_name + last_name + birth_date).
-    None != None в бизнес-терминах — не является дубликатом.
-    """
     names_match = (
         existing.first_name is not None
         and existing.last_name is not None
         and existing.first_name == candidate.first_name
         and existing.last_name == candidate.last_name
     )
+
+    if not names_match:
+        return False
+
+    both_no_date = existing.birth_date is None and candidate.birth_date is None
     dates_match = (
         existing.birth_date is not None
         and candidate.birth_date is not None
         and existing.birth_date == candidate.birth_date
     )
-    return names_match and dates_match
+    return both_no_date or dates_match
 
 
 def create_family(
@@ -224,7 +177,6 @@ def create_family(
     founded_year: int | None = None,
     ended_year: int | None = None,
 ) -> Family:
-    """Factory for brand-new families. Generates ID and validates."""
     if not owner_id or not owner_id.strip():
         raise FamilyDomainError(field="owner_id", message="owner_id cannot be empty.")
 

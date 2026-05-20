@@ -1,3 +1,8 @@
+"""
+genealogy/infrastructure/uow_factory.py
+
+"""
+
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
@@ -10,6 +15,7 @@ from genealogy.infrastructure.family.repositories import FamilyRepositoryImpl
 from genealogy.infrastructure.person.repositories import PersonRepositoryImpl
 from genealogy.infrastructure.relations.graph_repository import FamilyGraphRepositoryImpl
 from genealogy.infrastructure.relations.parent_child_repository import ParentChildRepositoryImpl
+from genealogy.infrastructure.relations.sibling_repository import SiblingRepositoryImpl
 from genealogy.infrastructure.relations.spouse_repository import SpouseRepositoryImpl
 
 
@@ -26,6 +32,7 @@ class GenealogyUoWFactory:
             families=FamilyRepositoryImpl(session=session),
             parent_child=ParentChildRepositoryImpl(session=session),
             spouses=SpouseRepositoryImpl(session=session),
+            siblings=SiblingRepositoryImpl(session=session),
             family_graph=FamilyGraphRepositoryImpl(session=session),
         )
 

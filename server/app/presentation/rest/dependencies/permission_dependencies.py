@@ -19,8 +19,8 @@ from __future__ import annotations
 
 from fastapi import Depends
 from identity.domain.entities.account import Account
-from identity.domain.permissions.enums import PermissionCodename
 from shared.domain.exceptions import PermissionDeniedError
+from shared.domain.permissions.enums import PermissionCodename
 
 from presentation.rest.dependencies.auth import get_current_account
 

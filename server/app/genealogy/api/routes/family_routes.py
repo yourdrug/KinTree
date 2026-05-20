@@ -1,22 +1,15 @@
 """
 api/routes/family_routes.py
-
-HTTP-роуты для агрегата Family.
-
-Принципы:
-- Роутер тонкий: принял запрос → создал команду → вызвал сервис → вернул ответ.
-- Никакой бизнес-логики в роутере.
-- Зависимости инжектируются через Depends.
-- Пагинация и фильтры — через FilterSchema.
-- Нет импортов из identity контекста: auth получается через presentation слой,
-  в сервис передаётся только owner_id: str, не объект Account.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Body, Depends, Path, Request, status
-from presentation.rest.dependencies.auth import get_current_account_id
+from identity.domain.entities.account import Account
+from presentation.rest.dependencies.auth import get_current_account, get_current_account_id
+from presentation.rest.dependencies.permission_dependencies import check_owner_or_permission
 from presentation.rest.dependencies.services import get_family_service
+from shared.domain.permissions.enums import PermissionCodename
 from shared.domain.value_objects.pagination import BaseFilterSpec, Page
 
 from genealogy.api.schemas.family import (
@@ -41,18 +34,7 @@ async def get_families_list(
     filters: FamilyFilterSchema = Depends(),
     service: FamilyService = Depends(get_family_service),
 ) -> FamilyPageResponse:
-    """
-    Получить список семей с фильтрацией, сортировкой и пагинацией.
-
-    Query-параметры фильтрации:
-    - `name__icontains` — поиск по названию
-    - `owner_id` — поиск по точному ID владельца
-    - `founded_year__gte` / `founded_year__lte` — диапазон года основания
-    - `search` — поиск по имени + описанию
-    - `order_by` — сортировка (name | founded_year | creation_date)
-    - `order_dir` — направление (asc | desc)
-    - `limit` / `offset` — пагинация
-    """
+    """Получить список семей с фильтрацией, сортировкой и пагинацией."""
     spec: BaseFilterSpec = filters.to_spec()
     page: Page[Family] = await service.get_families_list(spec)
     return FamilyPageResponse.from_page(page=page, request=request)
@@ -74,7 +56,7 @@ async def create_family(
     owner_id: str = Depends(get_current_account_id),
     service: FamilyService = Depends(get_family_service),
 ) -> FamilyResponse:
-    """Создание семьи по введенным данным."""
+    """Создание семьи по введённым данным."""
     command: CreateFamilyCommand = payload.to_command()
     created_family: Family = await service.create_family(command=command, owner_id=owner_id)
     return FamilyResponse.from_domain(family=created_family)
@@ -84,12 +66,20 @@ async def create_family(
 async def update_family(
     family_id: str = Path(..., min_length=32, max_length=32),
     payload: PutFamilyRequest = Body(...),
+    account: Account = Depends(get_current_account),
     service: FamilyService = Depends(get_family_service),
 ) -> FamilyResponse:
     """
-    Перезаписать объект семьи для обновления.
-    Если необязательный атрибут не передан, он устанавливается как None.
+    Перезаписать объект семьи (PUT-семантика).
+    Доступно только владельцу или аккаунту с пермишеном family:update:any.
     """
+    family: Family = await service.get_family(family_id)
+    check_owner_or_permission(
+        account=account,
+        codename=PermissionCodename.FAMILY__UPDATE_ANY.value,
+        resource_owner_id=family.owner_id,
+    )
+
     command = payload.to_command(family_id=family_id)
     updated_family: Family = await service.update_family(command)
     return FamilyResponse.from_domain(family=updated_family)
@@ -99,12 +89,20 @@ async def update_family(
 async def patch_update_family(
     family_id: str = Path(..., min_length=32, max_length=32),
     payload: PatchFamilyRequest = Body(...),
+    account: Account = Depends(get_current_account),
     service: FamilyService = Depends(get_family_service),
 ) -> FamilyResponse:
     """
-    Частично обновить объект семьи.
-    Если атрибут не передан, он не изменяется.
+    Частично обновить объект семьи (PATCH-семантика).
+    Доступно только владельцу или аккаунту с пермишеном family:update:any.
     """
+    family: Family = await service.get_family(family_id)
+    check_owner_or_permission(
+        account=account,
+        codename=PermissionCodename.FAMILY__UPDATE_ANY.value,
+        resource_owner_id=family.owner_id,
+    )
+
     command = payload.to_command(family_id)
     updated_family: Family = await service.patch_update_family(command)
     return FamilyResponse.from_domain(family=updated_family)
@@ -113,7 +111,17 @@ async def patch_update_family(
 @router.delete(path="/{family_id:str}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_family(
     family_id: str = Path(..., min_length=32, max_length=32),
+    account: Account = Depends(get_current_account),
     service: FamilyService = Depends(get_family_service),
 ) -> None:
-    """Удалить объект семьи."""
+    """
+    Удалить объект семьи.
+    Доступно только владельцу или аккаунту с пермишеном family:delete:any.
+    """
+    family: Family = await service.get_family(family_id)
+    check_owner_or_permission(
+        account=account,
+        codename=PermissionCodename.FAMILY__DELETE_ANY.value,
+        resource_owner_id=family.owner_id,
+    )
     await service.delete_family(family_id)
