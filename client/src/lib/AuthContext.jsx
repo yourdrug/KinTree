@@ -1,13 +1,17 @@
 /**
  * lib/AuthContext.jsx
  *
- * Исправления:
+ * ИСПРАВЛЕНИЯ:
  * 1. checkUserAuth не вызывает _clearSession при 401 — только при настоящем logout/refresh fail
  * 2. loginWithGoogle открывает окно через редирект на бэкенд (бэкенд → Google → /oauth/callback)
  * 3. handleOAuthCallback корректно принимает code из URL и отправляет на бэкенд
  * 4. Состояние не сбрасывается при SPA-навигации (Provider монтируется один раз в App)
  * 5. _logoutRef устанавливается только когда пользователь активно залогинен
  * 6. isLoadingAuth true только при реальных запросах, не при навигации
+ * 7. FIX: _meCallState.isInitial управляет поведением интерцептора для /account/me.
+ *    При старте приложения 401 на /me не триггерит refresh (пользователь не залогинен).
+ *    После логина все вызовы /me идут через refresh как обычно — истёкший
+ *    access-токен будет автоматически обновлён через refresh-токен в куках.
  */
 
 import React, {
@@ -18,7 +22,7 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import { http, _logoutRef } from "@/api/client";
+import { http, _logoutRef, _meCallState } from "@/api/client";
 import { ENDPOINTS as EP } from "@/api/endpoints";
 import { ROUTES } from "@/lib/routes";
 import { appParams } from "@/lib/app-params";
@@ -63,28 +67,43 @@ export const AuthProvider = ({ children }) => {
     }
   }, [isAuthenticated, _clearSession]);
 
-  // ── Restore on mount — единственный вызов при старте ───────────────────────
-  const checkUserAuth = useCallback(async () => {
+  // ── checkUserAuth ──────────────────────────────────────────────────────────
+  /**
+   * Запрашивает /account/me.
+   *
+   * isInitialCheck=true  → первый запуск приложения: 401 = "не залогинен",
+   *                         интерцептор НЕ делает refresh (через _meCallState.isInitial).
+   * isInitialCheck=false → повторный вызов после логина/OAuth: если access-токен
+   *                         истёк, интерцептор сделает refresh автоматически.
+   */
+  const checkUserAuth = useCallback(async (isInitialCheck = false) => {
     try {
       setIsLoadingAuth(true);
+
+      // Сообщаем интерцептору: этот вызов /me — начальный, не делай refresh на 401
+      _meCallState.isInitial = isInitialCheck;
+
       const res = await http.get(EP.auth.me());
       setUser(res.data);
       setIsAuthenticated(true);
       wasAuthenticated.current = true;
       setAuthError(null);
     } catch {
-      // 401 при /me — просто не залогинен, это нормально
-      // НЕ вызываем _clearSession, просто оставляем user = null
+      // При начальной проверке 401 — просто не залогинен, это нормально.
+      // При повторном вызове интерцептор уже попытался refresh; если дошли сюда —
+      // refresh тоже не помог, пользователь разлогинен.
       setUser(null);
       setIsAuthenticated(false);
     } finally {
+      _meCallState.isInitial = false; // всегда сбрасываем флаг
       setIsLoadingAuth(false);
     }
   }, []);
 
-  // Запускается один раз при монтировании — при SPA-навигации НЕ перезапускается
+  // Запускается один раз при монтировании — при SPA-навигации НЕ перезапускается.
+  // Передаём isInitialCheck=true: 401 означает просто "не залогинен".
   useEffect(() => {
-    checkUserAuth();
+    checkUserAuth(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Login ──────────────────────────────────────────────────────────────────
@@ -144,9 +163,6 @@ export const AuthProvider = ({ children }) => {
   }, [_clearSession]);
 
   // ── OAuth: Google ──────────────────────────────────────────────────────────
-  // Бэкенд на GET /auth/oauth/google делает редирект на Google.
-  // Google после авторизации редиректит пользователя на GOOGLE_REDIRECT_URI.
-  // GOOGLE_REDIRECT_URI должен указывать на страницу /oauth/callback на фронте.
   const loginWithGoogle = useCallback(() => {
     window.location.href = `${appParams.apiUrl}${EP.auth.googleRedirect()}`;
   }, []);
@@ -156,12 +172,11 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsLoadingAuth(true);
       setAuthError(null);
-      // Telegram присылает данные как объект — строим query string
       const params = new URLSearchParams(telegramData).toString();
       const res = await http.get(`${EP.auth.telegramCallback()}?${params}`);
       // Бэкенд ставит cookie и возвращает { detail: "ok" }
-      // После этого перечитываем пользователя
-      await checkUserAuth();
+      // После этого перечитываем пользователя (isInitialCheck=false — делаем refresh если нужно)
+      await checkUserAuth(false);
       return { ok: true };
     } catch (err) {
       const message = _extractError(err, "Ошибка входа через Telegram");
@@ -178,7 +193,8 @@ export const AuthProvider = ({ children }) => {
   const handleOAuthCallback = useCallback(async () => {
     try {
       setIsLoadingAuth(true);
-      await checkUserAuth();
+      // isInitialCheck=false: если access-токен истёк, интерцептор обновит его
+      await checkUserAuth(false);
       return { ok: isAuthenticated };
     } catch {
       return { ok: false };
@@ -191,7 +207,7 @@ export const AuthProvider = ({ children }) => {
   const verifyEmail = useCallback(async (token) => {
     try {
       await http.post(EP.auth.verifyEmail(), { token });
-      await checkUserAuth();
+      await checkUserAuth(false);
       return { ok: true };
     } catch (err) {
       return { ok: false, message: _extractError(err, "Ошибка подтверждения") };

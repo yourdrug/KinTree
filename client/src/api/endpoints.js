@@ -54,7 +54,7 @@ export const ENDPOINTS = {
 
   // ── Relations ─────────────────────────────────────────────────────────────
   relations: {
-    graph:             (familyId)          => `/relations/graph/${familyId}`,
+    graph:             (familyId)          => `/relations/family-graph/${familyId}`,
     parentChild:       ()                  => "/relations/parent-child",
     removeParentChild: (parentId, childId) => `/relations/parent-child/${parentId}/${childId}`,
     spouses:           ()                  => "/relations/spouses",

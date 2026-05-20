@@ -10,9 +10,14 @@
  *  4. После успешного refresh — повторяем все запросы из очереди
  *  5. Если refresh тоже 401 — вызываем _logoutRef.current()
  *
- * Важно: /account/me при первом запуске может вернуть 401 —
- * это НЕ должно вызывать logout (пользователь просто не залогинен).
- * Поэтому /account/me помечен как "auth endpoint" и не идёт через refresh.
+ * ИСПРАВЛЕНИЕ:
+ *  - /account/me больше не исключён из refresh глобально.
+ *    Вместо этого AuthContext помечает "начальный" вызов /me через
+ *    _meCallState.isInitial = true, чтобы при первом старте приложения
+ *    401 не вызвал refresh (пользователь просто не залогинен).
+ *    Все последующие вызовы /me (после логина, OAuth и т.д.)
+ *    идут через refresh как обычно.
+ *  - _logoutRef вызывается только если пользователь был залогинен.
  */
 
 import axios from "axios";
@@ -37,6 +42,17 @@ function _processQueue(error) {
 // Устанавливается из AuthContext после mount
 export const _logoutRef = { current: null };
 
+/**
+ * Флаг: идёт ли прямо сейчас начальный вызов /account/me при старте приложения.
+ * AuthContext устанавливает его в true перед checkUserAuth() при монтировании,
+ * и сбрасывает в false сразу после завершения.
+ *
+ * Это нужно чтобы 401 на /me при первом старте (пользователь просто не залогинен)
+ * не триггерил refresh. При всех последующих вызовах /me (после логина,
+ * OAuth callback и т.д.) refresh работает как обычно.
+ */
+export const _meCallState = { isInitial: false };
+
 // ── Interceptor ────────────────────────────────────────────────────────────────
 
 http.interceptors.response.use(
@@ -46,13 +62,18 @@ http.interceptors.response.use(
     const status   = err.response?.status;
     const url      = original?.url ?? "";
 
-    // Эти эндпоинты не должны триггерить refresh — они сами про аутентификацию
-    const isAuthUrl =
+    // Эндпоинты, которые никогда не должны триггерить refresh —
+    // они сами являются частью процесса аутентификации.
+    const isHardSkipUrl =
       url.includes(EP.auth.refresh()) ||
-      url.includes(EP.auth.login())   ||
-      url.includes(EP.auth.me());     // /account/me — начальная проверка
+      url.includes(EP.auth.login());
 
-    if (status !== 401 || original._retry || isAuthUrl) {
+    // /account/me при начальной проверке (старт приложения) тоже пропускаем —
+    // 401 здесь означает просто "не залогинен", а не "токен истёк".
+    const isInitialMeCall =
+      url.includes(EP.auth.me()) && _meCallState.isInitial;
+
+    if (status !== 401 || original._retry || isHardSkipUrl || isInitialMeCall) {
       return Promise.reject(err);
     }
 
@@ -73,7 +94,6 @@ http.interceptors.response.use(
     } catch (refreshErr) {
       _processQueue(refreshErr);
       // Вызываем logout только если пользователь был залогинен
-      // (т.е. _logoutRef установлен и был активный пользователь)
       _logoutRef.current?.();
       return Promise.reject(refreshErr);
     } finally {
