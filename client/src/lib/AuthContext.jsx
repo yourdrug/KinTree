@@ -59,13 +59,13 @@ export const AuthProvider = ({ children }) => {
 
   // Регистрируем logout только когда пользователь залогинен
   // При незалогиненном состоянии — пустая функция (чтобы не делать лишний redirect)
-  useEffect(() => {
-    if (isAuthenticated) {
-      _logoutRef.current = _clearSession;
-    } else {
-      _logoutRef.current = null;
-    }
-  }, [isAuthenticated, _clearSession]);
+  // useEffect(() => {
+  //   if (isAuthenticated) {
+  //     _logoutRef.current = _clearSession;
+  //   } else {
+  //     _logoutRef.current = null;
+  //   }
+  // }, [isAuthenticated, _clearSession]);
 
   // ── checkUserAuth ──────────────────────────────────────────────────────────
   /**

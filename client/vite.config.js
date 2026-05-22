@@ -15,23 +15,23 @@ export default defineConfig({
     proxy: {
       // Проксируем все API-пути на бэкенд
       '/auth': {
-        target: 'http://172.20.41.190:8000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
       '/account': {
-        target: 'http://172.20.41.190:8000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
       '/families': {
-        target: 'http://172.20.41.190:8000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
       '/persons': {
-        target: 'http://172.20.41.190:8000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
       '/relations': {
-        target: 'http://172.20.41.190:8000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
     },

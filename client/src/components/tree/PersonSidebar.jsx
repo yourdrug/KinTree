@@ -2,20 +2,50 @@
  * components/tree/PersonSidebar.jsx
  *
  * ИСПРАВЛЕНИЯ:
- * 1. Возраст теперь вычисляется с учётом month/day из PartialDateSchema,
- *    а не просто разностью годов. Для умерших — возраст на момент смерти.
- * 2. Убраны неиспользуемые импорты (ChevronRight, AnimatePresence).
+ * 1. parents/children/spouses/siblings берутся из relationMaps (buildRelationMaps),
+ *    а не из person.parent_ids и т.д. — этих полей нет в NodeResponse.
+ * 2. Siblings показываются с типом (FULL/HALF/STEP) и подписью.
+ * 3. Возраст вычисляется из birth_year/death_year (числа из NodeResponse),
+ *    а не из PartialDateSchema (PersonResponse).
+ * 4. Удалены неиспользуемые импорты.
+ * 5. nodesById — Map для O(1) поиска узла по ID.
  */
 
 import { X, Edit, UserPlus, User, Calendar, Heart } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { formatPartialDate } from "@/api";
+import { Button }           from "@/components/ui/button";
+import { formatPartialDate, getPersonRelations } from "@/api";
 
-function RelativeChip({ person, label }) {
-  if (!person) return null;
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Подпись для типа сиблинговой связи.
+ */
+const SIBLING_TYPE_LABEL = {
+  FULL: "Полный(ая) брат/сестра",
+  HALF: "Единокровный(ая) / единоутробный(ая)",
+  STEP: "Сводный(ая) брат/сестра",
+};
+
+/**
+ * Вычисляет возраст из числовых birth_year / death_year (NodeResponse).
+ * Для живых — текущий возраст, для умерших — на момент смерти.
+ */
+function computeAgeFromYears(birthYear, deathYear, isAlive) {
+  if (!birthYear) return null;
+  const endYear = (!isAlive && deathYear) ? deathYear : new Date().getFullYear();
+  const age = endYear - birthYear;
+  return age >= 0 ? age : null;
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function RelativeChip({ node, label, badge }) {
+  if (!node) return null;
+  const name = node.full_name || [node.first_name, node.last_name].filter(Boolean).join(" ") || "—";
+
   return (
     <div
-      className="flex items-center gap-2.5 p-2.5 rounded-xl transition-colors hover:bg-muted/60 cursor-default"
+      className="flex items-center gap-2.5 p-2.5 rounded-xl"
       style={{ background: "hsl(35,25%,95%)" }}
     >
       <div
@@ -25,55 +55,36 @@ function RelativeChip({ person, label }) {
         <User className="w-4 h-4 text-muted-foreground" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-foreground truncate">
-          {person.first_name} {person.last_name}
-        </div>
+        <div className="text-sm font-medium text-foreground truncate">{name}</div>
         <div className="text-xs text-muted-foreground">{label}</div>
       </div>
+      {badge && (
+        <span
+          className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+          style={{
+            background:
+              badge === "FULL" ? "hsl(145,35%,90%)" :
+              badge === "HALF" ? "hsl(210,50%,90%)" :
+              "hsl(0,0%,90%)",
+            color:
+              badge === "FULL" ? "hsl(145,40%,35%)" :
+              badge === "HALF" ? "hsl(210,55%,40%)" :
+              "hsl(0,0%,40%)",
+          }}
+        >
+          {badge}
+        </span>
+      )}
     </div>
   );
 }
 
-function getYear(pd) {
-  if (!pd) return null;
-  if (typeof pd === "object") return pd.year || null;
-  return null;
-}
-
-function computeAge(birthDate, deathDate) {
-  if (!birthDate) return null;
-
-  const birthYear  = birthDate.year;
-  const birthMonth = birthDate.month || 1;
-  const birthDay   = birthDate.day   || 1;
-
-  if (!birthYear) return null;
-
-  let endYear, endMonth, endDay;
-
-  if (deathDate?.year) {
-    endYear  = deathDate.year;
-    endMonth = deathDate.month || 1;
-    endDay   = deathDate.day   || 1;
-  } else {
-    const now = new Date();
-    endYear  = now.getFullYear();
-    endMonth = now.getMonth() + 1;
-    endDay   = now.getDate();
-  }
-
-  let age = endYear - birthYear;
-  // Если день рождения в этом году ещё не наступил — вычитаем 1
-  if (endMonth < birthMonth || (endMonth === birthMonth && endDay < birthDay)) {
-    age -= 1;
-  }
-
-  return age >= 0 ? age : null;
-}
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function PersonSidebar({
   person,
-  members,
+  nodes,
+  relationMaps,
   onClose,
   canEdit,
   onEdit,
@@ -82,28 +93,37 @@ export default function PersonSidebar({
 }) {
   if (!person) return null;
 
-  const parents  = (person.parent_ids  || []).map((id) => members.find((m) => m.id === id)).filter(Boolean);
-  const children = (person.child_ids   || []).map((id) => members.find((m) => m.id === id)).filter(Boolean);
-  const spouses  = (person.spouse_ids  || []).map((id) => members.find((m) => m.id === id)).filter(Boolean);
-  const siblings = members.filter(
-    (m) =>
-      m.id !== person.id &&
-      (person.parent_ids || []).length > 0 &&
-      (m.parent_ids || []).some((pid) => (person.parent_ids || []).includes(pid))
-  );
+  // O(1) поиск узла по ID
+  const nodesById = new Map((nodes ?? []).map((n) => [n.id, n]));
 
-  const birthYear = getYear(person.birth_date);
-  const deathYear = getYear(person.death_date);
+  // Связи из карты (не из person.parent_ids — его нет в NodeResponse)
+  const rel = getPersonRelations(relationMaps, person.id);
 
-  // FIX: передаём объекты PartialDateSchema, не только год
-  const age = computeAge(
-    typeof person.birth_date === "object" ? person.birth_date : null,
-    typeof person.death_date === "object" ? person.death_date : null
-  );
+  const parents  = rel.parentIds .map((id) => nodesById.get(id)).filter(Boolean);
+  const children = rel.childIds  .map((id) => nodesById.get(id)).filter(Boolean);
+  const spouses  = rel.spouseIds .map((id) => nodesById.get(id)).filter(Boolean);
+  const siblings = rel.siblingIds.map((id) => {
+    const node = nodesById.get(id);
+    if (!node) return null;
+    return {
+      node,
+      type:    rel.siblingTypeMap.get(id) ?? "FULL",
+      parents: rel.siblingParentsMap.get(id) ?? [],
+    };
+  }).filter(Boolean);
+
+  // Данные из NodeResponse
+  const birthYear = person.birth_year ?? null;
+  const deathYear = person.death_year ?? null;
+  const isAlive   = person.is_alive   ?? true;
+
+  const age = computeAgeFromYears(birthYear, deathYear, isAlive);
 
   const genderLabel =
-    person.gender === "MALE" ? "Мужской" :
-    person.gender === "FEMALE" ? "Женский" : "Другой";
+    person.gender === "MALE"   ? "Мужской"  :
+    person.gender === "FEMALE" ? "Женский"  : "Другой";
+
+  const hasRelatives = spouses.length + parents.length + children.length + siblings.length > 0;
 
   return (
     <div
@@ -115,7 +135,9 @@ export default function PersonSidebar({
         className="flex items-center justify-between px-5 py-4 flex-shrink-0"
         style={{ borderBottom: "1px solid hsl(35,20%,90%)" }}
       >
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Профиль</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+          Профиль
+        </span>
         <button
           onClick={onClose}
           className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-muted transition-colors"
@@ -124,7 +146,7 @@ export default function PersonSidebar({
         </button>
       </div>
 
-      {/* Scrollable body */}
+      {/* Body */}
       <div className="flex-1 overflow-y-auto">
         {/* Avatar + Name */}
         <div
@@ -139,53 +161,56 @@ export default function PersonSidebar({
           </div>
 
           <h2 className="font-serif text-xl font-semibold text-foreground">
-            {person.first_name} {person.last_name}
+            {person.full_name || [person.first_name, person.last_name].filter(Boolean).join(" ") || "—"}
           </h2>
 
           <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
             {birthYear && (
               <span>
-                {birthYear}{deathYear ? ` — ${deathYear}` : ""}
+                {birthYear}{!isAlive && deathYear ? ` — ${deathYear}` : ""}
               </span>
             )}
             {age !== null && <span>· {age} лет</span>}
           </div>
 
           <div className="mt-1 text-xs text-muted-foreground">{genderLabel}</div>
+
+          {!isAlive && (
+            <div className="mt-1 text-xs text-muted-foreground/60">† Умер(ла)</div>
+          )}
         </div>
 
         <div className="px-5 pb-5 space-y-5">
-          {/* Даты */}
-          <div className="space-y-2.5">
-            {person.birth_date && (
-              <div className="flex items-start gap-3 text-sm">
-                <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "hsl(145,35%,45%)" }} />
-                <div>
-                  <div className="text-xs text-muted-foreground">Дата рождения</div>
-                  <div className="font-medium text-foreground">
-                    {formatPartialDate(person.birth_date) || "—"}
+          {/* Даты — используем birth_date_raw если есть, иначе год */}
+          {(person.birth_date_raw || birthYear) && (
+            <div className="space-y-2.5">
+              {(person.birth_date_raw || birthYear) && (
+                <div className="flex items-start gap-3 text-sm">
+                  <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "hsl(145,35%,45%)" }} />
+                  <div>
+                    <div className="text-xs text-muted-foreground">Дата рождения</div>
+                    <div className="font-medium text-foreground">
+                      {person.birth_date_raw || birthYear}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            {person.death_date && (
-              <div className="flex items-start gap-3 text-sm">
-                <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
-                <div>
-                  <div className="text-xs text-muted-foreground">Дата смерти</div>
-                  <div className="font-medium text-foreground">
-                    {formatPartialDate(person.death_date) || "—"}
+              )}
+              {(!isAlive && (person.birth_date_raw || deathYear)) && (
+                <div className="flex items-start gap-3 text-sm">
+                  <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
+                  <div>
+                    <div className="text-xs text-muted-foreground">Дата смерти</div>
+                    <div className="font-medium text-foreground">
+                      {deathYear || "неизвестно"}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            {!person.is_alive && !person.death_date && (
-              <div className="text-xs text-muted-foreground italic">Умер(ла)</div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* Родственники */}
-          {(spouses.length > 0 || parents.length > 0 || children.length > 0 || siblings.length > 0) && (
+          {hasRelatives && (
             <div>
               <div className="flex items-center gap-1.5 mb-3">
                 <Heart className="w-3.5 h-3.5 text-muted-foreground" />
@@ -194,10 +219,23 @@ export default function PersonSidebar({
                 </span>
               </div>
               <div className="space-y-2">
-                {spouses.map((s)  => <RelativeChip key={s.id} person={s} label="Партнёр / Супруг(а)" />)}
-                {parents.map((p)  => <RelativeChip key={p.id} person={p} label="Родитель" />)}
-                {siblings.map((s) => <RelativeChip key={s.id} person={s} label="Брат / Сестра" />)}
-                {children.map((c) => <RelativeChip key={c.id} person={c} label="Ребёнок" />)}
+                {spouses.map((n) => (
+                  <RelativeChip key={n.id} node={n} label="Партнёр / Супруг(а)" />
+                ))}
+                {parents.map((n) => (
+                  <RelativeChip key={n.id} node={n} label="Родитель" />
+                ))}
+                {siblings.map(({ node, type }) => (
+                  <RelativeChip
+                    key={node.id}
+                    node={node}
+                    label={SIBLING_TYPE_LABEL[type] ?? "Брат / Сестра"}
+                    badge={type}
+                  />
+                ))}
+                {children.map((n) => (
+                  <RelativeChip key={n.id} node={n} label="Ребёнок" />
+                ))}
               </div>
             </div>
           )}
@@ -205,26 +243,29 @@ export default function PersonSidebar({
       </div>
 
       {/* Footer actions */}
-      <div className="flex-shrink-0 p-4 space-y-2.5" style={{ borderTop: "1px solid hsl(35,20%,90%)" }}>
+      <div
+        className="flex-shrink-0 p-4 space-y-2.5"
+        style={{ borderTop: "1px solid hsl(35,20%,90%)" }}
+      >
         {canEdit ? (
           <>
             <Button
               className="w-full rounded-xl gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => onEdit && onEdit(person)}
+              onClick={() => onEdit?.(person)}
             >
               <Edit className="w-4 h-4" /> Редактировать
             </Button>
             <Button
               variant="outline"
               className="w-full rounded-xl gap-2"
-              onClick={() => onAddRelative && onAddRelative(person)}
+              onClick={() => onAddRelative?.(person)}
             >
               <UserPlus className="w-4 h-4" /> Добавить родственника
             </Button>
             <Button
               variant="outline"
               className="w-full rounded-xl gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
-              onClick={() => onDelete && onDelete(person.id)}
+              onClick={() => onDelete?.(person.id)}
             >
               Удалить
             </Button>

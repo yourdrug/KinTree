@@ -2,26 +2,29 @@
  * components/tree/AddPersonModal.jsx
  *
  * ИСПРАВЛЕНИЯ:
- * 1. handleSave: onClose() вызывался сразу после await onSave() — но если onSave
- *    бросало ошибку, модалка всё равно закрывалась. Теперь onClose вызывается
- *    только при успехе; при ошибке модалка остаётся открытой.
- * 2. saving состояние корректно сбрасывается через finally.
- * 3. canSave проверяет !saving явно.
+ * 1. editPerson теперь NodeResponse (из graph.nodes), а не PersonResponse.
+ *    Форма заполняется из birth_year (число), а не из birth_date (PartialDateSchema).
+ *    При редактировании PATCH-запрос использует birth_date как PartialDateSchema.
+ * 2. sibling-предупреждение: если у relativePerson нет родителей в relationMaps —
+ *    показываем предупреждение что связь сиблингов будет неполной.
+ * 3. handleSave: onClose только при успехе (ошибка оставляет модалку открытой).
+ * 4. canSave проверяет !saving явно.
+ * 5. Год рождения в форме — строка "YYYY" или "YYYY-MM-DD".
  */
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
-import { Button }   from "@/components/ui/button";
-import { Input }    from "@/components/ui/input";
-import { Label }    from "@/components/ui/label";
+import { X, AlertTriangle }  from "lucide-react";
+import { Button }            from "@/components/ui/button";
+import { Input }             from "@/components/ui/input";
+import { Label }             from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem,
   SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { fromPartialDate } from "@/api";
+import { getPersonRelations } from "@/api";
 
-// ─── Константы ────────────────────────────────────────────────────────────────
+// ── Константы ─────────────────────────────────────────────────────────────────
 
 const RELATION_TYPES = [
   { value: "child",   label: "Ребёнок" },
@@ -36,29 +39,29 @@ const GENDERS = [
   { value: "OTHER",  label: "Другой" },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function buildEmptyForm() {
+  return { first_name: "", last_name: "", birth_date: "", death_date: "", gender: "MALE" };
+}
+
+/**
+ * Заполняем форму из NodeResponse (editPerson).
+ * NodeResponse содержит birth_year (число), не birth_date (PartialDateSchema).
+ * Форма хранит строки вида "YYYY" или "YYYY-MM-DD" для input[type=date].
+ */
+function formFromNode(node) {
   return {
-    first_name: "",
-    last_name: "",
-    birth_date: "",
-    death_date: "",
-    gender: "MALE",
+    first_name: node.first_name  || node.full_name?.split(" ")[0] || "",
+    last_name:  node.last_name   || node.full_name?.split(" ").slice(1).join(" ") || "",
+    gender:     node.gender      || "MALE",
+    // birth_year → "YYYY" для input (не полная дата, нет month/day в NodeResponse)
+    birth_date: node.birth_year  ? String(node.birth_year)  : "",
+    death_date: node.death_year  ? String(node.death_year)  : "",
   };
 }
 
-function formFromPerson(person) {
-  return {
-    first_name: person.first_name  || "",
-    last_name:  person.last_name   || "",
-    birth_date: fromPartialDate(person.birth_date),
-    death_date: fromPartialDate(person.death_date),
-    gender:     person.gender || "MALE",
-  };
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function AddPersonModal({
   open,
@@ -66,6 +69,7 @@ export default function AddPersonModal({
   onSave,
   relativePerson,
   editPerson,
+  relationMaps,   // нужен для предупреждения sibling
 }) {
   const [relationType, setRelationType] = useState("child");
   const [form,         setForm]         = useState(buildEmptyForm());
@@ -76,7 +80,7 @@ export default function AddPersonModal({
   useEffect(() => {
     if (!open) return;
     if (isEdit) {
-      setForm(formFromPerson(editPerson));
+      setForm(formFromNode(editPerson));
     } else {
       setRelationType("child");
       setForm(buildEmptyForm());
@@ -85,16 +89,23 @@ export default function AddPersonModal({
 
   const setField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
-  // FIX: onClose вызывается только при успешном сохранении.
-  // При ошибке в onSave — модалка остаётся открытой, ошибка показывается в TreeView.
+  // Предупреждение для sibling: если у relativePerson нет родителей
+  const showSiblingWarning =
+    !isEdit &&
+    relationType === "sibling" &&
+    relativePerson &&
+    relationMaps &&
+    getPersonRelations(relationMaps, relativePerson.id).parentIds.length === 0;
+
+  // FIX: onClose только при успехе
   const handleSave = async () => {
     if (saving) return;
     setSaving(true);
     try {
       await onSave(form, editPerson?.id, relationType, relativePerson);
-      onClose(); // закрываем только при успехе
+      onClose();
     } catch {
-      // Ошибка обрабатывается в TreeView через toast — здесь не закрываем
+      // Ошибка отображается через toast в TreeView — модалка остаётся открытой
     } finally {
       setSaving(false);
     }
@@ -115,8 +126,8 @@ export default function AddPersonModal({
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.93, y: 24 }}
-            animate={{ opacity: 1, scale: 1,    y: 0  }}
-            exit={{    opacity: 0, scale: 0.93, y: 24 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.93, y: 24 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
             className="w-full max-w-md rounded-3xl shadow-2xl overflow-hidden"
             style={{ background: "hsl(40,33%,98%)", border: "1px solid hsl(35,20%,88%)" }}
@@ -127,7 +138,7 @@ export default function AddPersonModal({
                 isEdit
                   ? "Редактировать"
                   : relativePerson
-                    ? `Добавить к: ${relativePerson.first_name}`
+                    ? `Добавить к: ${relativePerson.first_name || relativePerson.full_name}`
                     : "Добавить человека"
               }
               subtitle={!isEdit && relativePerson ? "Выберите тип связи" : undefined}
@@ -136,7 +147,6 @@ export default function AddPersonModal({
 
             {/* Body */}
             <div className="px-6 py-5 space-y-4 max-h-[72vh] overflow-y-auto">
-
               {/* Тип связи */}
               {!isEdit && relativePerson && (
                 <RelationSelector
@@ -144,6 +154,21 @@ export default function AddPersonModal({
                   value={relationType}
                   onChange={setRelationType}
                 />
+              )}
+
+              {/* Предупреждение для sibling без родителей */}
+              {showSiblingWarning && (
+                <div
+                  className="flex items-start gap-2 p-3 rounded-xl text-xs"
+                  style={{ background: "hsl(45,90%,94%)", border: "1px solid hsl(45,70%,80%)" }}
+                >
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: "hsl(35,80%,45%)" }} />
+                  <span style={{ color: "hsl(35,60%,30%)" }}>
+                    У <strong>{relativePerson.first_name || relativePerson.full_name}</strong> нет родителей.
+                    Добавьте сначала общего родителя, чтобы связь братьев/сестёр отобразилась корректно.
+                    Персона будет создана без связи сиблинга.
+                  </span>
+                </div>
               )}
 
               {/* Имя и фамилия */}
@@ -155,6 +180,7 @@ export default function AddPersonModal({
                     placeholder="Иван"
                     className="rounded-xl"
                     disabled={saving}
+                    autoFocus
                   />
                 </FormField>
                 <FormField label="Фамилия *">
@@ -170,7 +196,11 @@ export default function AddPersonModal({
 
               {/* Пол */}
               <FormField label="Пол">
-                <Select value={form.gender} onValueChange={(v) => setField("gender", v)} disabled={saving}>
+                <Select
+                  value={form.gender}
+                  onValueChange={(v) => setField("gender", v)}
+                  disabled={saving}
+                >
                   <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {GENDERS.map((g) => (
@@ -182,33 +212,40 @@ export default function AddPersonModal({
 
               {/* Даты */}
               <div className="grid grid-cols-2 gap-3">
-                <FormField label="Дата рождения">
+                <FormField label="Год рождения">
                   <Input
-                    type="date"
+                    type="number"
+                    min="1"
+                    max="9999"
                     value={form.birth_date}
                     onChange={(e) => setField("birth_date", e.target.value)}
+                    placeholder="1990"
                     className="rounded-xl"
                     disabled={saving}
                   />
                 </FormField>
-                <FormField label="Дата смерти">
+                <FormField label="Год смерти">
                   <Input
-                    type="date"
+                    type="number"
+                    min="1"
+                    max="9999"
                     value={form.death_date}
                     onChange={(e) => setField("death_date", e.target.value)}
+                    placeholder="необязательно"
                     className="rounded-xl"
                     disabled={saving}
                   />
                 </FormField>
               </div>
 
-              <p className="text-xs text-muted-foreground">
-                * Обязательные поля
-              </p>
+              <p className="text-xs text-muted-foreground">* Обязательные поля</p>
             </div>
 
             {/* Footer */}
-            <div className="flex gap-3 px-6 py-4" style={{ borderTop: "1px solid hsl(35,20%,90%)" }}>
+            <div
+              className="flex gap-3 px-6 py-4"
+              style={{ borderTop: "1px solid hsl(35,20%,90%)" }}
+            >
               <Button
                 variant="outline"
                 className="flex-1 rounded-xl"
@@ -232,7 +269,7 @@ export default function AddPersonModal({
   );
 }
 
-// ─── Вспомогательные подкомпоненты ────────────────────────────────────────────
+// ── Вспомогательные подкомпоненты ─────────────────────────────────────────────
 
 function ModalHeader({ title, subtitle, onClose }) {
   return (
@@ -257,10 +294,11 @@ function ModalHeader({ title, subtitle, onClose }) {
 }
 
 function RelationSelector({ relative, value, onChange }) {
+  const name = relative.first_name || relative.full_name || "персоны";
   return (
     <div>
       <Label className="text-xs font-medium text-muted-foreground mb-2 block">
-        Кем приходится {relative.first_name}?
+        Кем приходится {name}?
       </Label>
       <div className="grid grid-cols-2 gap-2">
         {RELATION_TYPES.map((r) => (
@@ -271,7 +309,7 @@ function RelationSelector({ relative, value, onChange }) {
             style={{
               background: value === r.value ? "hsl(145,35%,38%)" : "hsl(35,30%,95%)",
               color:      value === r.value ? "white" : "hsl(30,10%,30%)",
-              border:     value === r.value ? "none" : "1px solid hsl(35,20%,88%)",
+              border:     value === r.value ? "none"  : "1px solid hsl(35,20%,88%)",
             }}
           >
             {r.label}
