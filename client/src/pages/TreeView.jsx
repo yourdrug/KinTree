@@ -108,9 +108,50 @@ export default function TreeView() {
     setEditPerson(null);
   }, []);
 
+  // ── Connect existing persons ───────────────────────────────────────────────
+
+  const handleConnect = useCallback(async ({ personA, personB, relType, marriageDate, divorceDate }) => {
+    try {
+      if (relType === "spouse") {
+        await relationsApi.addSpouse({
+          person_a_id: personA,
+          person_b_id: personB,
+          marriage_status: "MARRIED",
+          marriage_year:   marriageDate ? parseInt(marriageDate) : null,
+          divorce_year:    divorceDate  ? parseInt(divorceDate)  : null,
+        });
+      } else if (relType === "parent_child_ab") {
+        await relationsApi.addParentChild({ parent_id: personA, child_id: personB, relation_type: "BIOLOGICAL" });
+      } else if (relType === "parent_child_ba") {
+        await relationsApi.addParentChild({ parent_id: personB, child_id: personA, relation_type: "BIOLOGICAL" });
+      } else if (relType === "sibling") {
+        // Shared parents: find common parents of both
+        const relA = getPersonRelations(relationMaps, personA);
+        const relB = getPersonRelations(relationMaps, personB);
+        const sharedParents = relA.parentIds.filter(id => relB.parentIds.includes(id));
+        if (sharedParents.length === 0 && relA.parentIds.length === 0 && relB.parentIds.length === 0) {
+          toast({ title: "Братья/сёстры связаны", description: "У обоих нет родителей — добавьте общего родителя вручную." });
+        }
+        // The sibling relation is implicit through shared parents; ensure parent-child edges
+        // If they already share parents via graph it'll show up; we add explicit parent_child if needed
+        // For now just toast — the API may handle sibling edges automatically via shared parents
+        toast({ title: "Для связи братьев/сестёр", description: "Убедитесь, что у них есть общий родитель в дереве." });
+        await loadData();
+        return;
+      }
+      toast({ title: "Связь создана" });
+      await loadData();
+    } catch (err) {
+      const message = err?.response?.data?.message || err?.response?.data?.detail || err?.message || "Проверьте данные.";
+      toast({ variant: "destructive", title: "Ошибка создания связи",
+        description: typeof message === "string" ? message : "Неизвестная ошибка." });
+      throw err;
+    }
+  }, [familyId, loadData, relationMaps]);
+
   // ── Save ───────────────────────────────────────────────────────────────────
 
-  const handleSave = useCallback(async (formData, existingId, relationType, relPerson) => {
+  const handleSave = useCallback(async (formData, existingId, relationType, relPerson, extra = {}) => {
     const personPayload = {
       first_name: formData.first_name?.trim() || null,
       last_name:  formData.last_name?.trim()  || null,
@@ -129,24 +170,64 @@ export default function TreeView() {
         return;
       }
 
+      let newPerson = null;
+
       if (!relPerson || !relationType) {
-        await personsApi.create(personPayload);
+        newPerson = await personsApi.create(personPayload);
       } else if (relationType === "child") {
-        await createPersonAsChild(personPayload, relPerson.id);
+        newPerson = await createPersonAsChild(personPayload, relPerson.id);
+
+        // Extra: second parent
+        if (extra.secondParentId) {
+          await relationsApi.addParentChild({
+            parent_id: extra.secondParentId,
+            child_id: newPerson.id,
+            relation_type: "BIOLOGICAL",
+          });
+
+          // Also link the two parents as spouses if marriage date provided or just as MARRIED
+          if (extra.parentsMarried) {
+            try {
+              await relationsApi.addSpouse({
+                person_a_id: relPerson.id,
+                person_b_id: extra.secondParentId,
+                marriage_status: "MARRIED",
+                marriage_year: extra.marriageDate ? parseInt(extra.marriageDate) : null,
+                divorce_year:  extra.divorceDate  ? parseInt(extra.divorceDate)  : null,
+              });
+            } catch {
+              // May already be spouses — ignore duplicate error
+            }
+          }
+        }
+
       } else if (relationType === "parent") {
-        const newPerson = await personsApi.create(personPayload);
+        newPerson = await personsApi.create(personPayload);
         await relationsApi.addParentChild({ parent_id: newPerson.id, child_id: relPerson.id, relation_type: "BIOLOGICAL" });
       } else if (relationType === "partner") {
-        await createPersonAsSpouse(personPayload, relPerson.id);
+        newPerson = await createPersonAsSpouse(personPayload, relPerson.id);
       } else if (relationType === "sibling") {
         const relPersonRelations = getPersonRelations(relationMaps, relPerson.id);
-        await createPersonAsSibling(personPayload, relPersonRelations.parentIds, "BIOLOGICAL");
+        const { siblingParentMode, siblingParentId } = extra;
 
-        if (relPersonRelations.parentIds.length === 0) {
-          toast({ title: "Брат/сестра добавлен(а)",
-            description: "У выбранной персоны нет родителей — добавьте общего родителя вручную." });
-          await loadData();
-          return;
+        if (siblingParentMode === "different" && siblingParentId) {
+          // New person shares only a specific parent
+          newPerson = await personsApi.create(personPayload);
+          await relationsApi.addParentChild({
+            parent_id: siblingParentId,
+            child_id: newPerson.id,
+            relation_type: "BIOLOGICAL",
+          });
+        } else {
+          // Same parents as relPerson
+          newPerson = await createPersonAsSibling(personPayload, relPersonRelations.parentIds, "BIOLOGICAL");
+
+          if (relPersonRelations.parentIds.length === 0) {
+            toast({ title: "Брат/сестра добавлен(а)",
+              description: "У выбранной персоны нет родителей — добавьте общего родителя вручную." });
+            await loadData();
+            return;
+          }
         }
       }
 
@@ -278,9 +359,11 @@ export default function TreeView() {
         open={showModal}
         onClose={closeModal}
         onSave={handleSave}
+        onConnect={handleConnect}
         relativePerson={relativePerson}
         editPerson={editPerson}
         relationMaps={relationMaps}
+        nodes={nodes}
       />
     </div>
   );

@@ -262,7 +262,7 @@ function TreeCanvasInner({
             style={{
               background: "hsla(40,33%,96%,0.92)",
               border: "1px solid hsl(35,20%,88%)",
-              borderRadius: 12, bottom: 24, left: 24,
+              borderRadius: 12, bottom: 24, left: 55, width: 200,
             }}
           />
         )}
