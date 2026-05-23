@@ -6,11 +6,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from shared.domain.exceptions import NotFoundError
+from shared.domain.exceptions import ConflictError, NotFoundError
 from shared.domain.permissions.enums import RoleName
 from sqlalchemy import exists, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine.result import Result
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from identity.domain.entities.account import Account as DomainAccount
@@ -28,6 +29,10 @@ from identity.infrastructure.permissions.role_cache import (
 )
 
 
+# Имена constraint-ов из миграций — единственное место где они определены
+_CONSTRAINT_EMAIL_UNIQUE = "idx_account_email"
+
+
 class AccountRepositoryImpl:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -39,7 +44,6 @@ class AccountRepositoryImpl:
 
     async def get_by_id(self, account_id: str) -> DomainAccount:
         account = await self._fetch_with_role(ORMAccount.id == account_id)
-
         if account is None:
             raise NotFoundError(resource="Account", resource_id=account_id)
         return account
@@ -58,9 +62,19 @@ class AccountRepositoryImpl:
             )
             .returning(ORMAccount)
         )
-        result: Result = await self._session.execute(stmt)
-        orm: ORMAccount = result.scalar_one()
+        try:
+            result: Result = await self._session.execute(stmt)
+        except IntegrityError as e:
+            # Нарушение уникального индекса email — race condition при регистрации.
+            # Два запроса прошли get_by_email одновременно, PostgreSQL поймал дубль.
+            if _CONSTRAINT_EMAIL_UNIQUE in str(e.orig):
+                raise ConflictError(
+                    message="Пользователь с таким email уже зарегистрирован",
+                    errors={"email": "already_exists"},
+                ) from e
+            raise
 
+        orm: ORMAccount = result.scalar_one()
         role_name, permissions = await self._load_role_and_permissions(orm.id)
         return AccountMapper.to_domain(orm, permissions=permissions, role_name=role_name)
 
@@ -114,7 +128,6 @@ class AccountRepositoryImpl:
             return RoleName.USER.value, frozenset()
 
         role_id, role_name = row
-
         cached = get_cached_permissions(role_name)
         if cached is not None:
             return role_name, cached

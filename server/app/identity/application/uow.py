@@ -1,8 +1,7 @@
 """
 identity/application/uow.py
 
-Unit of Work для Identity bounded context.
-
+Unit of Work — управление транзакцией.
 """
 
 from __future__ import annotations
@@ -26,12 +25,6 @@ from identity.domain.repositories.refresh_tokens import RefreshTokenRepository
 
 
 class IdentityUoW:
-    """
-    Unit of Work для Identity контекста.
-
-    Содержит только репозитории Identity. Не знает о Genealogy.
-    """
-
     accounts: AccountRepository
     permissions: PermissionRepository
     roles: RoleRepository

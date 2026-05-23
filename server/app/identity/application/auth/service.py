@@ -135,12 +135,18 @@ class AuthService:
         raw_jti: str = payload["jti"]
 
         async with self._uow_factory.create(master=True) as uow:
-            stored_token = await uow.refresh_tokens.get_by_session_id(session_id)
+            stored_token: RefreshToken | None = await uow.refresh_tokens.get_by_session_id(session_id)
 
             if stored_token is None:
                 raise AuthenticationError(
                     message="Сессия не найдена",
                     errors={"token": "session_not_found"},
+                )
+
+            if stored_token.is_expired():
+                raise AuthenticationError(
+                    message="Токен истек",
+                    errors={"token": "token_expired"},
                 )
 
             if stored_token.revoked:
@@ -172,7 +178,6 @@ class AuthService:
                 user_agent=stored_token.user_agent,
                 ip_address=stored_token.ip_address,
             )
-            await uow.refresh_tokens.create(session.refresh_token)
 
         return _to_token_pair(session, account)
 

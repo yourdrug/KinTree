@@ -24,11 +24,12 @@ class RefreshToken:
     user_agent: str | None = None
     ip_address: str | None = None
 
-    def is_expired(self, now: datetime) -> bool:
+    def is_expired(self) -> bool:
+        now = datetime.now(tz=UTC)
         return now >= self.expires_at
 
-    def is_active(self, now: datetime) -> bool:
-        return not self.revoked and not self.is_expired(now)
+    def is_active(self) -> bool:
+        return not self.revoked and not self.is_expired()
 
 
 def create_refresh_token(
