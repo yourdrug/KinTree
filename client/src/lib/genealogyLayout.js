@@ -49,8 +49,8 @@ export function computeGenealogyLayout(nodes, edges) {
   // ── 1. Определить поколения (BFS) ────────────────────────────────────────
   const generation = new Map();   // id → number
 
-  // Корни — ноды без родителей
-  const roots = nodes.filter(n => parentsOf.get(n.id).size === 0);
+  // Корни — ноды c generation 0
+  const roots = nodes.filter(n => n.generation === 0);
   if (!roots.length) roots.push(nodes[0]);   // защита
 
   const queue = [...roots.map(r => ({ id: r.id, gen: 0 }))];
