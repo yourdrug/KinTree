@@ -1,35 +1,19 @@
 /**
  * components/tree/PersonSidebar.jsx
- *
- * ИСПРАВЛЕНИЯ:
- * 1. parents/children/spouses/siblings берутся из relationMaps (buildRelationMaps),
- *    а не из person.parent_ids и т.д. — этих полей нет в NodeResponse.
- * 2. Siblings показываются с типом (FULL/HALF/STEP) и подписью.
- * 3. Возраст вычисляется из birth_year/death_year (числа из NodeResponse),
- *    а не из PartialDateSchema (PersonResponse).
- * 4. Удалены неиспользуемые импорты.
- * 5. nodesById — Map для O(1) поиска узла по ID.
  */
 
 import { X, Edit, UserPlus, User, Calendar, Heart } from "lucide-react";
-import { Button }           from "@/components/ui/button";
-import { formatPartialDate, getPersonRelations } from "@/api";
+import { Button } from "@/components/ui/button";
+import { getPersonRelations } from "@/api";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Подпись для типа сиблинговой связи.
- */
 const SIBLING_TYPE_LABEL = {
-  FULL: "Полный(ая) брат/сестра",
+  FULL: "Брат/сестра",
   HALF: "Единокровный(ая) / единоутробный(ая)",
   STEP: "Сводный(ая) брат/сестра",
 };
 
-/**
- * Вычисляет возраст из числовых birth_year / death_year (NodeResponse).
- * Для живых — текущий возраст, для умерших — на момент смерти.
- */
 function computeAgeFromYears(birthYear, deathYear, isAlive) {
   if (!birthYear) return null;
   const endYear = (!isAlive && deathYear) ? deathYear : new Date().getFullYear();
@@ -44,14 +28,9 @@ function RelativeChip({ node, label, badge }) {
   const name = node.full_name || [node.first_name, node.last_name].filter(Boolean).join(" ") || "—";
 
   return (
-    <div
-      className="flex items-center gap-2.5 p-2.5 rounded-xl"
-      style={{ background: "hsl(35,25%,95%)" }}
-    >
-      <div
-        className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center"
-        style={{ background: "hsl(35,40%,88%)" }}
-      >
+    <div className="flex items-center gap-2.5 p-2.5 rounded-xl" style={{ background: "hsl(35,25%,95%)" }}>
+      <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center"
+        style={{ background: "hsl(35,40%,88%)" }}>
         <User className="w-4 h-4 text-muted-foreground" />
       </div>
       <div className="flex-1 min-w-0">
@@ -59,19 +38,11 @@ function RelativeChip({ node, label, badge }) {
         <div className="text-xs text-muted-foreground">{label}</div>
       </div>
       {badge && (
-        <span
-          className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
           style={{
-            background:
-              badge === "FULL" ? "hsl(145,35%,90%)" :
-              badge === "HALF" ? "hsl(210,50%,90%)" :
-              "hsl(0,0%,90%)",
-            color:
-              badge === "FULL" ? "hsl(145,40%,35%)" :
-              badge === "HALF" ? "hsl(210,55%,40%)" :
-              "hsl(0,0%,40%)",
-          }}
-        >
+            background: badge === "FULL" ? "hsl(145,35%,90%)" : badge === "HALF" ? "hsl(210,50%,90%)" : "hsl(0,0%,90%)",
+            color:      badge === "FULL" ? "hsl(145,40%,35%)" : badge === "HALF" ? "hsl(210,55%,40%)" : "hsl(0,0%,40%)",
+          }}>
           {badge}
         </span>
       )}
@@ -79,24 +50,15 @@ function RelativeChip({ node, label, badge }) {
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function PersonSidebar({
-  person,
-  nodes,
-  relationMaps,
-  onClose,
-  canEdit,
-  onEdit,
-  onAddRelative,
-  onDelete,
+  person, nodes, relationMaps, onClose,
+  canEdit, onEdit, onAddRelative, onDelete,
 }) {
   if (!person) return null;
 
-  // O(1) поиск узла по ID
   const nodesById = new Map((nodes ?? []).map((n) => [n.id, n]));
-
-  // Связи из карты (не из person.parent_ids — его нет в NodeResponse)
   const rel = getPersonRelations(relationMaps, person.id);
 
   const parents  = rel.parentIds .map((id) => nodesById.get(id)).filter(Boolean);
@@ -105,19 +67,13 @@ export default function PersonSidebar({
   const siblings = rel.siblingIds.map((id) => {
     const node = nodesById.get(id);
     if (!node) return null;
-    return {
-      node,
-      type:    rel.siblingTypeMap.get(id) ?? "FULL",
-      parents: rel.siblingParentsMap.get(id) ?? [],
-    };
+    return { node, type: rel.siblingTypeMap.get(id) ?? "FULL" };
   }).filter(Boolean);
 
-  // Данные из NodeResponse
   const birthYear = person.birth_year ?? null;
   const deathYear = person.death_year ?? null;
   const isAlive   = person.is_alive   ?? true;
-
-  const age = computeAgeFromYears(birthYear, deathYear, isAlive);
+  const age       = computeAgeFromYears(birthYear, deathYear, isAlive);
 
   const genderLabel =
     person.gender === "MALE"   ? "Мужской"  :
@@ -126,22 +82,15 @@ export default function PersonSidebar({
   const hasRelatives = spouses.length + parents.length + children.length + siblings.length > 0;
 
   return (
-    <div
-      className="h-full flex flex-col"
-      style={{ background: "hsl(40,33%,98%)", borderLeft: "1px solid hsl(35,20%,88%)" }}
-    >
+    <div className="h-full flex flex-col"
+      style={{ background: "hsl(40,33%,98%)", borderLeft: "1px solid hsl(35,20%,88%)" }}>
+
       {/* Header */}
-      <div
-        className="flex items-center justify-between px-5 py-4 flex-shrink-0"
-        style={{ borderBottom: "1px solid hsl(35,20%,90%)" }}
-      >
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
-          Профиль
-        </span>
-        <button
-          onClick={onClose}
-          className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-muted transition-colors"
-        >
+      <div className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+        style={{ borderBottom: "1px solid hsl(35,20%,90%)" }}>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Профиль</span>
+        <button onClick={onClose}
+          className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-muted transition-colors">
           <X className="w-4 h-4 text-muted-foreground" />
         </button>
       </div>
@@ -149,14 +98,10 @@ export default function PersonSidebar({
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
         {/* Avatar + Name */}
-        <div
-          className="flex flex-col items-center text-center px-5 py-6"
-          style={{ background: "linear-gradient(to bottom, hsl(145,35%,96%), hsl(40,33%,98%))" }}
-        >
-          <div
-            className="w-24 h-24 rounded-2xl overflow-hidden mb-4 shadow-md flex items-center justify-center"
-            style={{ border: "3px solid hsl(145,35%,80%)", background: "hsl(35,40%,90%)" }}
-          >
+        <div className="flex flex-col items-center text-center px-5 py-6"
+          style={{ background: "linear-gradient(to bottom, hsl(145,35%,96%), hsl(40,33%,98%))" }}>
+          <div className="w-24 h-24 rounded-2xl overflow-hidden mb-4 shadow-md flex items-center justify-center"
+            style={{ border: "3px solid hsl(145,35%,80%)", background: "hsl(35,40%,90%)" }}>
             <User className="w-10 h-10 text-muted-foreground/60" />
           </div>
 
@@ -166,50 +111,39 @@ export default function PersonSidebar({
 
           <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
             {birthYear && (
-              <span>
-                {birthYear}{!isAlive && deathYear ? ` — ${deathYear}` : ""}
-              </span>
+              <span>{birthYear}{!isAlive && deathYear ? ` — ${deathYear}` : ""}</span>
             )}
             {age !== null && <span>· {age} лет</span>}
           </div>
 
           <div className="mt-1 text-xs text-muted-foreground">{genderLabel}</div>
-
-          {!isAlive && (
-            <div className="mt-1 text-xs text-muted-foreground/60">† Умер(ла)</div>
-          )}
+          {!isAlive && <div className="mt-1 text-xs text-muted-foreground/60">† Умер(ла)</div>}
         </div>
 
         <div className="px-5 pb-5 space-y-5">
-          {/* Даты — используем birth_date_raw если есть, иначе год */}
+          {/* Dates */}
           {(person.birth_date_raw || birthYear) && (
             <div className="space-y-2.5">
-              {(person.birth_date_raw || birthYear) && (
-                <div className="flex items-start gap-3 text-sm">
-                  <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "hsl(145,35%,45%)" }} />
-                  <div>
-                    <div className="text-xs text-muted-foreground">Дата рождения</div>
-                    <div className="font-medium text-foreground">
-                      {person.birth_date_raw || birthYear}
-                    </div>
-                  </div>
+              <div className="flex items-start gap-3 text-sm">
+                <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "hsl(145,35%,45%)" }} />
+                <div>
+                  <div className="text-xs text-muted-foreground">Дата рождения</div>
+                  <div className="font-medium text-foreground">{person.birth_date_raw || birthYear}</div>
                 </div>
-              )}
-              {(!isAlive && (person.birth_date_raw || deathYear)) && (
+              </div>
+              {!isAlive && (person.birth_date_raw || deathYear) && (
                 <div className="flex items-start gap-3 text-sm">
                   <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground" />
                   <div>
                     <div className="text-xs text-muted-foreground">Дата смерти</div>
-                    <div className="font-medium text-foreground">
-                      {deathYear || "неизвестно"}
-                    </div>
+                    <div className="font-medium text-foreground">{deathYear || "неизвестно"}</div>
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Родственники */}
+          {/* Relatives */}
           {hasRelatives && (
             <div>
               <div className="flex items-center gap-1.5 mb-3">
@@ -219,54 +153,34 @@ export default function PersonSidebar({
                 </span>
               </div>
               <div className="space-y-2">
-                {spouses.map((n) => (
-                  <RelativeChip key={n.id} node={n} label="Партнёр / Супруг(а)" />
-                ))}
-                {parents.map((n) => (
-                  <RelativeChip key={n.id} node={n} label="Родитель" />
-                ))}
+                {spouses.map((n)  => <RelativeChip key={n.id} node={n} label="Партнёр / Супруг(а)" />)}
+                {parents.map((n)  => <RelativeChip key={n.id} node={n} label="Родитель" />)}
                 {siblings.map(({ node, type }) => (
-                  <RelativeChip
-                    key={node.id}
-                    node={node}
-                    label={SIBLING_TYPE_LABEL[type] ?? "Брат / Сестра"}
-                    badge={type}
-                  />
+                  <RelativeChip key={node.id} node={node}
+                    label={SIBLING_TYPE_LABEL[type] ?? "Брат / Сестра"} badge={type} />
                 ))}
-                {children.map((n) => (
-                  <RelativeChip key={n.id} node={n} label="Ребёнок" />
-                ))}
+                {children.map((n) => <RelativeChip key={n.id} node={n} label="Ребёнок" />)}
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Footer actions */}
-      <div
-        className="flex-shrink-0 p-4 space-y-2.5"
-        style={{ borderTop: "1px solid hsl(35,20%,90%)" }}
-      >
+      {/* Footer */}
+      <div className="flex-shrink-0 p-4 space-y-2.5" style={{ borderTop: "1px solid hsl(35,20%,90%)" }}>
         {canEdit ? (
           <>
-            <Button
-              className="w-full rounded-xl gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={() => onEdit?.(person)}
-            >
+            <Button className="w-full rounded-xl gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => onEdit?.(person)}>
               <Edit className="w-4 h-4" /> Редактировать
             </Button>
-            <Button
-              variant="outline"
-              className="w-full rounded-xl gap-2"
-              onClick={() => onAddRelative?.(person)}
-            >
+            <Button variant="outline" className="w-full rounded-xl gap-2"
+              onClick={() => onAddRelative?.(person)}>
               <UserPlus className="w-4 h-4" /> Добавить родственника
             </Button>
-            <Button
-              variant="outline"
+            <Button variant="outline"
               className="w-full rounded-xl gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
-              onClick={() => onDelete?.(person.id)}
-            >
+              onClick={() => onDelete?.(person.id)}>
               Удалить
             </Button>
           </>

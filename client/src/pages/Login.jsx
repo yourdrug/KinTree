@@ -1,11 +1,5 @@
 /**
  * pages/Login.jsx
- *
- * ИСПРАВЛЕНИЯ:
- * 1. useEffect для редиректа авторизованного пользователя — nav добавлен в deps,
- *    используем useRef для nav чтобы не перезапускать effect при каждом рендере.
- * 2. Telegram widget: убрана зависимость от изменяемой функции onAuth без useCallback.
- * 3. handleSubmit и handleForgotSubmit стабилизированы через useCallback.
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -21,61 +15,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth }           from "@/lib/AuthContext";
 import { useAppNavigate }    from "@/lib/navigation";
 import { ROUTES }            from "@/lib/routes";
-
-// ── Декоративное дерево ───────────────────────────────────────────────────────
-
-const MiniTree = () => (
-  <svg viewBox="0 0 220 320" className="w-full h-full opacity-90" fill="none">
-    <defs>
-      <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor="hsl(145,35%,38%)" stopOpacity="0.15" />
-        <stop offset="100%" stopColor="hsl(145,35%,38%)" stopOpacity="0" />
-      </radialGradient>
-    </defs>
-    <ellipse cx="110" cy="160" rx="100" ry="140" fill="url(#glow)" />
-    {[
-      { x1: 110, y1: 58,  x2: 60,  y2: 110 },
-      { x1: 110, y1: 58,  x2: 160, y2: 110 },
-      { x1: 60,  y1: 148, x2: 35,  y2: 200 },
-      { x1: 60,  y1: 148, x2: 85,  y2: 200 },
-      { x1: 160, y1: 148, x2: 135, y2: 200 },
-      { x1: 160, y1: 148, x2: 185, y2: 200 },
-      { x1: 60,  y1: 238, x2: 45,  y2: 285 },
-      { x1: 85,  y1: 238, x2: 95,  y2: 285 },
-    ].map((l, i) => (
-      <motion.line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-        stroke="hsl(145,35%,55%)" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.5"
-        initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: 0.5 }}
-        transition={{ delay: 0.3 + i * 0.08, duration: 0.6 }} />
-    ))}
-    {[
-      { cx: 110, cy: 38,  r: 18, label: "Пр.",  delay: 0 },
-      { cx: 60,  cy: 128, r: 16, label: "Дед",  delay: 0.15 },
-      { cx: 160, cy: 128, r: 16, label: "Баб.", delay: 0.2 },
-      { cx: 35,  cy: 218, r: 13, label: "Дядя", delay: 0.3 },
-      { cx: 85,  cy: 218, r: 13, label: "Папа", delay: 0.35 },
-      { cx: 135, cy: 218, r: 13, label: "Мама", delay: 0.4 },
-      { cx: 185, cy: 218, r: 13, label: "Тётя", delay: 0.45 },
-      { cx: 60,  cy: 290, r: 11, label: "Брат", delay: 0.55 },
-      { cx: 110, cy: 290, r: 14, label: "Вы",   delay: 0.6, isYou: true },
-    ].map((n, i) => (
-      <motion.g key={i} initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: n.delay, type: "spring", stiffness: 200 }}>
-        <circle cx={n.cx} cy={n.cy} r={n.r + 4}
-          fill={n.isYou ? "hsl(145,35%,38%)" : "hsl(40,33%,98%)"}
-          stroke={n.isYou ? "hsl(145,35%,30%)" : "hsl(35,20%,82%)"} strokeWidth="1.5" />
-        <circle cx={n.cx} cy={n.cy} r={n.r}
-          fill={n.isYou ? "hsl(145,35%,45%)" : "hsl(35,40%,92%)"} />
-        <text x={n.cx} y={n.cy + 4} fontSize={n.r < 13 ? 6 : 7} fontWeight="600"
-          fill={n.isYou ? "white" : "hsl(30,10%,30%)"} textAnchor="middle">
-          {n.label}
-        </text>
-      </motion.g>
-    ))}
-  </svg>
-);
-
-// ── Иконка Google ─────────────────────────────────────────────────────────────
+import LoginTree             from "@/components/landing/LoginTree";
 
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none">
@@ -86,28 +26,23 @@ const GoogleIcon = () => (
   </svg>
 );
 
-// ── Иконка Telegram ───────────────────────────────────────────────────────────
-
 const TelegramIcon = () => (
   <svg viewBox="0 0 24 24" className="w-4 h-4" fill="#229ED9">
     <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.17 13.667l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.978.892z"/>
   </svg>
 );
 
-// ── Telegram Widget Hook ───────────────────────────────────────────────────────
+// ── Telegram widget hook ───────────────────────────────────────────────────────
 
 function useTelegramWidget(onAuth, enabled) {
   const containerRef = useRef(null);
-  // Храним колбэк в ref чтобы не пересоздавать виджет при каждом рендере
-  const onAuthRef = useRef(onAuth);
+  const onAuthRef    = useRef(onAuth);
   useEffect(() => { onAuthRef.current = onAuth; }, [onAuth]);
 
   useEffect(() => {
     if (!enabled || !containerRef.current) return;
     containerRef.current.innerHTML = "";
-
     window._tgAuthCallback = (user) => { onAuthRef.current(user); };
-
     const botName = import.meta.env.VITE_TELEGRAM_BOT_NAME;
     if (!botName) return;
 
@@ -118,16 +53,15 @@ function useTelegramWidget(onAuth, enabled) {
     script.setAttribute("data-onauth", "_tgAuthCallback(user)");
     script.setAttribute("data-request-access", "write");
     script.async = true;
-
     containerRef.current.appendChild(script);
 
     return () => { delete window._tgAuthCallback; };
-  }, [enabled]); // onAuth намеренно исключён — используем ref
+  }, [enabled]);
 
   return containerRef;
 }
 
-// ─── Main ──────────────────────────────────────────────────────────────────────
+// ── Main ───────────────────────────────────────────────────────────────────────
 
 export default function Login() {
   const {
@@ -138,22 +72,19 @@ export default function Login() {
   const location = useLocation();
   const from     = location.state?.from || null;
 
-  // FIX: стабилизируем nav в ref чтобы не перезапускать effect
   const navRef = useRef(nav);
   useEffect(() => { navRef.current = nav; }, [nav]);
 
-  // Если уже залогинен — сразу на dashboard
+  // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
-      navRef.current.afterLogin();
-    }
+    if (isAuthenticated) navRef.current.afterLogin();
   }, [isAuthenticated]);
 
-  const [view,          setView]          = useState("login");
-  const [showPassword,  setShowPassword]  = useState(false);
-  const [form,          setForm]          = useState({ email: "", password: "" });
-  const [forgotEmail,   setForgotEmail]   = useState("");
-  const [localError,    setLocalError]    = useState("");
+  const [view,         setView]         = useState("login");
+  const [showPassword, setShowPassword] = useState(false);
+  const [form,         setForm]         = useState({ email: "", password: "" });
+  const [forgotEmail,  setForgotEmail]  = useState("");
+  const [localError,   setLocalError]   = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
 
   const showTgWidget = view === "login" || view === "register";
@@ -169,18 +100,16 @@ export default function Login() {
 
   const tgContainerRef = useTelegramWidget(handleTelegramAuth, showTgWidget);
 
-  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const setField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const clearError = () => setLocalError("");
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     clearError();
-
     if (!form.email.trim() || !form.password.trim()) {
       setLocalError("Заполните все поля");
       return;
     }
-
     const result = await (view === "login"
       ? login(form.email, form.password)
       : register(form.email, form.password));
@@ -196,11 +125,9 @@ export default function Login() {
     e.preventDefault();
     clearError();
     if (!forgotEmail.trim()) { setLocalError("Введите email"); return; }
-
     setForgotLoading(true);
     const result = await forgotPassword(forgotEmail.trim());
     setForgotLoading(false);
-
     if (result?.ok) {
       setView("forgot-sent");
     } else {
@@ -210,7 +137,7 @@ export default function Login() {
 
   const error = localError || (typeof authError === "string" ? authError : "");
 
-  // ── Экран «Письмо отправлено» ─────────────────────────────────────────────
+  // ── Forgot sent screen ────────────────────────────────────────────────────
   if (view === "forgot-sent") {
     return (
       <div className="min-h-screen flex items-center justify-center px-6" style={{ background: "hsl(40,33%,98%)" }}>
@@ -225,21 +152,17 @@ export default function Login() {
             Если аккаунт с адресом <strong>{forgotEmail}</strong> существует —
             мы отправили ссылку для сброса пароля.
           </p>
-          <p className="text-xs text-muted-foreground mb-8">
-            Ссылка действительна 15 минут. Проверьте папку «Спам».
-          </p>
+          <p className="text-xs text-muted-foreground mb-8">Ссылка действительна 15 минут.</p>
           <Button variant="outline" onClick={() => { setView("login"); setForgotEmail(""); clearError(); }}
-            className="w-full h-11 rounded-xl text-sm gap-2"
-            style={{ borderColor: "hsl(35,20%,85%)" }}>
-            <ArrowLeft className="w-4 h-4" />
-            Вернуться к входу
+            className="w-full h-11 rounded-xl text-sm gap-2" style={{ borderColor: "hsl(35,20%,85%)" }}>
+            <ArrowLeft className="w-4 h-4" /> Вернуться к входу
           </Button>
         </motion.div>
       </div>
     );
   }
 
-  // ── Экран «Забыли пароль?» ────────────────────────────────────────────────
+  // ── Forgot screen ─────────────────────────────────────────────────────────
   if (view === "forgot") {
     return (
       <div className="min-h-screen flex items-center justify-center px-6" style={{ background: "hsl(40,33%,98%)" }}>
@@ -270,7 +193,7 @@ export default function Login() {
             </AnimatePresence>
             <Button type="submit" disabled={forgotLoading}
               className="w-full h-12 rounded-xl text-sm font-semibold gap-2"
-              style={{ background: "hsl(145,35%,38%)", color: "white", boxShadow: "0 4px 20px hsla(145,35%,38%,0.4)" }}>
+              style={{ background: "hsl(145,35%,38%)", color: "white" }}>
               {forgotLoading
                 ? <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                 : <><Mail className="w-4 h-4" />Отправить ссылку</>}
@@ -281,53 +204,75 @@ export default function Login() {
     );
   }
 
-  // ── Основной экран: login / register ──────────────────────────────────────
+  // ── Main login/register screen ────────────────────────────────────────────
   return (
     <div className="min-h-screen flex" style={{ background: "hsl(40,33%,98%)" }}>
-
-      {/* Left panel */}
+      {/* ── Left decorative panel ─────────────────────────────────────────── */}
       <motion.div
-        initial={{ opacity: 0, x: -40 }} animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.8 }}
-        className="hidden lg:flex flex-col justify-between w-[44%] relative overflow-hidden p-12"
+        initial={{ opacity: 0, x: -40 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.7 }}
+        className="hidden lg:flex flex-col w-[46%] relative overflow-hidden"
         style={{ background: "hsl(145,35%,38%)" }}
       >
-        <div className="absolute inset-0 opacity-10"
-          style={{ backgroundImage: "radial-gradient(hsl(145,35%,60%) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
+        {/* Точечная сетка */}
+        <div className="absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage: "radial-gradient(hsl(145,55%,75%) 1px, transparent 1px)",
+            backgroundSize: "22px 22px",
+          }}
+        />
 
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
-            style={{ background: "hsla(40,33%,98%,0.2)" }}>
-            <Leaf className="w-5 h-5 text-white" />
+        {/* Логотип */}
+        <div className="relative z-10 flex items-center gap-3 px-10 pt-9">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+            style={{ background: "hsla(40,33%,98%,0.18)" }}>
+            <Leaf className="w-4.5 h-4.5 text-white" />
           </div>
-          <span className="font-serif text-2xl font-semibold text-white">KinTree</span>
+          <span className="font-serif text-xl font-semibold text-white tracking-tight">KinTree</span>
         </div>
 
-        <div className="relative z-10 flex-1 flex flex-col items-center justify-center">
-          <div className="w-56 h-80"><MiniTree /></div>
-          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="text-center mt-6 font-serif text-xl font-medium leading-relaxed"
-            style={{ color: "hsla(40,33%,98%,0.9)" }}>
-            «Семья — это то, что остаётся,&nbsp;когда всё остальное уходит»
+        {/* Дерево — занимает всё свободное пространство */}
+        <div className="relative z-10 flex-1 flex items-center justify-center px-6 py-4">
+          <LoginTree />
+        </div>
+
+        {/* Цитата + статистика */}
+        <div className="relative z-10 px-10 pb-9 space-y-6">
+          <motion.p
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.2, duration: 0.6 }}
+            className="font-serif text-base leading-relaxed text-center"
+            style={{ color: "hsla(40,33%,98%,0.75)" }}
+          >
+            «Семья — это то, что остаётся,<br/>когда всё остальное уходит»
           </motion.p>
-        </div>
 
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }}
-          className="relative z-10 grid grid-cols-3 gap-4">
-          {[{ val: "12K+", label: "семей" }, { val: "240K+", label: "людей" }, { val: "8", label: "поколений" }]
-            .map((s) => (
-              <div key={s.label} className="text-center">
-                <div className="font-serif text-2xl font-bold text-white">{s.val}</div>
-                <div className="text-xs mt-0.5" style={{ color: "hsla(40,33%,98%,0.6)" }}>{s.label}</div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5 }}
+            className="grid grid-cols-3 gap-2"
+          >
+            {[
+              { val: "12K+",  label: "семей" },
+              { val: "240K+", label: "людей" },
+              { val: "8",     label: "поколений" },
+            ].map((s) => (
+              <div key={s.label}
+                className="text-center rounded-2xl py-3"
+                style={{ background: "hsla(40,33%,98%,0.08)" }}>
+                <div className="font-serif text-xl font-bold text-white">{s.val}</div>
+                <div className="text-xs mt-0.5" style={{ color: "hsla(40,33%,98%,0.5)" }}>{s.label}</div>
               </div>
             ))}
-        </motion.div>
+          </motion.div>
+        </div>
       </motion.div>
 
-      {/* Right panel */}
+      {/* Right form panel */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-
         <Link to={ROUTES.home()} className="flex items-center gap-2 mb-10 lg:hidden">
           <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center">
             <Leaf className="w-4 h-4 text-primary-foreground" />
@@ -353,7 +298,6 @@ export default function Login() {
             ))}
           </div>
 
-          {/* Heading */}
           <AnimatePresence mode="wait">
             <motion.div key={view}
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -369,38 +313,31 @@ export default function Login() {
             </motion.div>
           </AnimatePresence>
 
-          {/* OAuth кнопки */}
+          {/* OAuth */}
           <div className="grid grid-cols-2 gap-3 mb-5">
             <OAuthButton icon={<GoogleIcon />} label="Google" onClick={loginWithGoogle} />
             <OAuthButton
               icon={<TelegramIcon />}
               label="Telegram"
-              onClick={() => {
-                const btn = tgContainerRef.current?.querySelector("iframe,a,button");
-                if (btn) btn.click();
-              }}
+              onClick={() => tgContainerRef.current?.querySelector("iframe,a,button")?.click()}
               disabled={!import.meta.env.VITE_TELEGRAM_BOT_NAME}
             />
           </div>
 
-          {/* Скрытый Telegram widget */}
-          <div
-            ref={tgContainerRef}
-            className="overflow-hidden"
-            style={{ height: 0, visibility: "hidden" }}
-            aria-hidden="true"
-          />
+          {/* Hidden Telegram widget */}
+          <div ref={tgContainerRef} className="overflow-hidden"
+            style={{ height: 0, visibility: "hidden" }} aria-hidden="true" />
 
           <Divider />
 
-          {/* Email + Password */}
+          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
               <Label htmlFor="email" className="text-xs font-medium text-muted-foreground">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input id="email" type="email" value={form.email}
-                  onChange={(e) => { set("email", e.target.value); clearError(); }}
+                  onChange={(e) => { setField("email", e.target.value); clearError(); }}
                   placeholder="ivan@example.com" autoComplete="email"
                   className="pl-10 h-12 rounded-xl text-sm"
                   style={{ background: "white", border: "1.5px solid hsl(35,20%,88%)" }} />
@@ -412,13 +349,12 @@ export default function Login() {
                 <Label htmlFor="password" className="text-xs font-medium text-muted-foreground">
                   Пароль
                   {view === "register" && (
-                    <span className="ml-2 font-normal text-muted-foreground/70">(мин. 8 симв., заглавная, цифра)</span>
+                    <span className="ml-2 font-normal text-muted-foreground/70">(мин. 8 симв.)</span>
                   )}
                 </Label>
                 {view === "login" && (
-                  <button type="button"
-                    onClick={() => { setView("forgot"); clearError(); }}
-                    className="text-xs transition-colors hover:underline"
+                  <button type="button" onClick={() => { setView("forgot"); clearError(); }}
+                    className="text-xs hover:underline transition-colors"
                     style={{ color: "hsl(145,35%,38%)" }}>
                     Забыли пароль?
                   </button>
@@ -428,16 +364,15 @@ export default function Login() {
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input id="password" type={showPassword ? "text" : "password"}
                   value={form.password}
-                  onChange={(e) => { set("password", e.target.value); clearError(); }}
+                  onChange={(e) => { setField("password", e.target.value); clearError(); }}
                   placeholder={view === "register" ? "Придумайте пароль" : "Введите пароль"}
                   autoComplete={view === "login" ? "current-password" : "new-password"}
                   className="pl-10 pr-12 h-12 rounded-xl text-sm"
                   style={{ background: "white", border: "1.5px solid hsl(35,20%,88%)" }} />
                 <button type="button" tabIndex={-1}
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:bg-muted">
-                  {showPassword
-                    ? <EyeOff className="w-4 h-4 text-muted-foreground" />
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-muted transition-colors">
+                  {showPassword ? <EyeOff className="w-4 h-4 text-muted-foreground" />
                     : <Eye className="w-4 h-4 text-muted-foreground" />}
                 </button>
               </div>
@@ -488,23 +423,14 @@ export default function Login() {
   );
 }
 
-// ─── Вспомогательные компоненты ────────────────────────────────────────────────
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
 function OAuthButton({ icon, label, onClick, disabled }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
+    <button type="button" onClick={onClick} disabled={disabled}
       className="flex items-center justify-center gap-2.5 h-11 rounded-xl text-sm font-medium transition-all duration-200 hover:shadow-md active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-      style={{
-        background: "white",
-        border: "1.5px solid hsl(35,20%,88%)",
-        color: "hsl(30,10%,20%)",
-      }}
-    >
-      {icon}
-      {label}
+      style={{ background: "white", border: "1.5px solid hsl(35,20%,88%)", color: "hsl(30,10%,20%)" }}>
+      {icon}{label}
     </button>
   );
 }

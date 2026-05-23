@@ -1,9 +1,11 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { TreePine, ArrowLeft } from 'lucide-react';
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { TreePine, ArrowLeft } from "lucide-react";
+import {useAppNavigate} from "@/lib/navigation.js";
 
 export default function PageNotFound() {
+  const navigate = useAppNavigate()
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-6">
       <div className="text-center">
@@ -13,12 +15,10 @@ export default function PageNotFound() {
         <h1 className="text-6xl font-serif font-bold text-primary/20 mb-2">404</h1>
         <h2 className="text-xl font-semibold mb-2">Страница не найдена</h2>
         <p className="text-muted-foreground mb-8">Эта ветвь дерева ведёт в никуда</p>
-        <Link to="/">
-          <Button className="rounded-full gap-2 px-6">
-            <ArrowLeft className="w-4 h-4" />
-            На главную
-          </Button>
-        </Link>
+        <Button className="rounded-full gap-2 px-6" onClick={() => nav.toHome()}>
+          <ArrowLeft className="w-4 h-4" />
+          На главную
+        </Button>
       </div>
     </div>
   );

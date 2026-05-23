@@ -1,13 +1,5 @@
 /**
  * components/dashboard/UserMenu.jsx
- *
- * Изменения:
- *  - Самописное меню (useState + useRef + AnimatePresence) заменено
- *    на Radix DropdownMenu — бесплатно получаем:
- *    • закрытие по Escape и клику вне
- *    • навигацию стрелками
- *    • корректный focus management
- *    • aria-атрибуты
  */
 
 import { Link } from "react-router-dom";
@@ -23,7 +15,7 @@ import {
 import { ROUTES } from "@/lib/routes";
 
 export default function UserMenu({ user, onLogout }) {
-  const initial = (user?.full_name?.[0] || user?.email?.[0] || "U").toUpperCase();
+  const initial = (user?.email?.[0] || "U").toUpperCase();
 
   return (
     <DropdownMenu>
@@ -34,7 +26,7 @@ export default function UserMenu({ user, onLogout }) {
           {initial}
         </div>
         <span className="hidden md:block text-muted-foreground max-w-32 truncate">
-          {user?.full_name || user?.email}
+          {user?.email}
         </span>
         <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
       </DropdownMenuTrigger>
@@ -44,7 +36,6 @@ export default function UserMenu({ user, onLogout }) {
         className="w-52 rounded-2xl"
         style={{ border: "1px solid hsl(35,20%,88%)" }}
       >
-        {/* Email пользователя */}
         <DropdownMenuLabel className="font-normal">
           <p className="text-xs text-muted-foreground">Вы вошли как</p>
           <p className="text-sm font-medium text-foreground truncate mt-0.5">{user?.email}</p>
@@ -52,18 +43,13 @@ export default function UserMenu({ user, onLogout }) {
 
         <DropdownMenuSeparator />
 
-        {/* Активные сессии */}
         <DropdownMenuItem asChild>
-          <Link
-            to={ROUTES.settings.sessions()}
-            className="flex items-center gap-3 cursor-pointer"
-          >
+          <Link to={ROUTES.settings.sessions()} className="flex items-center gap-3 cursor-pointer">
             <Shield className="w-4 h-4 text-muted-foreground" />
             Активные сессии
           </Link>
         </DropdownMenuItem>
 
-        {/* Выйти */}
         <DropdownMenuItem
           onClick={onLogout}
           className="flex items-center gap-3 cursor-pointer"

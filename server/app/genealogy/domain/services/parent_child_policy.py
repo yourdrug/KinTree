@@ -86,7 +86,7 @@ class ParentChildPolicy:
             if rel.involves(person_a) and rel.involves(person_b):
                 raise RelationDomainError(
                     message="Ошибка валидации",
-                    errors={"relation": ("Нельзя добавить родительскую связь: эти люди уже состоят в браке.")},
+                    errors={"relation": "Нельзя добавить родительскую связь: эти люди уже состоят в браке."},
                 )
 
     def _check_biological_parent_limit(

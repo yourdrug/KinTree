@@ -1,13 +1,12 @@
 /**
  * components/common/PageHeader.jsx
  *
- * Sticky-шапка страниц приложения (Dashboard, Explore, Sessions).
- * Содержит логотип KinTree и слот для правой части (actions).
+ * Sticky-шапка страниц приложения.
  *
  * Props:
- *   backTo   — путь для кнопки "Назад" (если не передан — кнопки нет)
- *   backLabel — подпись кнопки, по умолчанию "Назад"
- *   actions  — ReactNode справа (кнопки, меню)
+ *   backTo    — путь для кнопки «Назад» (если не передан — кнопки нет)
+ *   backLabel — подпись кнопки, по умолчанию «Назад»
+ *   actions   — ReactNode справа (кнопки, меню)
  */
 
 import { Link } from "react-router-dom";
@@ -20,8 +19,8 @@ export default function PageHeader({ backTo, backLabel = "Назад", actions }
     <header
       className="px-6 md:px-10 py-5 flex items-center justify-between sticky top-0 z-30"
       style={{
-        borderBottom: "1px solid hsl(35,20%,88%)",
-        background: "hsla(40,33%,98%,0.9)",
+        borderBottom:   "1px solid hsl(35,20%,88%)",
+        background:     "hsla(40,33%,98%,0.9)",
         backdropFilter: "blur(16px)",
       }}
     >

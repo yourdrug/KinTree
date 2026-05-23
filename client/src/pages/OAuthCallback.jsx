@@ -1,11 +1,8 @@
 /**
  * pages/OAuthCallback.jsx
  *
- * ИСПРАВЛЕНИЯ:
- * - Не полагаемся на isAuthenticated из AuthContext (stale closure).
- *   После checkUserAuth() читаем актуальный статус из повторного вызова /account/me
- *   через возвращаемое значение checkUserAuth (теперь возвращает { ok, user }).
- * - called.current guard предотвращает двойной вызов в StrictMode.
+ * Обрабатывает редирект от Google OAuth.
+ * Бэкенд уже поставил куки — просто читаем профиль через /account/me.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -14,12 +11,12 @@ import { Leaf, Loader2, XCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/AuthContext";
-import { ROUTES } from "@/lib/routes";
+import { ROUTES }  from "@/lib/routes";
 
 export default function OAuthCallback() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { checkUserAuth } = useAuth();
+  const { fetchMe } = useAuth();
 
   const [status,   setStatus]   = useState("loading");
   const [errorMsg, setErrorMsg] = useState("");
@@ -41,12 +38,10 @@ export default function OAuthCallback() {
       return;
     }
 
-    // Бэкенд уже поставил куки и сделал редирект сюда —
-    // достаточно одного запроса /account/me
-    checkUserAuth()
-      .then((ok) => {
-        // checkUserAuth не возвращает значение, но после её завершения
-        // состояние уже обновлено — навигируем независимо от стейта
+    // Бэкенд уже поставил куки через Set-Cookie при редиректе.
+    // Достаточно прочитать /account/me (isInitial=false → с поддержкой refresh).
+    fetchMe(false)
+      .then(() => {
         setStatus("success");
         setTimeout(() => navigate(ROUTES.dashboard(), { replace: true }), 700);
       })
@@ -89,9 +84,7 @@ export default function OAuthCallback() {
                   strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <h1 className="font-serif text-2xl font-semibold text-foreground mb-2">
-              Вход выполнен!
-            </h1>
+            <h1 className="font-serif text-2xl font-semibold text-foreground mb-2">Вход выполнен!</h1>
             <p className="text-sm text-muted-foreground">Перенаправляем…</p>
           </>
         )}

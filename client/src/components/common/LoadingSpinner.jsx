@@ -1,9 +1,5 @@
 /**
  * components/common/LoadingSpinner.jsx
- *
- * Универсальный спиннер загрузки.
- * fullScreen=true — занимает весь экран (для страниц)
- * fullScreen=false — инлайн (для карточек, секций)
  */
 
 export default function LoadingSpinner({ fullScreen = false }) {

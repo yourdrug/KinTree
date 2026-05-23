@@ -1,34 +1,24 @@
 /**
  * pages/TreeView.jsx
- *
- * ИСПРАВЛЕНИЯ:
- * 1. loadFamilyTree возвращает { family, graph, nodes, relationMaps }.
- *    nodes (graph.nodes) используются как members — содержат generation.
- *    PersonResponse больше не используется для отображения.
- * 2. handleSave "sibling": parentIds берётся из relationMaps (не person.parent_ids).
- * 3. TreeCanvas получает nodes и edges (из graph) — не persons.
- * 4. PersonSidebar получает nodes и relationMaps.
- * 5. selectedPerson хранит NodeResponse (из nodes), синхронизируется через selectedIdRef.
- * 6. handleSave "parent": создаём персону, потом parent_child (не наоборот).
- * 7. Исправлены все useCallback deps.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link }          from "react-router-dom";
 import { motion, AnimatePresence }  from "framer-motion";
 import { Leaf, ChevronLeft, UserPlus, Share2 } from "lucide-react";
-import { Button }      from "@/components/ui/button";
-import { toast }       from "@/components/ui/use-toast";
-import LoadingSpinner  from "@/components/common/LoadingSpinner";
-import TreeCanvas      from "@/components/tree/TreeCanvas";
-import PersonSidebar   from "@/components/tree/PersonSidebar";
-import AddPersonModal  from "@/components/tree/AddPersonModal";
+import { Button }     from "@/components/ui/button";
+import { toast }      from "@/components/ui/use-toast";
+import LoadingSpinner from "@/components/common/LoadingSpinner";
+import TreeCanvas     from "@/components/tree/TreeCanvas";
+import PersonSidebar  from "@/components/tree/PersonSidebar";
+import AddPersonModal from "@/components/tree/AddPersonModal";
 import {
   personsApi,
   relationsApi,
   loadFamilyTree,
   createPersonAsChild,
   createPersonAsSpouse,
+  createPersonAsSibling,
   getPersonRelations,
   toPartialDate,
 } from "@/api";
@@ -40,9 +30,9 @@ export default function TreeView() {
   const { user }         = useAuth();
 
   const [family,         setFamily]         = useState(null);
-  const [nodes,          setNodes]          = useState([]);      // graph.nodes (NodeResponse)
-  const [edges,          setEdges]          = useState([]);      // graph.edges
-  const [graph,          setGraph]          = useState(null);    // полный граф для meta
+  const [nodes,          setNodes]          = useState([]);
+  const [edges,          setEdges]          = useState([]);
+  const [graph,          setGraph]          = useState(null);
   const [relationMaps,   setRelationMaps]   = useState(new Map());
   const [selectedPerson, setSelectedPerson] = useState(null);
   const [loading,        setLoading]        = useState(true);
@@ -51,51 +41,43 @@ export default function TreeView() {
   const [editPerson,     setEditPerson]     = useState(null);
   const [isOwner,        setIsOwner]        = useState(false);
 
-  // Ref для обновления selectedPerson без бесконечного цикла
   const selectedIdRef = useRef(null);
 
-  // ── Загрузка данных ─────────────────────────────────────────────────────
+  // ── Load data ──────────────────────────────────────────────────────────────
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const data = await loadFamilyTree(familyId);
-
       setFamily(data.family);
       setNodes(data.nodes);
-      setEdges(data.graph?.edges ?? []);
+      setEdges(data.edges);
       setGraph(data.graph);
       setRelationMaps(data.relationMaps);
 
-      // Синхронизируем selectedPerson если он был выбран
       if (selectedIdRef.current) {
         const updated = data.nodes.find((n) => n.id === selectedIdRef.current);
         setSelectedPerson(updated ?? null);
         if (!updated) selectedIdRef.current = null;
       }
     } catch {
-      toast({
-        variant: "destructive",
-        title: "Ошибка загрузки",
-        description: "Не удалось загрузить семейное дерево. Попробуйте обновить страницу.",
-      });
+      toast({ variant: "destructive", title: "Ошибка загрузки",
+        description: "Не удалось загрузить семейное дерево. Попробуйте обновить страницу." });
     } finally {
       setLoading(false);
     }
   }, [familyId]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
   useEffect(() => {
     if (user && family) setIsOwner(family.owner_id === user.id);
   }, [user, family]);
 
-  // ── Выбор персоны ───────────────────────────────────────────────────────
+  // ── Person selection ───────────────────────────────────────────────────────
+
   const handleSelectPerson = useCallback((node) => {
     setSelectedPerson((prev) => {
-      if (prev?.id === node.id) {
-        selectedIdRef.current = null;
-        return null;
-      }
+      if (prev?.id === node.id) { selectedIdRef.current = null; return null; }
       selectedIdRef.current = node.id;
       return node;
     });
@@ -106,7 +88,8 @@ export default function TreeView() {
     selectedIdRef.current = null;
   }, []);
 
-  // ── Модалка ─────────────────────────────────────────────────────────────
+  // ── Modal ──────────────────────────────────────────────────────────────────
+
   const openAdd  = useCallback((relative = null) => {
     setRelativePerson(relative);
     setEditPerson(null);
@@ -125,10 +108,9 @@ export default function TreeView() {
     setEditPerson(null);
   }, []);
 
-  // ── Сохранение ──────────────────────────────────────────────────────────
-  const handleSave = useCallback(async (formData, existingId, relationType, relPerson) => {
-    // formData: { first_name, last_name, gender, birth_date: "YYYY-MM-DD"|"", death_date: "...|"" }
+  // ── Save ───────────────────────────────────────────────────────────────────
 
+  const handleSave = useCallback(async (formData, existingId, relationType, relPerson) => {
     const personPayload = {
       first_name: formData.first_name?.trim() || null,
       last_name:  formData.last_name?.trim()  || null,
@@ -140,7 +122,6 @@ export default function TreeView() {
 
     try {
       if (existingId) {
-        // PATCH — для редактирования не передаём family_id
         const { family_id: _fid, ...patchPayload } = personPayload;
         await personsApi.patch(existingId, patchPayload);
         toast({ title: "Изменения сохранены" });
@@ -148,41 +129,22 @@ export default function TreeView() {
         return;
       }
 
-      // ── Создание ────────────────────────────────────────────────────────
       if (!relPerson || !relationType) {
-        // Без привязки — просто создаём
         await personsApi.create(personPayload);
-
       } else if (relationType === "child") {
-        // relPerson — родитель нового человека
         await createPersonAsChild(personPayload, relPerson.id);
-
       } else if (relationType === "parent") {
-        // relPerson — ребёнок нового человека
         const newPerson = await personsApi.create(personPayload);
-        await relationsApi.addParentChild({
-          parent_id:     newPerson.id,
-          child_id:      relPerson.id,
-          relation_type: "BIOLOGICAL",
-        });
-
+        await relationsApi.addParentChild({ parent_id: newPerson.id, child_id: relPerson.id, relation_type: "BIOLOGICAL" });
       } else if (relationType === "partner") {
         await createPersonAsSpouse(personPayload, relPerson.id);
-
       } else if (relationType === "sibling") {
-        // FIX: parentIds берётся из relationMaps — не из relPerson.parent_ids
         const relPersonRelations = getPersonRelations(relationMaps, relPerson.id);
-        await relationsApi.addSiblingViaParents(
-          personPayload,
-          relPersonRelations.parentIds,
-          "BIOLOGICAL"
-        );
+        await createPersonAsSibling(personPayload, relPersonRelations.parentIds, "BIOLOGICAL");
 
         if (relPersonRelations.parentIds.length === 0) {
-          toast({
-            title: "Брат/сестра добавлен(а)",
-            description: "У выбранной персоны нет родителей — связь сиблингов не создана автоматически. Добавьте общего родителя вручную.",
-          });
+          toast({ title: "Брат/сестра добавлен(а)",
+            description: "У выбранной персоны нет родителей — добавьте общего родителя вручную." });
           await loadData();
           return;
         }
@@ -191,22 +153,15 @@ export default function TreeView() {
       toast({ title: "Человек добавлен" });
       await loadData();
     } catch (err) {
-      // Пробрасываем чтобы AddPersonModal мог оставаться открытым
-      const message =
-        err?.response?.data?.message ||
-        err?.response?.data?.detail  ||
-        err?.message                 ||
-        "Проверьте данные и попробуйте снова.";
-      toast({
-        variant: "destructive",
-        title:   "Ошибка сохранения",
-        description: typeof message === "string" ? message : "Неизвестная ошибка.",
-      });
-      throw err; // AddPersonModal.handleSave ловит это и не закрывает модалку
+      const message = err?.response?.data?.message || err?.response?.data?.detail || err?.message || "Проверьте данные и попробуйте снова.";
+      toast({ variant: "destructive", title: "Ошибка сохранения",
+        description: typeof message === "string" ? message : "Неизвестная ошибка." });
+      throw err;
     }
   }, [familyId, loadData, relationMaps]);
 
-  // ── Удаление ────────────────────────────────────────────────────────────
+  // ── Delete / Remove relation ───────────────────────────────────────────────
+
   const handleDelete = useCallback(async (personId) => {
     try {
       await personsApi.delete(personId);
@@ -232,7 +187,8 @@ export default function TreeView() {
     }
   }, [loadData]);
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   if (loading) return <LoadingSpinner fullScreen />;
 
   if (!family) {
@@ -248,7 +204,6 @@ export default function TreeView() {
 
   return (
     <div className="fixed inset-0 flex flex-col">
-      {/* Header */}
       <header className="flex items-center justify-between px-6 h-14 border-b bg-background/95 backdrop-blur z-20">
         <div className="flex items-center gap-3">
           <Link to={ROUTES.dashboard()}>
@@ -269,7 +224,7 @@ export default function TreeView() {
         </div>
 
         <div className="flex gap-2">
-          {!user           && <span className="text-sm text-muted-foreground px-2">Гость</span>}
+          {!user            && <span className="text-sm text-muted-foreground px-2">Гость</span>}
           {user && !isOwner && <span className="text-sm text-muted-foreground px-2">Просмотр</span>}
           {isOwner && (
             <>
@@ -284,7 +239,6 @@ export default function TreeView() {
         </div>
       </header>
 
-      {/* Main */}
       <div className="flex-1 flex relative overflow-hidden">
         <TreeCanvas
           nodes={nodes}

@@ -1,8 +1,5 @@
 /**
  * pages/VerifyEmail.jsx
- *
- * Исправлено: nav.to() → nav.toDashboard() / nav.toLogin()
- * "Отправить повторно" использует resendVerification, а не verifyEmail(token)
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -67,9 +64,7 @@ export default function VerifyEmail() {
         {status === "loading" && (
           <>
             <Loader2 className="w-12 h-12 mx-auto mb-6 animate-spin text-muted-foreground" />
-            <h1 className="font-serif text-2xl font-semibold text-foreground mb-2">
-              Подтверждение…
-            </h1>
+            <h1 className="font-serif text-2xl font-semibold text-foreground mb-2">Подтверждение…</h1>
             <p className="text-sm text-muted-foreground">Проверяем ссылку, подождите.</p>
           </>
         )}
@@ -80,9 +75,7 @@ export default function VerifyEmail() {
               style={{ background: "hsl(145,35%,94%)" }}>
               <CheckCircle2 className="w-8 h-8" style={{ color: "hsl(145,35%,38%)" }} />
             </div>
-            <h1 className="font-serif text-2xl font-semibold text-foreground mb-3">
-              Email подтверждён
-            </h1>
+            <h1 className="font-serif text-2xl font-semibold text-foreground mb-3">Email подтверждён</h1>
             <p className="text-sm text-muted-foreground mb-8">
               Ваш адрес электронной почты успешно подтверждён.
             </p>
