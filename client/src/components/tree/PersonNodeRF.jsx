@@ -113,6 +113,12 @@ function PersonNodeRF({ data }) {
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0, pointerEvents: "none" }} />
       <Handle type="source" position={Position.Left}   id="left"  style={{ opacity: 0, pointerEvents: "none" }} />
       <Handle type="target" position={Position.Right}  id="right" style={{ opacity: 0, pointerEvents: "none" }} />
+      <Handle type="source" position={Position.Top} id="sib-top"
+        style={{ opacity: 0, pointerEvents: "none", left: "30%" }}
+      />
+      <Handle type="target" position={Position.Top} id="sib-top-t"
+        style={{ opacity: 0, pointerEvents: "none", left: "30%" }}
+      />
 
       <motion.div
         initial={{ opacity: 0, scale: 0.7 }}

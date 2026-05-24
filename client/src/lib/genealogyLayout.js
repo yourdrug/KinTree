@@ -124,11 +124,17 @@ export function computeGenealogyLayout(nodes, edges) {
     if (spouse) {
       const totalPairW = NODE_W * 2 + PAIR_GAP;
       const left = centerX - totalPairW / 2;
-      positions.set(id,     { x: left,                    y });
-      positions.set(spouse, { x: left + NODE_W + PAIR_GAP, y });
+
+      const idNode     = nodes.find(n => n.id === id);
+      const isMale     = idNode?.gender === "MALE";
+
+      // Мужчина справа, женщина слева
+      const leftId  = isMale ? spouse : id;
+      const rightId = isMale ? id     : spouse;
+
+      positions.set(leftId,  { x: left,                     y });
+      positions.set(rightId, { x: left + NODE_W + PAIR_GAP, y });
       visited.add(spouse);
-    } else {
-      positions.set(id, { x: centerX - NODE_W / 2, y });
     }
 
     // Дети

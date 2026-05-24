@@ -106,15 +106,10 @@ function buildRFEdges(edges, positions, getEdgeHighlight) {
       edgeType = "straight";
     }
 
-    if (eType === "sibling" && srcPos && tgtPos) {
-      edgeType = "straight";
-      if (srcPos.x < tgtPos.x) {
-        sourceHandle = "right";
-        targetHandle = "left";
-      } else {
-        sourceHandle = "left";
-        targetHandle = "right";
-      }
+    if (eType === "sibling") {
+      edgeType = "smoothstep";
+      sourceHandle = "sib-top";
+      targetHandle = "sib-top-t";
     }
 
     result.push({
