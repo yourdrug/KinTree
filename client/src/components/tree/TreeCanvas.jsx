@@ -106,7 +106,16 @@ function buildRFEdges(edges, positions, getEdgeHighlight) {
       edgeType = "straight";
     }
 
-    if (eType === "sibling") edgeType = "straight";
+    if (eType === "sibling" && srcPos && tgtPos) {
+      edgeType = "straight";
+      if (srcPos.x < tgtPos.x) {
+        sourceHandle = "right";
+        targetHandle = "left";
+      } else {
+        sourceHandle = "left";
+        targetHandle = "right";
+      }
+    }
 
     result.push({
       id:           uniqKey,

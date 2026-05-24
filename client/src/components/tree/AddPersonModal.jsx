@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, AlertTriangle, Link2, UserCheck, Search, ChevronDown, Check } from "lucide-react";
+import { X, AlertTriangle, UserCheck, Search, ChevronDown, Check } from "lucide-react";
 import { Button }           from "@/components/ui/button";
 import { Input }            from "@/components/ui/input";
 import { Label }            from "@/components/ui/label";
@@ -284,6 +284,7 @@ function SectionCard({ title, icon: Icon, color, children }) {
 export default function AddPersonModal({
   open, onClose, onSave, onConnect,
   relativePerson, editPerson, relationMaps,
+  initialConnectMode = false,
   nodes = [],
 }) {
   const [relationType,       setRelationType]       = useState("child");
@@ -291,7 +292,7 @@ export default function AddPersonModal({
   const [saving,             setSaving]             = useState(false);
 
   // Connect mode (связать двух существующих)
-  const [connectMode,        setConnectMode]        = useState(false);
+  const [connectMode, setConnectMode] = useState(false);
   const [connectPersonA,     setConnectPersonA]     = useState(null);
   const [connectPersonB,     setConnectPersonB]     = useState(null);
   const [connectRelType,     setConnectRelType]     = useState("spouse");
@@ -334,6 +335,10 @@ export default function AddPersonModal({
       setSiblingParentId(null);
     }
   }, [open, editPerson, isEdit, relativePerson]);
+
+  useEffect(() => {
+  if (open) setConnectMode(initialConnectMode);
+}, [open, initialConnectMode]);
 
   const setField = (key, value) => setForm(f => ({ ...f, [key]: value }));
 
@@ -408,7 +413,7 @@ export default function AddPersonModal({
     : (form.first_name?.trim() && form.last_name?.trim() && !saving);
 
   // ── Render ────────────────────────────────────────────────────────────────
-
+  console.log(connectMode)
   return (
     <AnimatePresence>
       {open && (
@@ -450,23 +455,6 @@ export default function AddPersonModal({
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {/* Toggle connect mode — show when not already in add-relative flow, or when editing */}
-                {(!relativePerson || isEdit) && nodes.length >= 2 && (
-                  <button
-                    type="button"
-                    onClick={() => setConnectMode(v => !v)}
-                    title={connectMode ? "Вернуться к редактированию" : "Связать с другим человеком"}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
-                    style={{
-                      background: connectMode ? "hsl(145,35%,92%)" : "hsl(35,30%,94%)",
-                      color:      connectMode ? "hsl(145,35%,30%)" : "hsl(30,10%,45%)",
-                      border:     `1px solid ${connectMode ? "hsl(145,35%,75%)" : "hsl(35,20%,85%)"}`,
-                    }}
-                  >
-                    <Link2 className="w-3.5 h-3.5" />
-                    {connectMode ? (isEdit ? "Редактировать" : "Создать нового") : "Связать"}
-                  </button>
-                )}
                 {!saving && (
                   <button onClick={onClose}
                     className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-muted transition-colors">

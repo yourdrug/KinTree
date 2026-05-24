@@ -40,6 +40,7 @@ export default function TreeView() {
   const [relativePerson, setRelativePerson] = useState(null);
   const [editPerson,     setEditPerson]     = useState(null);
   const [isOwner,        setIsOwner]        = useState(false);
+  const [modalConnectMode, setModalConnectMode] = useState(false);
 
   const selectedIdRef = useRef(null);
 
@@ -102,10 +103,18 @@ export default function TreeView() {
     setShowModal(true);
   }, []);
 
+  const openConnect = useCallback((person) => {
+    setEditPerson(person);
+    setRelativePerson(null);
+    setModalConnectMode(true);
+    setShowModal(true);
+  }, []);
+
   const closeModal = useCallback(() => {
     setShowModal(false);
     setRelativePerson(null);
     setEditPerson(null);
+    setModalConnectMode(false);
   }, []);
 
   // ── Connect existing persons ───────────────────────────────────────────────
@@ -343,6 +352,7 @@ export default function TreeView() {
                 person={selectedPerson}
                 nodes={nodes}
                 relationMaps={relationMaps}
+                onConnect={openConnect}
                 onClose={handleCloseSidebar}
                 canEdit={isOwner}
                 onEdit={openEdit}
@@ -358,6 +368,7 @@ export default function TreeView() {
       <AddPersonModal
         open={showModal}
         onClose={closeModal}
+        initialConnectMode={modalConnectMode}
         onSave={handleSave}
         onConnect={handleConnect}
         relativePerson={relativePerson}

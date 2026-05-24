@@ -2,7 +2,7 @@
  * components/tree/PersonSidebar.jsx
  */
 
-import { X, Edit, UserPlus, User, Calendar, Heart } from "lucide-react";
+import { X, Edit, UserPlus, User, Calendar, Heart, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getPersonRelations } from "@/api";
 
@@ -20,8 +20,6 @@ function computeAgeFromYears(birthYear, deathYear, isAlive) {
   const age = endYear - birthYear;
   return age >= 0 ? age : null;
 }
-
-// ── Sub-components ────────────────────────────────────────────────────────────
 
 function RelativeChip({ node, label, badge }) {
   if (!node) return null;
@@ -50,11 +48,9 @@ function RelativeChip({ node, label, badge }) {
   );
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
-
 export default function PersonSidebar({
   person, nodes, relationMaps, onClose,
-  canEdit, onEdit, onAddRelative, onDelete,
+  canEdit, onEdit, onAddRelative, onConnect, onDelete,
 }) {
   if (!person) return null;
 
@@ -97,7 +93,6 @@ export default function PersonSidebar({
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
-        {/* Avatar + Name */}
         <div className="flex flex-col items-center text-center px-5 py-6"
           style={{ background: "linear-gradient(to bottom, hsl(145,35%,96%), hsl(40,33%,98%))" }}>
           <div className="w-24 h-24 rounded-2xl overflow-hidden mb-4 shadow-md flex items-center justify-center"
@@ -121,7 +116,6 @@ export default function PersonSidebar({
         </div>
 
         <div className="px-5 pb-5 space-y-5">
-          {/* Dates */}
           {(person.birth_date_raw || birthYear) && (
             <div className="space-y-2.5">
               <div className="flex items-start gap-3 text-sm">
@@ -143,7 +137,6 @@ export default function PersonSidebar({
             </div>
           )}
 
-          {/* Relatives */}
           {hasRelatives && (
             <div>
               <div className="flex items-center gap-1.5 mb-3">
@@ -178,6 +171,12 @@ export default function PersonSidebar({
               onClick={() => onAddRelative?.(person)}>
               <UserPlus className="w-4 h-4" /> Добавить родственника
             </Button>
+            {nodes?.length >= 2 && (
+              <Button variant="outline" className="w-full rounded-xl gap-2"
+                onClick={() => onConnect?.(person)}>
+                <Link2 className="w-4 h-4" /> Связать с другим
+              </Button>
+            )}
             <Button variant="outline"
               className="w-full rounded-xl gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
               onClick={() => onDelete?.(person.id)}>

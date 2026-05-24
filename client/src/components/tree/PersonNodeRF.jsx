@@ -243,7 +243,7 @@ function PersonNodeRF({ data }) {
               style={{
                 position:       "absolute",
                 bottom:         -14,
-                left:           "50%",
+                left:           "70%",
                 transform:      "translateX(-50%)",
                 width:          24,
                 height:         24,
