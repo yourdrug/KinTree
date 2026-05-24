@@ -5,15 +5,20 @@ genealogy/domain/services/generation_calculator.py
 
 Алгоритм:
   Шаг 1: Топологическая сортировка по parent_child рёбрам.
-          generation[child] = max(generation[parents]) + 1
-          Корни (без родителей в этой семье) = generation 0.
+          Вычисляем глубину каждого узла от его ближайшего корня.
 
-  Шаг 2: Выравнивание супругов.
-          Если A и B — супруги, оба получают max(gen[A], gen[B]).
-          Это корректно обрабатывает «вошедших» супругов (in-laws):
-          Света входит без родителей (generation=0 после шага 1),
-          но через брак с Петром (generation=1) получает generation=1.
-          Повторяется до стабилизации (обычно 1–2 итерации).
+  Шаг 2: Выравнивание по листьям (bottom-up alignment).
+          Для каждого узла без родителей (корень) вычисляем высоту
+          его поддерева (max расстояние до листа).
+          Корень с максимальной высотой получает generation=0.
+          Остальные корни сдвигаются вниз так, чтобы их листья
+          находились на том же уровне, что и листья самого глубокого дерева.
+          Это гарантирует, что "самый старший предок" всегда generation=0.
+
+  Шаг 3: Выравнивание супругов.
+          Если A и B — супруги, оба получают min(gen[A], gen[B])
+          (берём более высокий уровень = меньшее число).
+          Повторяется до стабилизации.
 
   Результат: dict[person_id → generation]
              None для узлов в цикле (защита от некорректных данных).
@@ -34,6 +39,10 @@ def compute_generations(
     """
     Вычисляет generation для каждой персоны.
 
+    generation=0 — самый старший предок (корень с максимальной глубиной потомков).
+    Остальные корни выравниваются так, чтобы их листья совпадали с листьями
+    самого глубокого дерева (bottom-up alignment).
+
     Args:
         person_ids:    все ID персон в семье
         parent_edges:  рёбра parent→child (только parent_child связи)
@@ -52,7 +61,7 @@ def compute_generations(
     internal_parent = [(s, t) for s, t in parent_edges if s in person_set and t in person_set]
     internal_spouse = [(a, b) for a, b in spouse_edges if a in person_set and b in person_set]
 
-    # ── Шаг 1: топологическая сортировка ─────────────────────────────────────
+    # ── Построить граф ────────────────────────────────────────────────────────
     parents_of: dict[str, set[str]] = defaultdict(set)
     children_of: dict[str, set[str]] = defaultdict(set)
 
@@ -60,35 +69,114 @@ def compute_generations(
         parents_of[child].add(parent)
         children_of[parent].add(child)
 
+    # ── Шаг 1: Топологическая сортировка, глубина от корня ───────────────────
     in_degree = {pid: len(parents_of[pid]) for pid in person_ids}
     queue: deque[str] = deque(pid for pid in person_ids if in_degree[pid] == 0)
-    generation: dict[str, int] = {}
+
+    # depth_from_root: расстояние от ближайшего корня вниз
+    depth_from_root: dict[str, int] = {}
+    for pid in person_ids:
+        if in_degree[pid] == 0:
+            depth_from_root[pid] = 0
+
     processed = 0
+    topo_order: list[str] = []
 
     while queue:
         node = queue.popleft()
         processed += 1
-
-        parent_gens = [generation[p] for p in parents_of[node] if p in generation]
-        generation[node] = (max(parent_gens) + 1) if parent_gens else 0
+        topo_order.append(node)
 
         for child in children_of[node]:
+            # глубина ребёнка = max(глубин родителей) + 1
+            candidate = depth_from_root.get(node, 0) + 1
+            depth_from_root[child] = max(depth_from_root.get(child, 0), candidate)
+
             in_degree[child] -= 1
             if in_degree[child] == 0:
                 queue.append(child)
 
     # ── Защита от циклов ──────────────────────────────────────────────────────
-    # Если processed < len(person_ids) — есть цикл (некорректные данные в БД).
-    # Таким узлам присваиваем None.
-    result: dict[str, int | None] = {pid: generation.get(pid) for pid in person_ids}
+    cycle_nodes = {pid for pid in person_ids if pid not in depth_from_root}
 
-    if processed < len(person_ids):
-        for pid in person_ids:
-            if pid not in generation:
-                result[pid] = None
+    # ── Шаг 2: Bottom-up alignment ───────────────────────────────────────────
+    # Для каждого узла вычисляем высоту поддерева (max глубина потомков).
+    # Проходим в обратном топологическом порядке.
+    subtree_height: dict[str, int] = dict.fromkeys(person_ids, 0)
 
-    # ── Шаг 2: выравнивание супругов ─────────────────────────────────────────
-    # Итерируем до стабилизации. Максимум len(spouse_edges) итераций.
+    for node in reversed(topo_order):
+        for child in children_of[node]:
+            subtree_height[node] = max(subtree_height[node], subtree_height[child] + 1)
+
+    # Корни (узлы без родителей в этой семье, не в цикле)
+    roots = [pid for pid in person_ids if not parents_of[pid] and pid not in cycle_nodes]
+
+    # Максимальная высота среди всех корней = "самый старший предок"
+    max_height = max((subtree_height[r] for r in roots), default=0)
+
+    # Сдвиг для каждого корня: корень с max_height получает offset=0,
+    # остальные сдвигаются вниз так, чтобы их листья были на одном уровне
+    # с листьями самого глубокого дерева.
+    root_offset: dict[str, int] = {}
+    for r in roots:
+        root_offset[r] = max_height - subtree_height[r]
+
+    # Propagate offsets вниз по дереву
+    result: dict[str, int | None] = {}
+
+    # BFS от каждого корня с его offset
+    visited: set[str] = set()
+    bfs: deque[tuple[str, int]] = deque()
+
+    for r in roots:
+        if r not in visited:
+            visited.add(r)
+            bfs.append((r, root_offset[r]))
+
+    while bfs:
+        node, gen = bfs.popleft()
+        result[node] = gen
+
+        for child in children_of[node]:
+            if child not in visited:
+                visited.add(child)
+                # Ребёнок на 1 поколение ниже родителя.
+                # Если у ребёнка несколько родителей — берём max generation
+                # (чтобы ребёнок не оказался выше одного из родителей)
+                bfs.append((child, gen + 1))
+
+    # Если узел посещён несколько раз (несколько родителей) — берём максимум.
+    # Перезапускаем через тополог. порядок для корректного многократного прохода.
+    result = {}
+    node_gen: dict[str, int] = {}
+
+    for r in roots:
+        node_gen[r] = root_offset[r]
+
+    for node in topo_order:
+        if node not in node_gen:
+            # Изолированный узел без родителей (не попал в roots из-за cycles)
+            node_gen[node] = 0
+        gen = node_gen[node]
+        result[node] = gen
+
+        for child in children_of[node]:
+            candidate = gen + 1
+            if child not in node_gen or node_gen[child] < candidate:
+                node_gen[child] = candidate
+
+    # Узлы в цикле → None
+    for pid in cycle_nodes:
+        result[pid] = None
+
+    # Оставшиеся без результата
+    for pid in person_ids:
+        if pid not in result:
+            result[pid] = None
+
+    # ── Шаг 3: Выравнивание супругов ─────────────────────────────────────────
+    # Супруги получают MIN generation (выше = старше = меньшее число).
+    # Это важно для "вошедших" супругов без предков в дереве.
     max_iterations = max(len(internal_spouse), 1)
 
     for _ in range(max_iterations):
@@ -108,8 +196,8 @@ def compute_generations(
                 result[b] = ga
                 changed = True
             elif ga is not None and gb is not None and ga != gb:
-                # Ставим обоих на БОЛЕЕ ВЫСОКИЙ уровень (max = дальше от корней)
-                target = max(ga, gb)
+                # Оба на уровень старшего из пары
+                target = min(ga, gb)
                 if result[a] != target:
                     result[a] = target
                     changed = True

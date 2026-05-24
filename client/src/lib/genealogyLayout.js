@@ -1,11 +1,15 @@
 /**
  * lib/genealogyLayout.js
  *
- * Кастомный алгоритм layout для генеалогического дерева.
+ * Алгоритм layout для генеалогического дерева.
  *
- * Логика:
- *  1. Определяем поколение каждой ноды (BFS от корней)
- *  2. Супружеские пары всегда стоят рядом на одной строке
+ * Поколения берутся напрямую из API (node.generation) — бэкенд
+ * уже вычислил их через bottom-up alignment (generation_calculator.py).
+ * Фронт не пересчитывает поколения самостоятельно.
+ *
+ * Логика позиционирования:
+ *  1. Группируем ноды по generation (строки)
+ *  2. Супружеские пары всегда рядом на одной строке
  *  3. Дети центрируются под своими родителями
  *  4. Рекурсивно разрешаем перекрытия через сдвиги
  *
@@ -46,43 +50,22 @@ export function computeGenealogyLayout(nodes, edges) {
     }
   }
 
-  // ── 1. Определить поколения (BFS) ────────────────────────────────────────
-  const generation = new Map();   // id → number
-
-  // Корни — ноды c generation 0
-  const roots = nodes.filter(n => n.generation === 0);
-  if (!roots.length) roots.push(nodes[0]);   // защита
-
-  const queue = [...roots.map(r => ({ id: r.id, gen: 0 }))];
-  while (queue.length) {
-    const { id, gen } = queue.shift();
-    if (generation.has(id)) continue;
-    generation.set(id, gen);
-
-    // Супруги — то же поколение
-    for (const sid of spouseOf.get(id) ?? []) {
-      if (!generation.has(sid)) queue.push({ id: sid, gen });
-    }
-    // Дети — следующее поколение
-    for (const cid of childrenOf.get(id) ?? []) {
-      if (!generation.has(cid)) queue.push({ id: cid, gen: gen + 1 });
-    }
-  }
-
-  // Ноды без поколения (изолированные) — ставим в конец
+  // ── 1. Используем generation из API ──────────────────────────────────────
+  // Бэкенд уже вычислил корректные поколения через bottom-up alignment.
+  // Нода без generation (null) получает fallback = 0.
+  const generation = new Map();
   for (const n of nodes) {
-    if (!generation.has(n.id)) generation.set(n.id, 0);
+    generation.set(n.id, n.generation ?? 0);
   }
 
   // ── 2. Сгруппировать в супружеские пары ──────────────────────────────────
-  // Пара = { primary, spouse|null }
-  const paired    = new Set();
+  const paired      = new Set();
   const pairsPerGen = new Map();  // gen → Pair[]
 
   for (const n of nodes) {
     if (paired.has(n.id)) continue;
-    const gen      = generation.get(n.id);
-    const spouses  = [...(spouseOf.get(n.id) ?? [])].filter(
+    const gen     = generation.get(n.id);
+    const spouses = [...(spouseOf.get(n.id) ?? [])].filter(
       sid => generation.get(sid) === gen
     );
 
@@ -95,20 +78,11 @@ export function computeGenealogyLayout(nodes, edges) {
   }
 
   // ── 3. Рекурсивный layout ─────────────────────────────────────────────────
-  // positions: id → {x, y}  (x — левый край ноды)
   const positions = new Map();
+  const gens      = [...pairsPerGen.keys()].sort((a, b) => a - b);
 
-  // Сортируем поколения
-  const gens = [...pairsPerGen.keys()].sort((a, b) => a - b);
-
-  // Для каждого поколения — вычисляем y
   const genY = gen => gen * (NODE_H + V_GAP);
 
-  // Стартуем с нулевого поколения, размещаем пары последовательно
-  // Потом корректируем x так, чтобы каждая пара центрировалась над детьми,
-  // а дети — между родителями.
-
-  // Сначала — bottom-up: вычислить "минимальную ширину" поддерева
   function subtreeWidth(id, visitedInCall = new Set()) {
     if (visitedInCall.has(id)) return NODE_W;
     visitedInCall.add(id);
@@ -117,12 +91,10 @@ export function computeGenealogyLayout(nodes, edges) {
     const spouse   = [...(spouseOf.get(id) ?? [])][0] ?? null;
 
     if (!children.length) {
-      // Листовая нода: ширина = 1 нода (+ супруг если есть)
       return spouse ? NODE_W * 2 + PAIR_GAP : NODE_W;
     }
 
-    // Ширина = сумма ширин детей + зазоры
-    const childWidths = children.map(c => subtreeWidth(c, new Set(visitedInCall)));
+    const childWidths  = children.map(c => subtreeWidth(c, new Set(visitedInCall)));
     const totalChildren = childWidths.reduce((a, b) => a + b, 0)
       + (children.length - 1) * H_GAP;
 
@@ -131,7 +103,6 @@ export function computeGenealogyLayout(nodes, edges) {
     return Math.max(selfWidth, totalChildren);
   }
 
-  // Top-down размещение
   function placeNode(id, centerX, gen, visited = new Set()) {
     if (visited.has(id)) return;
     visited.add(id);
@@ -142,34 +113,31 @@ export function computeGenealogyLayout(nodes, edges) {
     ) ?? null;
 
     if (spouse) {
-      // Пара: primary слева, spouse справа, центр = centerX
-      const pairW = NODE_W * 2 + PAIR_GAP;
+      const pairW    = NODE_W * 2 + PAIR_GAP;
       const pairLeft = centerX - pairW / 2;
-      positions.set(id,     { x: pairLeft,              y });
-      positions.set(spouse, { x: pairLeft + NODE_W + PAIR_GAP, y });
+      positions.set(id,     { x: pairLeft,                       y });
+      positions.set(spouse, { x: pairLeft + NODE_W + PAIR_GAP,   y });
       visited.add(spouse);
     } else {
       positions.set(id, { x: centerX - NODE_W / 2, y });
     }
 
-    // Дети этой ноды + детей супруга (объединяем)
     const myChildren     = [...(childrenOf.get(id) ?? [])];
     const spouseChildren = spouse ? [...(childrenOf.get(spouse) ?? [])] : [];
     const allChildren    = [...new Set([...myChildren, ...spouseChildren])];
 
     if (!allChildren.length) return;
 
-    // Вычислить суммарную ширину детей
     const childWidths = allChildren.map(c => subtreeWidth(c));
     const totalW = childWidths.reduce((a, b) => a + b, 0)
       + (allChildren.length - 1) * H_GAP;
 
-    let childX = centerX - totalW / 2;
+    let childX    = centerX - totalW / 2;
     const childGen = gen + 1;
 
     for (let i = 0; i < allChildren.length; i++) {
-      const cid   = allChildren[i];
-      const cw    = childWidths[i];
+      const cid     = allChildren[i];
+      const cw      = childWidths[i];
       const cCenter = childX + cw / 2;
       placeNode(cid, cCenter, childGen, visited);
       childX += cw + H_GAP;
@@ -185,7 +153,7 @@ export function computeGenealogyLayout(nodes, edges) {
   const totalRootW = rootWidths.reduce((a, b) => a + b, 0)
     + (rootIds.length - 1) * H_GAP;
 
-  let rootX = -totalRootW / 2;
+  let rootX   = -totalRootW / 2;
   const visited = new Set();
 
   for (let i = 0; i < rootIds.length; i++) {
@@ -199,7 +167,7 @@ export function computeGenealogyLayout(nodes, edges) {
   let fallbackX = 0;
   for (const n of nodes) {
     if (!positions.has(n.id)) {
-      positions.set(n.id, { x: fallbackX, y: 0 });
+      positions.set(n.id, { x: fallbackX, y: genY(generation.get(n.id) ?? 0) });
       fallbackX += NODE_W + H_GAP;
     }
   }
