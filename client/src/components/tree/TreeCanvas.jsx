@@ -3,6 +3,9 @@
  *
  * ReactFlow + кастомный генеалогический layout (без Dagre).
  * Супруги всегда рядом, дети под парой, рёбра не наискосок.
+ *
+ * v3: использует inferMissingSpouseEdges чтобы гарантировать
+ *     пунктирную линию у КАЖДОЙ пары.
  */
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -18,7 +21,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-import { computeGenealogyLayout } from "@/lib/genealogyLayout";
+import { computeGenealogyLayout, inferMissingSpouseEdges } from "@/lib/genealogyLayout";
 import { useHighlight } from "./useHighlight";
 import PersonNodeRF from "./PersonNodeRF";
 
@@ -150,6 +153,12 @@ function TreeCanvasInner({
     [rawNodes, rawEdges]
   );
 
+  // Объединяем реальные рёбра + синтетические spouse для пар без линии
+  const allEdges = useMemo(() => {
+    const synthetic = inferMissingSpouseEdges(rawNodes, rawEdges, positions);
+    return [...rawEdges, ...synthetic];
+  }, [rawNodes, rawEdges, positions]);
+
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
@@ -163,9 +172,9 @@ function TreeCanvasInner({
         onNodeMouseEnter, onNodeMouseLeave
       )
     );
-    setEdges(buildRFEdges(rawEdges, positions, getEdgeHighlight));
+    setEdges(buildRFEdges(allEdges, positions, getEdgeHighlight));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawNodes, rawEdges, positions]);
+  }, [rawNodes, rawEdges, positions, allEdges]);
 
   // Sync edge highlight on hover
   useEffect(() => {

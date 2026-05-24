@@ -5,7 +5,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, AlertTriangle, UserCheck, Search, ChevronDown, Check } from "lucide-react";
+import { X, AlertTriangle, UserCheck, Search, ChevronDown, Check, Heart } from "lucide-react";
 import { Button }           from "@/components/ui/button";
 import { Input }            from "@/components/ui/input";
 import { Label }            from "@/components/ui/label";
@@ -24,7 +24,6 @@ const RELATION_TYPES = [
   { value: "sibling", label: "Брат / Сестра" },
 ];
 
-// connect relation types — labels are built dynamically from selected person names
 const CONNECT_RELATION_TYPES = [
   { value: "parent_child_ab", labelFn: (a, b) => a && b ? `${a} — родитель ${b}` : "Первый — родитель второго" },
   { value: "parent_child_ba", labelFn: (a, b) => a && b ? `${b} — родитель ${a}` : "Второй — родитель первого" },
@@ -60,7 +59,7 @@ function personLabel(p) {
   return name + year;
 }
 
-// ── PersonPicker — выпадающий список с порталом (не срезается overflow) ───────
+// ── PersonPicker ──────────────────────────────────────────────────────────────
 
 function PersonPicker({ nodes, value, onChange, placeholder = "Выберите человека", exclude = [] }) {
   const [open, setOpen]         = useState(false);
@@ -82,7 +81,6 @@ function PersonPicker({ nodes, value, onChange, placeholder = "Выберите 
 
   const selected = value ? nodes?.find(n => n.id === value) : null;
 
-  // Calculate dropdown position relative to viewport
   const calcPos = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
@@ -99,7 +97,6 @@ function PersonPicker({ nodes, value, onChange, placeholder = "Выберите 
     setOpen(v => !v);
   };
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e) => {
@@ -115,7 +112,6 @@ function PersonPicker({ nodes, value, onChange, placeholder = "Выберите 
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Reposition on scroll/resize
   useEffect(() => {
     if (!open) return;
     const handler = () => calcPos();
@@ -210,18 +206,17 @@ function PersonPicker({ nodes, value, onChange, placeholder = "Выберите 
   );
 }
 
-// ── Toggle Checkbox ───────────────────────────────────────────────────────────
+// ── ToggleCheckbox ────────────────────────────────────────────────────────────
 
-function ToggleCheckbox({ checked, onChange, label }) {
+function ToggleCheckbox({ checked, onChange, label, sublabel }) {
   return (
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className="flex items-center gap-2.5 text-sm font-medium transition-colors"
-      style={{ color: checked ? "hsl(145,35%,38%)" : "hsl(30,10%,40%)" }}
+      className="flex items-start gap-2.5 text-left w-full"
     >
       <div
-        className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all"
+        className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 transition-all mt-0.5"
         style={{
           background:  checked ? "hsl(145,35%,38%)" : "white",
           border:      `2px solid ${checked ? "hsl(145,35%,38%)" : "hsl(35,20%,78%)"}`,
@@ -229,7 +224,17 @@ function ToggleCheckbox({ checked, onChange, label }) {
       >
         {checked && <Check className="w-3 h-3 text-white" />}
       </div>
-      {label}
+      <div>
+        <span
+          className="text-sm font-medium transition-colors"
+          style={{ color: checked ? "hsl(145,35%,38%)" : "hsl(30,10%,40%)" }}
+        >
+          {label}
+        </span>
+        {sublabel && (
+          <p className="text-xs text-muted-foreground mt-0.5">{sublabel}</p>
+        )}
+      </div>
     </button>
   );
 }
@@ -291,30 +296,58 @@ export default function AddPersonModal({
   const [form,               setForm]               = useState(buildEmptyForm());
   const [saving,             setSaving]             = useState(false);
 
-  // Connect mode (связать двух существующих)
-  const [connectMode, setConnectMode] = useState(false);
+  // Connect mode
+  const [connectMode,        setConnectMode]        = useState(false);
   const [connectPersonA,     setConnectPersonA]     = useState(null);
   const [connectPersonB,     setConnectPersonB]     = useState(null);
   const [connectRelType,     setConnectRelType]     = useState("spouse");
 
-  // Child + parents married checkbox
+  // Child + second parent
   const [parentsMarried,     setParentsMarried]     = useState(false);
-  const [secondParentId,     setSecondParentId]     = useState(null); // existing person
+  const [secondParentId,     setSecondParentId]     = useState(null);
   const [marriageDate,       setMarriageDate]       = useState("");
   const [divorceDate,        setDivorceDate]        = useState("");
 
+  // ── NEW: Parent + existing co-parent as spouse ────────────────────────────
+  // Когда добавляем родителя к ребёнку у которого уже есть 1 родитель,
+  // предлагаем сделать нового родителя супругом существующего.
+  const [makeSpouseOfCoParent, setMakeSpouseOfCoParent] = useState(false);
+  const [coParentMarriageDate, setCoParentMarriageDate] = useState("");
+  const [coParentDivorceDate,  setCoParentDivorceDate]  = useState("");
+
   // Sibling parents mode
-  const [siblingParentMode,  setSiblingParentMode]  = useState("same"); // "same" | "different"
-  const [siblingParentId,    setSiblingParentId]    = useState(null);   // additional parent for "different"
+  const [siblingParentMode,  setSiblingParentMode]  = useState("same");
+  const [siblingParentId,    setSiblingParentId]    = useState(null);
 
   const isEdit = !!editPerson;
+
+  // ── Существующие родители relativePerson ──────────────────────────────────
+  const existingParents = useMemo(() => {
+    if (!relativePerson || !relationMaps || !nodes.length) return [];
+    const rel = getPersonRelations(relationMaps, relativePerson.id);
+    return rel.parentIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
+  }, [relativePerson, relationMaps, nodes]);
+
+  // Показываем блок «сделать супругами» когда:
+  // - добавляем родителя
+  // - у ребёнка ровно 1 существующий родитель
+  // - не режим редактирования
+  const showCoParentSpouseOffer = useMemo(() => {
+    return (
+      !isEdit &&
+      !connectMode &&
+      relationType === "parent" &&
+      existingParents.length === 1
+    );
+  }, [isEdit, connectMode, relationType, existingParents]);
+
+  const existingCoParent = showCoParentSpouseOffer ? existingParents[0] : null;
 
   useEffect(() => {
     if (!open) return;
     if (isEdit) {
       setForm(formFromNode(editPerson));
       setConnectMode(false);
-      // Pre-fill person A with the person being edited when switching to connect mode
       setConnectPersonA(editPerson.id);
       setConnectPersonB(null);
       setConnectRelType("spouse");
@@ -331,14 +364,24 @@ export default function AddPersonModal({
       setSecondParentId(null);
       setMarriageDate("");
       setDivorceDate("");
+      setMakeSpouseOfCoParent(false);
+      setCoParentMarriageDate("");
+      setCoParentDivorceDate("");
       setSiblingParentMode("same");
       setSiblingParentId(null);
     }
   }, [open, editPerson, isEdit, relativePerson]);
 
   useEffect(() => {
-  if (open) setConnectMode(initialConnectMode);
-}, [open, initialConnectMode]);
+    if (open) setConnectMode(initialConnectMode);
+  }, [open, initialConnectMode]);
+
+  // Сбрасываем флаг супругов при смене типа связи
+  useEffect(() => {
+    setMakeSpouseOfCoParent(false);
+    setCoParentMarriageDate("");
+    setCoParentDivorceDate("");
+  }, [relationType]);
 
   const setField = (key, value) => setForm(f => ({ ...f, [key]: value }));
 
@@ -350,12 +393,7 @@ export default function AddPersonModal({
     relationMaps &&
     getPersonRelations(relationMaps, relativePerson.id).parentIds.length === 0;
 
-  // Relative's existing parents
-  const relativeParents = useMemo(() => {
-    if (!relativePerson || !relationMaps || !nodes.length) return [];
-    const rel = getPersonRelations(relationMaps, relativePerson.id);
-    return rel.parentIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-  }, [relativePerson, relationMaps, nodes]);
+  const relativeParents = existingParents; // alias для читаемости ниже
 
   // ── Save ──────────────────────────────────────────────────────────────────
 
@@ -363,7 +401,6 @@ export default function AddPersonModal({
     if (saving) return;
     setSaving(true);
     try {
-      // Connect existing persons mode
       if (connectMode) {
         if (!connectPersonA || !connectPersonB) return;
         await onConnect?.({ personA: connectPersonA, personB: connectPersonB, relType: connectRelType, marriageDate, divorceDate });
@@ -371,7 +408,6 @@ export default function AddPersonModal({
         return;
       }
 
-      // Extra data passed alongside the form
       const extra = {};
 
       if (!isEdit && relationType === "child" && parentsMarried && secondParentId) {
@@ -386,6 +422,14 @@ export default function AddPersonModal({
         extra.siblingParentId   = siblingParentMode === "different" ? siblingParentId : null;
       }
 
+      // ── NEW: связать нового родителя с существующим как супругов ──────────
+      if (!isEdit && relationType === "parent" && makeSpouseOfCoParent && existingCoParent) {
+        extra.makeSpouseOfCoParent = true;
+        extra.coParentId           = existingCoParent.id;
+        extra.coParentMarriageDate = coParentMarriageDate || null;
+        extra.coParentDivorceDate  = coParentDivorceDate  || null;
+      }
+
       await onSave(form, editPerson?.id, relationType, relativePerson, extra);
       onClose();
     } catch {
@@ -395,7 +439,6 @@ export default function AddPersonModal({
     }
   };
 
-  // Short first names for relation type labels
   const nameA = useMemo(() => {
     if (!connectPersonA) return null;
     const p = nodes.find(n => n.id === connectPersonA);
@@ -413,7 +456,7 @@ export default function AddPersonModal({
     : (form.first_name?.trim() && form.last_name?.trim() && !saving);
 
   // ── Render ────────────────────────────────────────────────────────────────
-  console.log(connectMode)
+
   return (
     <AnimatePresence>
       {open && (
@@ -499,7 +542,6 @@ export default function AddPersonModal({
                     <div className="flex-1 h-px" style={{ background: "hsl(35,20%,88%)" }} />
                   </div>
 
-                  {/* Relation type */}
                   <div className="grid grid-cols-1 gap-2">
                     {CONNECT_RELATION_TYPES.map(r => (
                       <button
@@ -518,7 +560,6 @@ export default function AddPersonModal({
                     ))}
                   </div>
 
-                  {/* Marriage dates if spouse */}
                   <AnimatePresence>
                     {connectRelType === "spouse" && (
                       <motion.div
@@ -677,6 +718,93 @@ export default function AddPersonModal({
                   </div>
                 </div>
 
+                {/* ── NEW: Parent → offer spouse link with existing co-parent ── */}
+                <AnimatePresence>
+                  {showCoParentSpouseOffer && existingCoParent && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                    >
+                      <div
+                        className="rounded-2xl p-4 space-y-3"
+                        style={{ background: "hsl(345,60%,98%)", border: "1px solid hsl(345,50%,88%)" }}
+                      >
+                        {/* Кто уже является родителем */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <Heart className="w-3.5 h-3.5 flex-shrink-0" style={{ color: "hsl(345,60%,55%)" }} />
+                          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "hsl(345,45%,40%)" }}>
+                            Уже есть родитель
+                          </span>
+                        </div>
+
+                        <div
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm"
+                          style={{ background: "hsl(345,50%,94%)" }}
+                        >
+                          <div
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                            style={{ background: "hsl(345,55%,82%)", color: "hsl(345,55%,30%)" }}
+                          >
+                            {(existingCoParent.first_name || existingCoParent.full_name || "?")[0].toUpperCase()}
+                          </div>
+                          <span className="font-medium" style={{ color: "hsl(345,45%,25%)" }}>
+                            {[existingCoParent.first_name, existingCoParent.last_name].filter(Boolean).join(" ") || existingCoParent.full_name}
+                          </span>
+                          {existingCoParent.birth_year && (
+                            <span className="text-xs ml-auto" style={{ color: "hsl(345,35%,55%)" }}>
+                              {existingCoParent.birth_year}
+                            </span>
+                          )}
+                        </div>
+
+                        <ToggleCheckbox
+                          checked={makeSpouseOfCoParent}
+                          onChange={setMakeSpouseOfCoParent}
+                          label="Сделать их супругами"
+                          sublabel={`Новый родитель и ${existingCoParent.first_name || existingCoParent.full_name} будут связаны как партнёры`}
+                        />
+
+                        <AnimatePresence>
+                          {makeSpouseOfCoParent && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="space-y-3 pt-1"
+                            >
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground mb-1 block">Год свадьбы</Label>
+                                  <Input
+                                    type="number" min="1" max="9999"
+                                    value={coParentMarriageDate}
+                                    onChange={e => setCoParentMarriageDate(e.target.value)}
+                                    placeholder="необязательно"
+                                    className="rounded-xl"
+                                    disabled={saving}
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground mb-1 block">Год развода</Label>
+                                  <Input
+                                    type="number" min="1" max="9999"
+                                    value={coParentDivorceDate}
+                                    onChange={e => setCoParentDivorceDate(e.target.value)}
+                                    placeholder="необязательно"
+                                    className="rounded-xl"
+                                    disabled={saving}
+                                  />
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 {/* ── CHILD: parents married checkbox ─────────────────── */}
                 <AnimatePresence>
                   {!isEdit && relationType === "child" && relativePerson && (
@@ -691,7 +819,7 @@ export default function AddPersonModal({
                         <ToggleCheckbox
                           checked={parentsMarried}
                           onChange={setParentsMarried}
-                          label={`Есть второй родитель у этого ребёнка?`}
+                          label="Есть второй родитель у этого ребёнка?"
                         />
 
                         <AnimatePresence>

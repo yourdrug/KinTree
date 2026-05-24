@@ -109,8 +109,8 @@ function PersonNodeRF({ data }) {
   return (
     <>
       {/* ReactFlow handles — невидимые, нужны для рёбер */}
-      <Handle type="target" position={Position.Top}    style={{ opacity: 0, pointerEvents: "none" }} />
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0, pointerEvents: "none" }} />
+      <Handle type="target" position={Position.Top}    id="top"   style={{ opacity: 0, pointerEvents: "none" }} />
+      <Handle type="source" position={Position.Bottom} id="bot"   style={{ opacity: 0, pointerEvents: "none" }} />
       <Handle type="source" position={Position.Left}   id="left"  style={{ opacity: 0, pointerEvents: "none" }} />
       <Handle type="target" position={Position.Right}  id="right" style={{ opacity: 0, pointerEvents: "none" }} />
       <Handle type="source" position={Position.Top} id="sib-top"
