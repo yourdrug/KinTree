@@ -9,6 +9,7 @@ identity/infrastructure/oauth/google_verifier.py
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 import logging
 
 import httpx
@@ -97,6 +98,7 @@ def verify_google_id_token(id_token: str) -> GoogleUserInfo:
             audience=settings.GOOGLE_CLIENT_ID,
             issuer=[_GOOGLE_ISSUER_1, _GOOGLE_ISSUER_2],
             options={"verify_exp": True},
+            leeway=timedelta(seconds=30),
         )
     except jwt.ExpiredSignatureError as exc:
         raise ValueError("Google id_token истёк") from exc
