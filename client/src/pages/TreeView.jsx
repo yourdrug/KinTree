@@ -134,16 +134,12 @@ export default function TreeView() {
       } else if (relType === "parent_child_ba") {
         await relationsApi.addParentChild({ parent_id: personB, child_id: personA, relation_type: "BIOLOGICAL" });
       } else if (relType === "sibling") {
-        // Shared parents: find common parents of both
         const relA = getPersonRelations(relationMaps, personA);
         const relB = getPersonRelations(relationMaps, personB);
         const sharedParents = relA.parentIds.filter(id => relB.parentIds.includes(id));
         if (sharedParents.length === 0 && relA.parentIds.length === 0 && relB.parentIds.length === 0) {
           toast({ title: "Братья/сёстры связаны", description: "У обоих нет родителей — добавьте общего родителя вручную." });
         }
-        // The sibling relation is implicit through shared parents; ensure parent-child edges
-        // If they already share parents via graph it'll show up; we add explicit parent_child if needed
-        // For now just toast — the API may handle sibling edges automatically via shared parents
         toast({ title: "Для связи братьев/сестёр", description: "Убедитесь, что у них есть общий родитель в дереве." });
         await loadData();
         return;
@@ -171,6 +167,7 @@ export default function TreeView() {
     };
 
     try {
+      // ── Edit existing person ─────────────────────────────────────────────
       if (existingId) {
         const { family_id: _fid, ...patchPayload } = personPayload;
         await personsApi.patch(existingId, patchPayload);
@@ -181,54 +178,81 @@ export default function TreeView() {
 
       let newPerson = null;
 
+      // ── Add without relation ─────────────────────────────────────────────
       if (!relPerson || !relationType) {
         newPerson = await personsApi.create(personPayload);
+
+      // ── Add as child ─────────────────────────────────────────────────────
       } else if (relationType === "child") {
         newPerson = await createPersonAsChild(personPayload, relPerson.id);
 
-        // Extra: second parent
         if (extra.secondParentId) {
           await relationsApi.addParentChild({
             parent_id: extra.secondParentId,
-            child_id: newPerson.id,
+            child_id:  newPerson.id,
             relation_type: "BIOLOGICAL",
           });
 
-          // Also link the two parents as spouses if marriage date provided or just as MARRIED
           if (extra.parentsMarried) {
             try {
               await relationsApi.addSpouse({
-                person_a_id: relPerson.id,
-                person_b_id: extra.secondParentId,
+                person_a_id:     relPerson.id,
+                person_b_id:     extra.secondParentId,
                 marriage_status: "MARRIED",
-                marriage_year: extra.marriageDate ? parseInt(extra.marriageDate) : null,
-                divorce_year:  extra.divorceDate  ? parseInt(extra.divorceDate)  : null,
+                marriage_year:   extra.marriageDate ? parseInt(extra.marriageDate) : null,
+                divorce_year:    extra.divorceDate  ? parseInt(extra.divorceDate)  : null,
               });
             } catch {
-              // May already be spouses — ignore duplicate error
+              // Already spouses — ignore duplicate
             }
           }
         }
 
+      // ── Add as parent ────────────────────────────────────────────────────
       } else if (relationType === "parent") {
         newPerson = await personsApi.create(personPayload);
-        await relationsApi.addParentChild({ parent_id: newPerson.id, child_id: relPerson.id, relation_type: "BIOLOGICAL" });
+        await relationsApi.addParentChild({
+          parent_id:     newPerson.id,
+          child_id:      relPerson.id,
+          relation_type: "BIOLOGICAL",
+        });
+
+        // ── NEW: link new parent as spouse of existing co-parent ──────────
+        if (extra.makeSpouseOfCoParent && extra.coParentId) {
+          try {
+            await relationsApi.addSpouse({
+              person_a_id:     newPerson.id,
+              person_b_id:     extra.coParentId,
+              marriage_status: "MARRIED",
+              marriage_year:   extra.coParentMarriageDate ? parseInt(extra.coParentMarriageDate) : null,
+              divorce_year:    extra.coParentDivorceDate  ? parseInt(extra.coParentDivorceDate)  : null,
+            });
+          } catch {
+            // Already spouses — ignore duplicate, but warn user
+            toast({
+              title: "Связь супругов уже существует",
+              description: "Эти два человека уже были отмечены как партнёры.",
+            });
+          }
+        }
+
+      // ── Add as partner ───────────────────────────────────────────────────
       } else if (relationType === "partner") {
         newPerson = await createPersonAsSpouse(personPayload, relPerson.id);
+
+      // ── Add as sibling ───────────────────────────────────────────────────
       } else if (relationType === "sibling") {
         const relPersonRelations = getPersonRelations(relationMaps, relPerson.id);
         const { siblingParentMode, siblingParentId } = extra;
 
         if (siblingParentMode === "different" && siblingParentId) {
-          // New person shares only a specific parent
           newPerson = await personsApi.create(personPayload);
           await relationsApi.addParentChild({
-            parent_id: siblingParentId,
-            child_id: newPerson.id,
+            parent_id:     siblingParentId,
+            child_id:      newPerson.id,
             relation_type: "BIOLOGICAL",
           });
         } else {
-          // Same parents as relPerson
           newPerson = await createPersonAsSibling(personPayload, relPersonRelations.parentIds, "BIOLOGICAL");
 
           if (relPersonRelations.parentIds.length === 0) {
@@ -250,7 +274,7 @@ export default function TreeView() {
     }
   }, [familyId, loadData, relationMaps]);
 
-  // ── Delete / Remove relation ───────────────────────────────────────────────
+  // ── Delete ─────────────────────────────────────────────────────────────────
 
   const handleDelete = useCallback(async (personId) => {
     try {
@@ -337,6 +361,7 @@ export default function TreeView() {
           onSelectPerson={handleSelectPerson}
           canEdit={isOwner}
           onAddChild={(parent) => openAdd(parent)}
+          focusPersonId={selectedPerson?.id ?? nodes[0]?.id}
         />
 
         <AnimatePresence>

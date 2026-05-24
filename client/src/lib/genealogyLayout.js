@@ -1,36 +1,62 @@
 /**
- * lib/genealogyLayout.js  v3
+ * lib/genealogyLayout.js  v4+spacing
  *
- * Правила:
- *  1. Мужчина ВСЕГДА справа в паре, женщина слева.
- *     Если оба одного пола / неизвестен — сохраняем порядок (ведущий слева).
- *  2. Дети размещаются строго под центром родительской пары.
- *  3. Дети с собственными семьями группируются в центре, одиночки — по краям,
- *     чтобы их партнёры и потомки не улетали далеко.
- *  4. Spouse-рёбра синтетически добавляются в TreeCanvas если их нет в rawEdges
- *     (см. buildRFEdges — теперь он принимает extraSpouseEdges).
+ * v4 (из обновления):
+ *  - orderPairByGender: женщина слева, мужчина справа
+ *  - buildMarriageBlocks: поддержка нескольких браков
+ *  - inferMissingSpouseEdges: экспортируемая утилита для TreeCanvas
+ *
+ * spacing fix (из исправления расстояний):
+ *  - H_GAP  40 → 24
+ *  - PAIR_GAP 20 → 16
+ *  - V_GAP  100 → 80
+ *  - ROOT_GAP = 40 (отдельный зазор между независимыми корневыми поддеревьями)
  */
 
-const NODE_W   = 140;
-const NODE_H   = 100;
-const H_GAP    = 40;   // горизонтальный зазор между независимыми поддеревьями
-const PAIR_GAP = 20;   // зазор внутри супружеской пары
-const V_GAP    = 100;  // вертикальный зазор между поколениями
+const NODE_W    = 140;
+const NODE_H    = 100;
+const H_GAP     = 24;   // зазор между соседними поддеревьями
+const PAIR_GAP  = 16;   // зазор внутри супружеской пары
+const V_GAP     = 80;   // вертикальный зазор между поколениями
+const ROOT_GAP  = 40;   // зазор между независимыми корневыми поддеревьями
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Возвращает {leftId, rightId} для пары с учётом пола:
+ *   FEMALE слева, MALE справа.
+ *   Если оба одного пола / неизвестно — ведущий слева.
+ */
+function orderPairByGender(leadId, spouseId, nodeById) {
+  const lGender = nodeById.get(leadId)?.gender  ?? null;
+  const sGender = nodeById.get(spouseId)?.gender ?? null;
+
+  if (lGender === 'MALE'   && sGender !== 'MALE')   return { leftId: spouseId, rightId: leadId };
+  if (lGender === 'FEMALE' && sGender !== 'FEMALE') return { leftId: leadId,   rightId: spouseId };
+  if (sGender === 'MALE'   && lGender !== 'MALE')   return { leftId: leadId,   rightId: spouseId };
+  if (sGender === 'FEMALE' && lGender !== 'FEMALE') return { leftId: spouseId, rightId: leadId };
+
+  return { leftId: leadId, rightId: spouseId };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Main layout
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function computeGenealogyLayout(nodes, edges) {
   if (!nodes?.length) return new Map();
 
   // ── Индексы ───────────────────────────────────────────────────────────────
-  const spouseOf   = new Map(); // id → Set<id>
+  const spousesOf  = new Map(); // id → Set<spouseId>  (все браки)
   const parentsOf  = new Map(); // child_id → Set<parent_id>
   const childrenOf = new Map(); // parent_id → Set<child_id>
   const genMap     = new Map(); // id → generation
-  const nodeById   = new Map(); // id → node object
+  const nodeById   = new Map(); // id → node
 
   for (const n of nodes) {
-    spouseOf  .set(n.id, new Set());
+    spousesOf .set(n.id, new Set());
     parentsOf .set(n.id, new Set());
     childrenOf.set(n.id, new Set());
     genMap    .set(n.id, n.generation ?? 0);
@@ -39,8 +65,8 @@ export function computeGenealogyLayout(nodes, edges) {
 
   for (const e of edges) {
     if (e.type === 'spouse') {
-      spouseOf.get(e.source_id)?.add(e.target_id);
-      spouseOf.get(e.target_id)?.add(e.source_id);
+      spousesOf.get(e.source_id)?.add(e.target_id);
+      spousesOf.get(e.target_id)?.add(e.source_id);
     }
     if (e.type === 'parent_child') {
       parentsOf .get(e.target_id)?.add(e.source_id);
@@ -48,115 +74,90 @@ export function computeGenealogyLayout(nodes, edges) {
     }
   }
 
-  // ── Определяем пары (ведущий + супруг) ────────────────────────────────────
-  // Каждый человек входит ровно в одну пару.
-  // Ведущий — тот, у кого есть дети (или первый встреченный если оба/ни один).
-  const primarySpouse = new Map(); // id → spouseId | null
-  const pairedSet     = new Set();
+  // ── Строим супружеские блоки ──────────────────────────────────────────────
+  // Блок = { leadId, spouseId|null, children: Set<id> }
+  // Один человек может быть lead в нескольких блоках (несколько браков).
+  // primaryBlockOf: Map<personId, blockKey> — блок, в котором персона нарисована.
+
+  const blocks         = new Map();
+  const processedPairs = new Set();
 
   for (const n of nodes) {
-    if (pairedSet.has(n.id)) continue;
     const gen = genMap.get(n.id);
-    const spouse = [...(spouseOf.get(n.id) ?? [])]
-      .find(sid => genMap.get(sid) === gen && !pairedSet.has(sid)) ?? null;
+    for (const spId of spousesOf.get(n.id) ?? []) {
+      if (genMap.get(spId) !== gen) continue;
+      const pairKey = [n.id, spId].sort().join('+');
+      if (processedPairs.has(pairKey)) continue;
+      processedPairs.add(pairKey);
 
-    primarySpouse.set(n.id, spouse);
-    pairedSet.add(n.id);
-    if (spouse) {
-      primarySpouse.set(spouse, n.id);
-      pairedSet.add(spouse);
+      // Ведущий — у кого больше детей
+      const nChildren  = childrenOf.get(n.id)?.size  ?? 0;
+      const spChildren = childrenOf.get(spId)?.size   ?? 0;
+      const leadId   = (spChildren > nChildren) ? spId : n.id;
+      const spouseId = leadId === n.id ? spId : n.id;
+
+      const childSet = new Set([
+        ...(childrenOf.get(leadId)   ?? []),
+        ...(childrenOf.get(spouseId) ?? []),
+      ]);
+
+      blocks.set(pairKey, { leadId, spouseId, children: childSet });
+    }
+
+    // Одиночные блоки (без супруга того же поколения)
+    const sameGenSpouses = [...(spousesOf.get(n.id) ?? [])].filter(
+      s => genMap.get(s) === genMap.get(n.id)
+    );
+    if (sameGenSpouses.length === 0) {
+      blocks.set(n.id, {
+        leadId:   n.id,
+        spouseId: null,
+        children: childrenOf.get(n.id) ?? new Set(),
+      });
     }
   }
 
-  // ── Ведущий пары (lead) ────────────────────────────────────────────────────
-  // lead — тот, вокруг кого строится поддерево; spouse привязан к нему.
-  // Из двух партнёров ведущим делаем того, у кого больше детей (или первый).
-  const leadOf = new Map(); // id → leadId
+  // primaryBlockOf: для каждого человека — ключ блока, в котором он нарисован
+  const primaryBlockOf = new Map();
 
-  for (const [id, spId] of primarySpouse) {
-    if (leadOf.has(id)) continue;
-    if (!spId) { leadOf.set(id, id); continue; }
+  for (const [key, blk] of blocks) {
+    const { leadId, spouseId } = blk;
 
-    const idChildren = [...(childrenOf.get(id)   ?? [])];
-    const spChildren = [...(childrenOf.get(spId) ?? [])];
-    const idHas = idChildren.length > 0;
-    const spHas = spChildren.length > 0;
-
-    const lead = (spHas && !idHas) ? spId : id;
-    leadOf.set(id,   lead);
-    leadOf.set(spId, lead);
-  }
-
-  // ── Правило: мужчина ВСЕГДА справа ────────────────────────────────────────
-  function getPairOrder(leadId) {
-    const spId = primarySpouse.get(leadId);
-    if (!spId) return { leftId: leadId, rightId: null };
-
-    const leadGender   = nodeById.get(leadId)?.gender ?? null;
-    const spouseGender = nodeById.get(spId)?.gender   ?? null;
-
-    if (leadGender === 'MALE' && spouseGender !== 'MALE') {
-      // Ведущий — мужчина → он справа, супруг(а) слева
-      return { leftId: spId, rightId: leadId };
+    const existing = primaryBlockOf.get(leadId);
+    if (!existing) {
+      primaryBlockOf.set(leadId, key);
+    } else {
+      const existingBlk = blocks.get(existing);
+      if (blk.children.size > (existingBlk?.children.size ?? 0)) {
+        primaryBlockOf.set(leadId, key);
+      }
     }
-    if (spouseGender === 'MALE' && leadGender !== 'MALE') {
-      // Супруг — мужчина → он справа
-      return { leftId: leadId, rightId: spId };
+
+    if (spouseId && !primaryBlockOf.has(spouseId)) {
+      primaryBlockOf.set(spouseId, key);
     }
-    // Оба мужчины / обе женщины / неизвестно → ведущий слева
-    return { leftId: leadId, rightId: spId };
   }
 
-  // ── Общие дети пары ────────────────────────────────────────────────────────
-  function pairChildren(leadId) {
-    const spId = primarySpouse.get(leadId);
-    const my = [...(childrenOf.get(leadId) ?? [])];
-    const sp = spId ? [...(childrenOf.get(spId) ?? [])] : [];
-    return [...new Set([...my, ...sp])];
-  }
-
-  // ── Ширина поддерева ───────────────────────────────────────────────────────
+  // ── Вычисление ширины поддерева ───────────────────────────────────────────
   const widthCache = new Map();
 
-  function pairSelfWidth(leadId) {
-    return primarySpouse.get(leadId) ? NODE_W * 2 + PAIR_GAP : NODE_W;
+  function blockSelfWidth(key) {
+    const blk = blocks.get(key);
+    if (!blk) return NODE_W;
+    return blk.spouseId ? NODE_W * 2 + PAIR_GAP : NODE_W;
   }
 
-  function subtreeWidth(leadId, visited = new Set()) {
-    if (widthCache.has(leadId)) return widthCache.get(leadId);
-    if (visited.has(leadId))    return pairSelfWidth(leadId);
-    visited.add(leadId);
-
-    const children = pairChildren(leadId);
-    const selfW    = pairSelfWidth(leadId);
-
-    if (children.length === 0) {
-      widthCache.set(leadId, selfW);
-      return selfW;
-    }
-
-    const sortedChildren = sortChildren(children);
-    const childrenW = sortedChildren.reduce((acc, cid, i) => {
-      const cLead = leadOf.get(cid) ?? cid;
-      return acc + subtreeWidth(cLead, new Set(visited)) + (i > 0 ? H_GAP : 0);
-    }, 0);
-
-    const w = Math.max(selfW, childrenW);
-    widthCache.set(leadId, w);
-    return w;
-  }
-
-  // ── Сортировка детей: с семьёй в центр, одиночки по краям ─────────────────
-  // Это решает кейс 3: Евгений (с женой/детьми) должен быть ближе к своей семье.
-  function hasFamily(id) {
-    const lead = leadOf.get(id) ?? id;
-    return pairChildren(lead).length > 0 || !!primarySpouse.get(lead);
+  function hasFamily(personId) {
+    const key = primaryBlockOf.get(personId);
+    if (!key) return false;
+    const blk = blocks.get(key);
+    return !!blk?.spouseId || (blk?.children.size ?? 0) > 0;
   }
 
   function sortChildren(children) {
-    const withFamily    = children.filter(id => hasFamily(id));
-    const withoutFamily = children.filter(id => !hasFamily(id));
-    // Одиночки по краям, семейные в центре
+    const arr           = [...children];
+    const withFamily    = arr.filter(id => hasFamily(id));
+    const withoutFamily = arr.filter(id => !hasFamily(id));
     const half = Math.floor(withoutFamily.length / 2);
     return [
       ...withoutFamily.slice(0, half),
@@ -165,83 +166,111 @@ export function computeGenealogyLayout(nodes, edges) {
     ];
   }
 
-  // ── Рекурсивное размещение ────────────────────────────────────────────────
-  const positions = new Map();
+  function subtreeWidth(blockKey, visited = new Set()) {
+    if (widthCache.has(blockKey)) return widthCache.get(blockKey);
+    if (visited.has(blockKey))    return blockSelfWidth(blockKey);
+    visited.add(blockKey);
 
-  function placeSubtree(id, centerX, visited = new Set()) {
-    const lead = leadOf.get(id) ?? id;
-    if (visited.has(lead)) return;
-    visited.add(lead);
+    const blk = blocks.get(blockKey);
+    if (!blk) return NODE_W;
 
-    const gen  = genMap.get(lead);
-    const y    = gen * (NODE_H + V_GAP);
-    const spId = primarySpouse.get(lead);
+    const selfW    = blockSelfWidth(blockKey);
+    const children = [...blk.children];
 
-    const { leftId, rightId } = getPairOrder(lead);
-
-    if (rightId) {
-      const totalW = NODE_W * 2 + PAIR_GAP;
-      const left   = centerX - totalW / 2;
-      positions.set(leftId,  { x: left,                     y });
-      positions.set(rightId, { x: left + NODE_W + PAIR_GAP, y });
-      visited.add(spId);
-    } else {
-      positions.set(lead, { x: centerX - NODE_W / 2, y });
+    if (children.length === 0) {
+      widthCache.set(blockKey, selfW);
+      return selfW;
     }
 
-    // Дети
-    const children = pairChildren(lead);
-    if (children.length === 0) return;
+    const sorted    = sortChildren(children);
+    const childrenW = sorted.reduce((acc, cid, i) => {
+      const cKey = primaryBlockOf.get(cid);
+      if (!cKey) return acc + NODE_W + (i > 0 ? H_GAP : 0);
+      return acc + subtreeWidth(cKey, new Set(visited)) + (i > 0 ? H_GAP : 0);
+    }, 0);
 
-    const sortedChildren = sortChildren(children);
-    const childWidths    = sortedChildren.map(cid => {
-      const cLead = leadOf.get(cid) ?? cid;
-      return subtreeWidth(cLead);
+    const w = Math.max(selfW, childrenW);
+    widthCache.set(blockKey, w);
+    return w;
+  }
+
+  // ── Рекурсивное размещение ────────────────────────────────────────────────
+  const positions  = new Map();
+  const placedKeys = new Set();
+
+  function placeBlock(blockKey, centerX, visited = new Set()) {
+    if (placedKeys.has(blockKey)) return;
+    if (visited.has(blockKey))    return;
+    visited.add(blockKey);
+    placedKeys.add(blockKey);
+
+    const blk = blocks.get(blockKey);
+    if (!blk) return;
+
+    const { leadId, spouseId, children } = blk;
+    const gen = genMap.get(leadId);
+    const y   = gen * (NODE_H + V_GAP);
+
+    if (spouseId) {
+      const { leftId, rightId } = orderPairByGender(leadId, spouseId, nodeById);
+      const totalW = NODE_W * 2 + PAIR_GAP;
+      const left   = centerX - totalW / 2;
+      if (!positions.has(leftId))  positions.set(leftId,  { x: left,                     y });
+      if (!positions.has(rightId)) positions.set(rightId, { x: left + NODE_W + PAIR_GAP, y });
+    } else {
+      if (!positions.has(leadId)) positions.set(leadId, { x: centerX - NODE_W / 2, y });
+    }
+
+    if (children.size === 0) return;
+
+    const sorted      = sortChildren([...children]);
+    const childWidths = sorted.map(cid => {
+      const cKey = primaryBlockOf.get(cid);
+      return cKey ? subtreeWidth(cKey) : NODE_W;
     });
     const totalChildW = childWidths.reduce((a, b) => a + b, 0)
-      + (sortedChildren.length - 1) * H_GAP;
+      + (sorted.length - 1) * H_GAP;
 
-    let x = centerX - totalChildW / 2;
-    for (let i = 0; i < sortedChildren.length; i++) {
-      const cid   = sortedChildren[i];
-      const cLead = leadOf.get(cid) ?? cid;
-      if (!visited.has(cLead)) {
-        placeSubtree(cLead, x + childWidths[i] / 2, visited);
+    let cx = centerX - totalChildW / 2;
+    for (let i = 0; i < sorted.length; i++) {
+      const cid  = sorted[i];
+      const cKey = primaryBlockOf.get(cid);
+      if (cKey && !placedKeys.has(cKey)) {
+        placeBlock(cKey, cx + childWidths[i] / 2, new Set(visited));
       }
-      x += childWidths[i] + H_GAP;
+      cx += childWidths[i] + H_GAP;
     }
   }
 
-  // ── Корневые ноды: нет родителей ──────────────────────────────────────────
-  const rootLeads = [];
-  const rootSeen  = new Set();
+  // ── Корневые блоки ────────────────────────────────────────────────────────
+  const rootKeys = [];
+  const rootSeen = new Set();
 
   for (const n of nodes) {
     if ((parentsOf.get(n.id)?.size ?? 0) > 0) continue;
-    const lead = leadOf.get(n.id) ?? n.id;
-    if (!rootSeen.has(lead)) {
-      rootLeads.push(lead);
-      rootSeen.add(lead);
-      const sp = primarySpouse.get(lead);
-      if (sp) rootSeen.add(sp);
-    }
+    const key = primaryBlockOf.get(n.id);
+    if (!key || rootSeen.has(key)) continue;
+    rootSeen.add(key);
+    rootKeys.push(key);
   }
 
-  rootLeads.sort((a, b) => (genMap.get(a) ?? 0) - (genMap.get(b) ?? 0));
+  rootKeys.sort((a, b) => {
+    const ga = genMap.get(blocks.get(a)?.leadId) ?? 0;
+    const gb = genMap.get(blocks.get(b)?.leadId) ?? 0;
+    return ga - gb;
+  });
 
-  const rootWidths = rootLeads.map(id => subtreeWidth(id));
+  const rootWidths = rootKeys.map(k => subtreeWidth(k));
   const totalRootW = rootWidths.reduce((a, b) => a + b, 0)
-    + (rootLeads.length - 1) * H_GAP;
+    + (rootKeys.length - 1) * ROOT_GAP;
 
-  const visited = new Set();
-  let x = -totalRootW / 2;
-
-  for (let i = 0; i < rootLeads.length; i++) {
-    placeSubtree(rootLeads[i], x + rootWidths[i] / 2, visited);
-    x += rootWidths[i] + H_GAP;
+  let rx = -totalRootW / 2;
+  for (let i = 0; i < rootKeys.length; i++) {
+    placeBlock(rootKeys[i], rx + rootWidths[i] / 2);
+    rx += rootWidths[i] + ROOT_GAP;
   }
 
-  // ── Fallback для изолированных нод ────────────────────────────────────────
+  // ── Fallback для изолированных нод ───────────────────────────────────────
   let fallbackX = 0;
   for (const n of nodes) {
     if (!positions.has(n.id)) {
@@ -251,7 +280,7 @@ export function computeGenealogyLayout(nodes, edges) {
     }
   }
 
-  // ── Финальный проход: устранение перекрытий внутри поколения ─────────────
+  // ── Устранение перекрытий внутри поколения ────────────────────────────────
   const byGen = new Map();
   for (const [id, pos] of positions) {
     const gen = genMap.get(id) ?? 0;
@@ -278,31 +307,21 @@ export function computeGenealogyLayout(nodes, edges) {
   return positions;
 }
 
-/**
- * Возвращает массив синтетических spouse-рёбер для пар,
- * у которых позиции смежны (разница по x ≈ NODE_W + PAIR_GAP)
- * но нет явного edge в rawEdges.
- *
- * Используется в TreeCanvas.buildRFEdges чтобы гарантировать,
- * что у КАЖДОЙ пары есть пунктирная линия.
- *
- * @param {Array}  nodes      — rawNodes
- * @param {Array}  rawEdges   — rawEdges из API
- * @param {Map}    positions  — результат computeGenealogyLayout
- */
+// ─────────────────────────────────────────────────────────────────────────────
+//  inferMissingSpouseEdges
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function inferMissingSpouseEdges(nodes, rawEdges, positions) {
-  // Существующие spouse пары
   const existing = new Set(
     rawEdges
       .filter(e => e.type === 'spouse')
       .map(e => [e.source_id, e.target_id].sort().join('|'))
   );
 
-  const genMap = new Map(nodes.map(n => [n.id, n.generation ?? 0]));
-  const extra  = [];
-
-  // Для каждой пары узлов одного поколения с позициями вплотную — добавляем ребро
+  const genMap   = new Map(nodes.map(n => [n.id, n.generation ?? 0]));
+  const extra    = [];
   const nodeList = nodes.filter(n => positions.has(n.id));
+
   for (let i = 0; i < nodeList.length; i++) {
     for (let j = i + 1; j < nodeList.length; j++) {
       const a = nodeList[i];
@@ -316,16 +335,15 @@ export function inferMissingSpouseEdges(nodes, rawEdges, positions) {
       const dx = Math.abs(posA.x - posB.x);
       const dy = Math.abs(posA.y - posB.y);
 
-      // Смежные по x (расстояние = NODE_W + PAIR_GAP ± 2px) и на одной строке
       const expectedGap = NODE_W + PAIR_GAP;
       if (dy < 5 && Math.abs(dx - expectedGap) < 3) {
         const key = [a.id, b.id].sort().join('|');
         if (!existing.has(key)) {
           existing.add(key);
           extra.push({
-            type:      'spouse',
-            source_id: posA.x < posB.x ? a.id : b.id,
-            target_id: posA.x < posB.x ? b.id : a.id,
+            type:       'spouse',
+            source_id:  posA.x < posB.x ? a.id : b.id,
+            target_id:  posA.x < posB.x ? b.id : a.id,
             _synthetic: true,
           });
         }

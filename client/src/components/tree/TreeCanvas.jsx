@@ -141,8 +141,9 @@ function TreeCanvasInner({
   onSelectPerson,
   canEdit,
   onAddChild,
+  focusPersonId,
 }) {
-  const { fitView } = useReactFlow();
+  const { fitView, setCenter } = useReactFlow();
   const fitDone = useRef(false);
 
   const { getNodeRole, getEdgeHighlight, onNodeMouseEnter, onNodeMouseLeave } =
@@ -212,9 +213,28 @@ function TreeCanvasInner({
   useEffect(() => {
     if (rawNodes.length && !fitDone.current) {
       fitDone.current = true;
-      setTimeout(() => fitView({ padding: 0.15, duration: 500 }), 120);
+
+      setTimeout(() => {
+        const focusPos = positions.get(focusPersonId);
+
+        if (focusPos) {
+          setCenter(
+            focusPos.x + NODE_W / 2,
+            focusPos.y + NODE_H / 2,
+            {
+              zoom: 1,
+              duration: 600,
+            }
+          );
+        } else {
+          fitView({
+            padding: 0.15,
+            duration: 500,
+          });
+        }
+      }, 120);
     }
-  }, [rawNodes.length, fitView]);
+  }, [rawNodes.length, positions, focusPersonId]);
 
   const onNodeClick = useCallback(
     (_, node) => onSelectPerson?.(node.data.person),
@@ -240,7 +260,6 @@ function TreeCanvasInner({
         onNodeClick={onNodeClick}
         onNodeMouseEnter={onNodeMouseEnterCb}
         onNodeMouseLeave={onNodeMouseLeaveCb}
-        fitView
         minZoom={0.1}
         maxZoom={2.5}
         proOptions={{ hideAttribution: true }}
