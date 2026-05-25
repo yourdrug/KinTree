@@ -35,6 +35,7 @@ export default function TreeView() {
   const [graph,          setGraph]          = useState(null);
   const [relationMaps,   setRelationMaps]   = useState(new Map());
   const [selectedPerson, setSelectedPerson] = useState(null);
+  const [focusPersonId, setFocusPersonId] = useState(null);
   const [loading,        setLoading]        = useState(true);
   const [showModal,      setShowModal]      = useState(false);
   const [relativePerson, setRelativePerson] = useState(null);
@@ -77,7 +78,8 @@ export default function TreeView() {
   // ── Person selection ───────────────────────────────────────────────────────
 
   const handleSelectPerson = useCallback((node) => {
-    setSelectedPerson((prev) => {
+      setFocusPersonId(null);
+      setSelectedPerson((prev) => {
       if (prev?.id === node.id) { selectedIdRef.current = null; return null; }
       selectedIdRef.current = node.id;
       return node;
@@ -265,6 +267,7 @@ export default function TreeView() {
       }
 
       toast({ title: "Человек добавлен" });
+      if (newPerson?.id) setFocusPersonId(newPerson.id);
       await loadData();
     } catch (err) {
       const message = err?.response?.data?.message || err?.response?.data?.detail || err?.message || "Проверьте данные и попробуйте снова.";
@@ -316,6 +319,9 @@ export default function TreeView() {
     );
   }
 
+  console.log(focusPersonId)
+  console.log(nodes[0]?.id)
+
   return (
     <div className="fixed inset-0 flex flex-col">
       <header className="flex items-center justify-between px-6 h-14 border-b bg-background/95 backdrop-blur z-20">
@@ -361,7 +367,7 @@ export default function TreeView() {
           onSelectPerson={handleSelectPerson}
           canEdit={isOwner}
           onAddChild={(parent) => openAdd(parent)}
-          focusPersonId={selectedPerson?.id ?? nodes[0]?.id}
+          focusPersonId={focusPersonId ?? nodes[0]?.id}
         />
 
         <AnimatePresence>

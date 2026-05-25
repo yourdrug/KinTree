@@ -1,11 +1,5 @@
 /**
  * components/tree/TreeCanvas.jsx
- *
- * ReactFlow + кастомный генеалогический layout (без Dagre).
- * Супруги всегда рядом, дети под парой, рёбра не наискосок.
- *
- * v3: использует inferMissingSpouseEdges чтобы гарантировать
- *     пунктирную линию у КАЖДОЙ пары.
  */
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -21,7 +15,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-import { computeGenealogyLayout, inferMissingSpouseEdges } from "@/lib/genealogyLayout";
+import { computeGenealogyLayout } from "@/lib/genealogyLayout";
 import { useHighlight } from "./useHighlight";
 import PersonNodeRF from "./PersonNodeRF";
 
@@ -134,6 +128,53 @@ function buildRFEdges(edges, positions, getEdgeHighlight) {
   return result;
 }
 
+// ── Хук для фокусировки на конкретной персоне ─────────────────────────────────
+// Вызывается когда positions обновились и React уже записал ноды в state.
+// Использует двойной rAF: первый — React flush, второй — ReactFlow internal layout.
+function useFocusPerson({ focusPersonId, positions, setCenter, fitView }) {
+  // Храним предыдущий focusPersonId чтобы не реагировать на лишние рендеры
+  const prevFocusId  = useRef(null);
+  // Флаг первоначального fitView
+  const initialDone  = useRef(false);
+
+  useEffect(() => {
+    if (!positions.size) return;
+
+    const isInitial = !initialDone.current;
+    const idChanged = focusPersonId && focusPersonId !== prevFocusId.current;
+
+    if (!isInitial && !idChanged) return;
+
+    // Двойной rAF: гарантирует что ReactFlow отрисовал новые позиции
+    let raf1, raf2;
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const pos = positions.get(focusPersonId);
+
+        if (pos) {
+          setCenter(
+            pos.x + NODE_W / 2,
+            pos.y + NODE_H / 2,
+            { zoom: 1.2, duration: 500 }
+          );
+          prevFocusId.current = focusPersonId;
+        } else {
+          fitView({ padding: 0.15, duration: 500 });
+        }
+
+        initialDone.current = true;
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  // Реагируем на смену focusPersonId или появление positions
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPersonId, positions]);
+}
+
 function TreeCanvasInner({
   nodes: rawNodes,
   edges: rawEdges,
@@ -144,7 +185,6 @@ function TreeCanvasInner({
   focusPersonId,
 }) {
   const { fitView, setCenter } = useReactFlow();
-  const fitDone = useRef(false);
 
   const { getNodeRole, getEdgeHighlight, onNodeMouseEnter, onNodeMouseLeave } =
     useHighlight(rawEdges);
@@ -153,12 +193,6 @@ function TreeCanvasInner({
     () => computeGenealogyLayout(rawNodes, rawEdges),
     [rawNodes, rawEdges]
   );
-
-  // Объединяем реальные рёбра + синтетические spouse для пар без линии
-  const allEdges = useMemo(() => {
-    const synthetic = inferMissingSpouseEdges(rawNodes, rawEdges, positions);
-    return [...rawEdges, ...synthetic];
-  }, [rawNodes, rawEdges, positions]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -173,9 +207,9 @@ function TreeCanvasInner({
         onNodeMouseEnter, onNodeMouseLeave
       )
     );
-    setEdges(buildRFEdges(allEdges, positions, getEdgeHighlight));
+    setEdges(buildRFEdges(rawEdges, positions, getEdgeHighlight));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawNodes, rawEdges, positions, allEdges]);
+  }, [rawNodes, rawEdges, positions]);
 
   // Sync edge highlight on hover
   useEffect(() => {
@@ -209,32 +243,8 @@ function TreeCanvasInner({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPerson?.id, getNodeRole, canEdit]);
 
-  // Fit view on first load
-  useEffect(() => {
-    if (rawNodes.length && !fitDone.current) {
-      fitDone.current = true;
-
-      setTimeout(() => {
-        const focusPos = positions.get(focusPersonId);
-
-        if (focusPos) {
-          setCenter(
-            focusPos.x + NODE_W / 2,
-            focusPos.y + NODE_H / 2,
-            {
-              zoom: 1,
-              duration: 600,
-            }
-          );
-        } else {
-          fitView({
-            padding: 0.15,
-            duration: 500,
-          });
-        }
-      }, 120);
-    }
-  }, [rawNodes.length, positions, focusPersonId]);
+  // ── Фокусировка ───────────────────────────────────────────────────────────
+  useFocusPerson({ focusPersonId, positions, setCenter, fitView });
 
   const onNodeClick = useCallback(
     (_, node) => onSelectPerson?.(node.data.person),
