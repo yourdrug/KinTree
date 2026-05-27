@@ -38,6 +38,7 @@ class CreateFamilyRequest(BaseModel):
     origin_place: str | None = None
     founded_year: int | None = Field(None, ge=1, le=9999)
     ended_year: int | None = Field(None, ge=1, le=9999)
+    is_public: bool = False
 
     def to_command(self) -> CreateFamilyCommand:
         return CreateFamilyCommand(
@@ -46,6 +47,7 @@ class CreateFamilyRequest(BaseModel):
             origin_place=self.origin_place,
             founded_year=self.founded_year,
             ended_year=self.ended_year,
+            is_public=self.is_public,
         )
 
 
@@ -57,6 +59,7 @@ class PutFamilyRequest(BaseModel):
     origin_place: str | None = None
     founded_year: int | None = Field(None, ge=1, le=9999)
     ended_year: int | None = Field(None, ge=1, le=9999)
+    is_public: bool = False
 
     def to_command(self, family_id: str) -> PutFamilyCommand:
         return PutFamilyCommand(
@@ -66,6 +69,7 @@ class PutFamilyRequest(BaseModel):
             origin_place=self.origin_place,
             founded_year=self.founded_year,
             ended_year=self.ended_year,
+            is_public=self.is_public,
         )
 
 
@@ -79,6 +83,7 @@ class PatchFamilyRequest(BasePatchSchema):
     origin_place: str | None = None
     founded_year: int | None = Field(None, ge=1, le=9999)
     ended_year: int | None = Field(None, ge=1, le=9999)
+    is_public: bool | None = None
 
     def to_command(self, family_id: str) -> PatchFamilyCommand:
         sent = self.model_fields_set
@@ -89,6 +94,7 @@ class PatchFamilyRequest(BasePatchSchema):
             origin_place=self.origin_place if "origin_place" in sent else UNSET,
             founded_year=self.founded_year if "founded_year" in sent else UNSET,
             ended_year=self.ended_year if "ended_year" in sent else UNSET,
+            is_public=self.is_public if "is_public" in sent else UNSET,
         )
 
 
@@ -103,6 +109,7 @@ class FamilyResponse(BaseModel):
     origin_place: str | None = None
     founded_year: int | None = None
     ended_year: int | None = None
+    is_public: bool = False
 
     @classmethod
     def from_domain(cls, family: Family) -> FamilyResponse:
@@ -114,6 +121,7 @@ class FamilyResponse(BaseModel):
             origin_place=family.origin_place,
             founded_year=family.founded_year,
             ended_year=family.ended_year,
+            is_public=family.is_public,
         )
 
 

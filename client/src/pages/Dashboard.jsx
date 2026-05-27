@@ -105,7 +105,16 @@ export default function Dashboard() {
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filtered.map((tree, i) => <TreeCard key={tree.id} tree={tree} index={i} />)}
+            {filtered.map((tree, i) => (
+                <TreeCard
+                    key={tree.id}
+                    tree={tree}
+                    index={i}
+                    onUpdate={(updated) =>
+                        setTrees((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
+                    }
+                />
+            ))}
           </div>
         )}
       </main>

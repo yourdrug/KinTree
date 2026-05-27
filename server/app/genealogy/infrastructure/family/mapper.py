@@ -12,6 +12,7 @@ class FamilyMapper:
         return DomainFamily(
             id=model.id,
             name=model.name,
+            is_public=model.is_public,
             owner_id=model.owner_id,
             description=model.description,
             origin_place=model.origin_place,
@@ -24,6 +25,7 @@ class FamilyMapper:
         return {
             "id": entity.id,
             "name": entity.name,
+            "is_public": entity.is_public,
             "owner_id": entity.owner_id,
             "description": entity.description,
             "origin_place": entity.origin_place,

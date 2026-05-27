@@ -319,9 +319,6 @@ export default function TreeView() {
     );
   }
 
-  console.log(focusPersonId)
-  console.log(nodes[0]?.id)
-
   return (
     <div className="fixed inset-0 flex flex-col">
       <header className="flex items-center justify-between px-6 h-14 border-b bg-background/95 backdrop-blur z-20">

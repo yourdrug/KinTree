@@ -11,6 +11,7 @@ class CreateFamilyCommand:
     origin_place: str | None
     founded_year: int | None
     ended_year: int | None
+    is_public: bool = False
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class PatchFamilyCommand:
     origin_place: str | None | UnsetType = UNSET
     founded_year: int | None | UnsetType = UNSET
     ended_year: int | None | UnsetType = UNSET
+    is_public: bool | UnsetType = UNSET
 
 
 @dataclass(frozen=True)
@@ -35,3 +37,4 @@ class PutFamilyCommand:
     origin_place: str | None
     founded_year: int | None
     ended_year: int | None
+    is_public: bool = False

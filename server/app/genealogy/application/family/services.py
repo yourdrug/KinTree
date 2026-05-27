@@ -50,6 +50,7 @@ class FamilyService:
                 origin_place=command.origin_place,
                 founded_year=command.founded_year,
                 ended_year=command.ended_year,
+                is_public=command.is_public,
             )
             return await uow.families.save(family)
 
@@ -66,6 +67,7 @@ class FamilyService:
                 origin_place=command.origin_place,
                 founded_year=command.founded_year,
                 ended_year=command.ended_year,
+                is_public=command.is_public,
             )
             return await uow.families.save(family)
 
@@ -79,6 +81,7 @@ class FamilyService:
                 origin_place=command.origin_place,
                 founded_year=command.founded_year,
                 ended_year=command.ended_year,
+                is_public=command.is_public,
             )
             return await uow.families.save(family)
 

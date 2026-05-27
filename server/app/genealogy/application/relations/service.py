@@ -1,6 +1,12 @@
 """
 genealogy/application/relations/service.py
 
+Изменения v2:
+  - get_family_graph: передаёт step_child_ids в compute_generations
+    для корректной обработки STEP-родителей (отчим/мачеха).
+  - _person_to_node: передаёт is_alive флаг корректно.
+  - Новый хелпер _collect_step_child_ids для извлечения STEP-рёбер.
+  - Комментарии к edge-кейсам.
 """
 
 from __future__ import annotations
@@ -20,6 +26,7 @@ from genealogy.domain.entities.parent_child import ParentChildRelation
 from genealogy.domain.entities.person import Person
 from genealogy.domain.entities.sibling import SiblingRelation
 from genealogy.domain.entities.spouse import SpouseRelation
+from genealogy.domain.enums import RelationType
 from genealogy.domain.services.generation_calculator import compute_generations
 from genealogy.domain.services.parent_child_policy import ParentChildPolicy
 from genealogy.domain.services.spouse_policy import SpousePolicy
@@ -74,7 +81,6 @@ class RelationService:
 
             existing_spouse = await _load_spouse_relations(uow, command.person_a_id, command.person_b_id)
             existing_parent = await _load_parent_relations(uow, command.person_a_id, command.person_b_id)
-
             existing_siblings_a = await uow.siblings.get_siblings_of(command.person_a_id)
 
             relation = self._spouse_policy.assert_can_add(
@@ -122,12 +128,25 @@ class RelationService:
         async with self._uow_factory.create(master=False) as uow:
             await uow.families.get_by_id(family_id)
 
-            persons, parent_relations, spouse_relations = await uow.family_graph.get_persons_with_relations(family_id)
+            persons, parent_relations, spouse_relations = (
+                await uow.family_graph.get_persons_with_relations(family_id)
+            )
 
             person_ids = [p.id for p in persons]
             parent_pairs = [(r.parent_id, r.child_id) for r in parent_relations]
             spouse_pairs = [(r.first_person_id, r.second_person_id) for r in spouse_relations]
-            generations = compute_generations(person_ids, parent_pairs, spouse_pairs)
+
+            # Передаём STEP-детей, чтобы алгоритм знал о слабых иерархических
+            # связях. Для STEP-родителя (отчим/мачеха) поколение определяется
+            # spouse-align, а не напрямую из иерархии.
+            step_child_ids = _collect_step_child_ids(parent_relations)
+
+            generations = compute_generations(
+                person_ids,
+                parent_pairs,
+                spouse_pairs,
+                step_child_ids=step_child_ids,
+            )
 
             sibling_map = await uow.siblings.get_siblings_of_many(person_ids)
             nodes = [_person_to_node(p, generations.get(p.id)) for p in persons]
@@ -139,6 +158,8 @@ class RelationService:
 
             return FamilyGraphResult(nodes=nodes, edges=edges)
 
+
+# ── Хелперы загрузки ─────────────────────────────────────────────────────────
 
 async def _load_parent_relations(
     uow: GenealogyUoW,
@@ -168,13 +189,32 @@ async def _load_spouse_relations(
 ) -> list[SpouseRelation]:
     seen: set[tuple[str, str]] = set()
     result: list[SpouseRelation] = []
-    raw = await uow.spouses.get_spouses_of(person_a_id) + await uow.spouses.get_spouses_of(person_b_id)
+    raw = (
+        await uow.spouses.get_spouses_of(person_a_id)
+        + await uow.spouses.get_spouses_of(person_b_id)
+    )
     for rel in raw:
         key = (rel.first_person_id, rel.second_person_id)
         if key not in seen:
             seen.add(key)
             result.append(rel)
     return result
+
+
+# ── Хелперы конвертации ───────────────────────────────────────────────────────
+
+def _collect_step_child_ids(parent_relations: list[ParentChildRelation]) -> set[str]:
+    """
+    Возвращает child_id для всех STEP-связей.
+
+    Используется в compute_generations как подсказка:
+    STEP-ребёнок не должен «тянуть» отчима/мачеху на более высокое поколение.
+    """
+    return {
+        r.child_id
+        for r in parent_relations
+        if r.relation_type == RelationType.STEP
+    }
 
 
 def _person_to_node(person: Person, generation: int | None) -> NodeDTO:
@@ -221,7 +261,10 @@ def _build_sibling_edges(
 
     for siblings in sibling_map.values():
         for rel in siblings:
-            key = (min(rel.person_id, rel.sibling_id), max(rel.person_id, rel.sibling_id))
+            key = (
+                min(rel.person_id, rel.sibling_id),
+                max(rel.person_id, rel.sibling_id),
+            )
             if key in seen:
                 continue
             seen.add(key)

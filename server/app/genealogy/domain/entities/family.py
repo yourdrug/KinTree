@@ -34,6 +34,7 @@ class Family:
     id: str
     name: str
     owner_id: str
+    is_public: bool = False
     description: str | None = None
     origin_place: str | None = None
     founded_year: int | None = None
@@ -59,6 +60,7 @@ class Family:
         self,
         *,
         name: str,
+        is_public: bool = False,
         description: str | None,
         origin_place: str | None,
         founded_year: int | None,
@@ -69,6 +71,7 @@ class Family:
         self.origin_place = origin_place
         self.founded_year = founded_year
         self.ended_year = ended_year
+        self.is_public = is_public
         self._validate()
 
     def apply_patch(
@@ -79,6 +82,7 @@ class Family:
         origin_place: str | None | UnsetType = UNSET,
         founded_year: int | None | UnsetType = UNSET,
         ended_year: int | None | UnsetType = UNSET,
+        is_public: bool | UnsetType = UNSET,
     ) -> None:
         if not isinstance(name, UnsetType):
             self.name = name
@@ -90,6 +94,8 @@ class Family:
             self.founded_year = founded_year
         if not isinstance(ended_year, UnsetType):
             self.ended_year = ended_year
+        if not isinstance(is_public, UnsetType):
+            self.is_public = is_public
         self._validate()
 
     # ── Invariants ────────────────────────────────────────────────────────────
@@ -172,6 +178,7 @@ def create_family(
     *,
     name: str,
     owner_id: str,
+    is_public: bool = False,
     description: str | None = None,
     origin_place: str | None = None,
     founded_year: int | None = None,
@@ -183,6 +190,7 @@ def create_family(
     return Family(
         id=generate_uuid(),
         name=name,
+        is_public=is_public,
         owner_id=owner_id,
         description=description,
         origin_place=origin_place,

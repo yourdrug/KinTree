@@ -1,5 +1,5 @@
 from shared.infrastructure.db.basemodel import BaseModel
-from sqlalchemy import ForeignKey, Index, Text
+from sqlalchemy import ForeignKey, Index, Text, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -17,6 +17,13 @@ class Family(BaseModel):
     owner_id: Mapped[str] = mapped_column(
         ForeignKey("Account.id", ondelete="CASCADE"),
         comment="Family owner account",
+    )
+
+    is_public: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="is public Family",
     )
 
     description: Mapped[str] = mapped_column(
