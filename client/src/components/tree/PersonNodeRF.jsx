@@ -113,6 +113,9 @@ function PersonNodeRF({ data }) {
       <Handle type="source" position={Position.Bottom} id="bot"   style={{ opacity: 0, pointerEvents: "none" }} />
       <Handle type="source" position={Position.Left}   id="left"  style={{ opacity: 0, pointerEvents: "none" }} />
       <Handle type="target" position={Position.Right}  id="right" style={{ opacity: 0, pointerEvents: "none" }} />
+      {/* Spouse edge handles: source on right side, target on left side */}
+      <Handle type="source" position={Position.Right} id="right-src" style={{ opacity: 0, pointerEvents: "none" }} />
+      <Handle type="target" position={Position.Left}  id="left-tgt"  style={{ opacity: 0, pointerEvents: "none" }} />
       <Handle type="source" position={Position.Top} id="sib-top"
         style={{ opacity: 0, pointerEvents: "none", left: "30%" }}
       />
@@ -226,15 +229,9 @@ function PersonNodeRF({ data }) {
           )}
 
           {/* Years */}
-          {yearsStr && (
-            <div style={{ fontSize: 9, color: yearColor, transition: "color 0.18s" }}>
-              {yearsStr}
-            </div>
-          )}
-
-          {!isAlive && !deathYear && (
-            <div style={{ fontSize: 9, color: yearColor }}>†</div>
-          )}
+          <div style={{ fontSize: 9, color: yearColor, minHeight: 12, transition: "color 0.18s" }}>
+            {yearsStr || (!isAlive ? "†" : "\u00A0")}
+          </div>
         </div>
 
         {/* Add child button */}

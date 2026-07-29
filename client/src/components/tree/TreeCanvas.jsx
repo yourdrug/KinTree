@@ -19,7 +19,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-import { computeGenealogyLayout } from "@/lib/genealogyLayout";
+import { computeGenealogyLayout, inferMissingSpouseEdges } from "@/lib/genealogyLayout";
 import { useHighlight } from "./useHighlight";
 import PersonNodeRF from "./PersonNodeRF";
 
@@ -103,8 +103,8 @@ function buildRFEdges(edges, positions, getEdgeHighlight) {
       targetHandle = "top";
     } else if (eType === "spouse" && srcPos && tgtPos) {
       if (srcPos.x < tgtPos.x) {
-        sourceHandle = "right";
-        targetHandle = "left";
+        sourceHandle = "right-src";
+        targetHandle = "left-tgt";
       } else {
         sourceHandle = "left";
         targetHandle = "right";
@@ -215,7 +215,9 @@ function TreeCanvasInner({
         onNodeMouseEnter, onNodeMouseLeave
       )
     );
-    setEdges(buildRFEdges(rawEdges, positions, getEdgeHighlight));
+    const inferred = inferMissingSpouseEdges(rawNodes, rawEdges, positions);
+    const allEdges = inferred.length > 0 ? [...rawEdges, ...inferred] : rawEdges;
+    setEdges(buildRFEdges(allEdges, positions, getEdgeHighlight));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawNodes, rawEdges, positions]);
 
