@@ -1,11 +1,16 @@
 /**
  * pages/TreeView.jsx
+ *
+ * Fixes:
+ * 1. Share button copies public link to clipboard
+ * 2. focusPersonId defaults to first node on load (not passed as ?? to Canvas always)
+ * 3. Public trees accessible without auth (isOwner=false, canEdit=false)
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link }          from "react-router-dom";
 import { motion, AnimatePresence }  from "framer-motion";
-import { Leaf, ChevronLeft, UserPlus, Share2 } from "lucide-react";
+import { Leaf, ChevronLeft, UserPlus, Share2, Copy, Check } from "lucide-react";
 import { Button }     from "@/components/ui/button";
 import { toast }      from "@/components/ui/use-toast";
 import LoadingSpinner from "@/components/common/LoadingSpinner";
@@ -25,6 +30,74 @@ import {
 import { useAuth }  from "@/lib/AuthContext";
 import { ROUTES }   from "@/lib/routes";
 
+// ── Share button ──────────────────────────────────────────────────────────────
+
+function ShareButton({ familyId, isPublic }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}${ROUTES.tree(familyId)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // fallback
+      const el = document.createElement("textarea");
+      el.value = url;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+    }
+    setCopied(true);
+    toast({
+      title: isPublic ? "Ссылка скопирована" : "Ссылка скопирована",
+      description: isPublic
+        ? "Любой с этой ссылкой может просмотреть дерево."
+        : "Дерево приватное — только авторизованные пользователи со ссылкой увидят его.",
+    });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="rounded-lg gap-1.5"
+      onClick={handleShare}
+      title="Скопировать ссылку"
+    >
+      <AnimatePresence mode="wait" initial={false}>
+        {copied ? (
+          <motion.span
+            key="check"
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.7 }}
+            className="flex items-center gap-1.5"
+            style={{ color: "hsl(145,35%,38%)" }}
+          >
+            <Check className="w-4 h-4" />
+            Скопировано
+          </motion.span>
+        ) : (
+          <motion.span
+            key="share"
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.7 }}
+            className="flex items-center gap-1.5"
+          >
+            <Share2 className="w-4 h-4" />
+            Поделиться
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </Button>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function TreeView() {
   const { id: familyId } = useParams();
   const { user }         = useAuth();
@@ -35,7 +108,7 @@ export default function TreeView() {
   const [graph,          setGraph]          = useState(null);
   const [relationMaps,   setRelationMaps]   = useState(new Map());
   const [selectedPerson, setSelectedPerson] = useState(null);
-  const [focusPersonId, setFocusPersonId] = useState(null);
+  const [focusPersonId,  setFocusPersonId]  = useState(null);
   const [loading,        setLoading]        = useState(true);
   const [showModal,      setShowModal]      = useState(false);
   const [relativePerson, setRelativePerson] = useState(null);
@@ -43,7 +116,9 @@ export default function TreeView() {
   const [isOwner,        setIsOwner]        = useState(false);
   const [modalConnectMode, setModalConnectMode] = useState(false);
 
-  const selectedIdRef = useRef(null);
+  const selectedIdRef  = useRef(null);
+  // Track whether we've already done the initial fitView focus
+  const initialFocusDone = useRef(false);
 
   // ── Load data ──────────────────────────────────────────────────────────────
 
@@ -57,20 +132,30 @@ export default function TreeView() {
       setGraph(data.graph);
       setRelationMaps(data.relationMaps);
 
+      // On first load, focus the first node (fitView)
+      if (!initialFocusDone.current && data.nodes.length > 0) {
+        setFocusPersonId(data.nodes[0].id);
+        initialFocusDone.current = true;
+      }
+
       if (selectedIdRef.current) {
         const updated = data.nodes.find((n) => n.id === selectedIdRef.current);
         setSelectedPerson(updated ?? null);
         if (!updated) selectedIdRef.current = null;
       }
     } catch {
-      toast({ variant: "destructive", title: "Ошибка загрузки",
-        description: "Не удалось загрузить семейное дерево. Попробуйте обновить страницу." });
+      toast({
+        variant: "destructive",
+        title: "Ошибка загрузки",
+        description: "Не удалось загрузить семейное дерево. Попробуйте обновить страницу.",
+      });
     } finally {
       setLoading(false);
     }
   }, [familyId]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
   useEffect(() => {
     if (user && family) setIsOwner(family.owner_id === user.id);
   }, [user, family]);
@@ -78,8 +163,8 @@ export default function TreeView() {
   // ── Person selection ───────────────────────────────────────────────────────
 
   const handleSelectPerson = useCallback((node) => {
-      setFocusPersonId(null);
-      setSelectedPerson((prev) => {
+    setFocusPersonId(null);
+    setSelectedPerson((prev) => {
       if (prev?.id === node.id) { selectedIdRef.current = null; return null; }
       selectedIdRef.current = node.id;
       return node;
@@ -93,7 +178,7 @@ export default function TreeView() {
 
   // ── Modal ──────────────────────────────────────────────────────────────────
 
-  const openAdd  = useCallback((relative = null) => {
+  const openAdd = useCallback((relative = null) => {
     setRelativePerson(relative);
     setEditPerson(null);
     setShowModal(true);
@@ -169,7 +254,6 @@ export default function TreeView() {
     };
 
     try {
-      // ── Edit existing person ─────────────────────────────────────────────
       if (existingId) {
         const { family_id: _fid, ...patchPayload } = personPayload;
         await personsApi.patch(existingId, patchPayload);
@@ -180,11 +264,9 @@ export default function TreeView() {
 
       let newPerson = null;
 
-      // ── Add without relation ─────────────────────────────────────────────
       if (!relPerson || !relationType) {
         newPerson = await personsApi.create(personPayload);
 
-      // ── Add as child ─────────────────────────────────────────────────────
       } else if (relationType === "child") {
         newPerson = await createPersonAsChild(personPayload, relPerson.id);
 
@@ -204,13 +286,10 @@ export default function TreeView() {
                 marriage_year:   extra.marriageDate ? parseInt(extra.marriageDate) : null,
                 divorce_year:    extra.divorceDate  ? parseInt(extra.divorceDate)  : null,
               });
-            } catch {
-              // Already spouses — ignore duplicate
-            }
+            } catch { /* Already spouses */ }
           }
         }
 
-      // ── Add as parent ────────────────────────────────────────────────────
       } else if (relationType === "parent") {
         newPerson = await personsApi.create(personPayload);
         await relationsApi.addParentChild({
@@ -219,7 +298,6 @@ export default function TreeView() {
           relation_type: "BIOLOGICAL",
         });
 
-        // ── NEW: link new parent as spouse of existing co-parent ──────────
         if (extra.makeSpouseOfCoParent && extra.coParentId) {
           try {
             await relationsApi.addSpouse({
@@ -230,7 +308,6 @@ export default function TreeView() {
               divorce_year:    extra.coParentDivorceDate  ? parseInt(extra.coParentDivorceDate)  : null,
             });
           } catch {
-            // Already spouses — ignore duplicate, but warn user
             toast({
               title: "Связь супругов уже существует",
               description: "Эти два человека уже были отмечены как партнёры.",
@@ -238,11 +315,9 @@ export default function TreeView() {
           }
         }
 
-      // ── Add as partner ───────────────────────────────────────────────────
       } else if (relationType === "partner") {
         newPerson = await createPersonAsSpouse(personPayload, relPerson.id);
 
-      // ── Add as sibling ───────────────────────────────────────────────────
       } else if (relationType === "sibling") {
         const relPersonRelations = getPersonRelations(relationMaps, relPerson.id);
         const { siblingParentMode, siblingParentId } = extra;
@@ -320,16 +395,33 @@ export default function TreeView() {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col">
-      <header className="flex items-center justify-between px-6 h-14 border-b bg-background/95 backdrop-blur z-20">
-        <div className="flex items-center gap-3">
-          <Link to={ROUTES.dashboard()}>
+    // ── FIX: fixed inset-0, flex col, children fill remaining height ─────────
+    <div style={{ position: "fixed", inset: 0, display: "flex", flexDirection: "column" }}>
+
+      {/* Header */}
+      <header
+        style={{
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 1.5rem",
+          height: "3.5rem",
+          borderBottom: "1px solid hsl(35,20%,88%)",
+          background: "hsla(40,33%,98%,0.95)",
+          backdropFilter: "blur(12px)",
+          zIndex: 20,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <Link to={user ? ROUTES.dashboard() : ROUTES.home()}>
             <Button variant="ghost" size="sm" className="rounded-lg gap-1">
-              <ChevronLeft className="w-4 h-4" /> Назад
+              <ChevronLeft className="w-4 h-4" />
+              {user ? "Назад" : "Главная"}
             </Button>
           </Link>
-          <div className="w-px h-5 bg-border" />
-          <div className="flex items-center gap-2">
+          <div style={{ width: 1, height: "1.25rem", background: "hsl(35,20%,88%)" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <div className="w-6 h-6 rounded-lg bg-primary flex items-center justify-center">
               <Leaf className="w-3 h-3 text-primary-foreground" />
             </div>
@@ -340,23 +432,29 @@ export default function TreeView() {
           </span>
         </div>
 
-        <div className="flex gap-2">
-          {!user            && <span className="text-sm text-muted-foreground px-2">Гость</span>}
-          {user && !isOwner && <span className="text-sm text-muted-foreground px-2">Просмотр</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {!user && (
+            <span className="text-sm text-muted-foreground px-2">
+              Режим просмотра
+            </span>
+          )}
+          {user && !isOwner && (
+            <span className="text-sm text-muted-foreground px-2">Просмотр</span>
+          )}
+
+          {/* Share button — always visible */}
+          <ShareButton familyId={familyId} isPublic={family.is_public} />
+
           {isOwner && (
-            <>
-              <Button variant="outline" size="sm" className="rounded-lg">
-                <Share2 className="w-4 h-4" />
-              </Button>
-              <Button size="sm" className="rounded-lg gap-1.5" onClick={() => openAdd(null)}>
-                <UserPlus className="w-4 h-4" /> Добавить
-              </Button>
-            </>
+            <Button size="sm" className="rounded-lg gap-1.5" onClick={() => openAdd(null)}>
+              <UserPlus className="w-4 h-4" /> Добавить
+            </Button>
           )}
         </div>
       </header>
 
-      <div className="flex-1 flex relative overflow-hidden">
+      {/* Canvas area — takes all remaining height */}
+      <div style={{ flex: 1, display: "flex", position: "relative", overflow: "hidden" }}>
         <TreeCanvas
           nodes={nodes}
           edges={edges}
@@ -364,7 +462,7 @@ export default function TreeView() {
           onSelectPerson={handleSelectPerson}
           canEdit={isOwner}
           onAddChild={(parent) => openAdd(parent)}
-          focusPersonId={focusPersonId ?? nodes[0]?.id}
+          focusPersonId={focusPersonId}
         />
 
         <AnimatePresence>
@@ -374,7 +472,12 @@ export default function TreeView() {
               animate={{ x: 0 }}
               exit={{ x: 320 }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="absolute right-0 top-0 bottom-0 w-80 z-10"
+              style={{
+                position: "absolute",
+                right: 0, top: 0, bottom: 0,
+                width: "20rem",
+                zIndex: 10,
+              }}
             >
               <PersonSidebar
                 person={selectedPerson}
@@ -393,17 +496,19 @@ export default function TreeView() {
         </AnimatePresence>
       </div>
 
-      <AddPersonModal
-        open={showModal}
-        onClose={closeModal}
-        initialConnectMode={modalConnectMode}
-        onSave={handleSave}
-        onConnect={handleConnect}
-        relativePerson={relativePerson}
-        editPerson={editPerson}
-        relationMaps={relationMaps}
-        nodes={nodes}
-      />
+      {isOwner && (
+        <AddPersonModal
+          open={showModal}
+          onClose={closeModal}
+          initialConnectMode={modalConnectMode}
+          onSave={handleSave}
+          onConnect={handleConnect}
+          relativePerson={relativePerson}
+          editPerson={editPerson}
+          relationMaps={relationMaps}
+          nodes={nodes}
+        />
+      )}
     </div>
   );
 }

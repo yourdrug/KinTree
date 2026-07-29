@@ -28,6 +28,7 @@ import VerifyEmail   from "@/pages/VerifyEmail";
 import Dashboard from "@/pages/Dashboard";
 import TreeView  from "@/pages/TreeView";
 import Sessions  from "@/pages/Sessions";
+import TreeRoute from "@/lib/TreeRoute.jsx";
 
 export default function App() {
   return (
@@ -43,12 +44,13 @@ export default function App() {
             <Route path={ROUTES.resetPassword()} element={<ResetPassword />} />
             <Route path={ROUTES.verifyEmail()}   element={<VerifyEmail />} />
 
+            <Route path={ROUTES.tree(":id")} element={
+              <TreeRoute><TreeView /></TreeRoute>
+            } />
+
             {/* Protected */}
             <Route path={ROUTES.dashboard()} element={
               <ProtectedRoute><Dashboard /></ProtectedRoute>
-            } />
-            <Route path={ROUTES.tree(":id")} element={
-              <ProtectedRoute><TreeView /></ProtectedRoute>
             } />
             <Route path={ROUTES.settings.sessions()} element={
               <ProtectedRoute><Sessions /></ProtectedRoute>

@@ -1,5 +1,9 @@
 /**
  * components/tree/TreeCanvas.jsx
+ *
+ * Fixes:
+ * 1. Container height — explicit style="height:100%;width:100%" on wrapper
+ * 2. Focus person — wait for positions then fitView/setCenter properly
  */
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -81,6 +85,8 @@ function buildRFEdges(edges, positions, getEdgeHighlight) {
     if (drawn.has(uniqKey)) continue;
     drawn.add(uniqKey);
 
+    if (!positions.has(e.source_id) || !positions.has(e.target_id)) continue;
+
     const hl    = getEdgeHighlight ? getEdgeHighlight(e) : null;
     const eType = e.type ?? "parent_child";
     const style = makeEdgeStyle(eType, hl);
@@ -88,11 +94,14 @@ function buildRFEdges(edges, positions, getEdgeHighlight) {
     const srcPos = positions.get(e.source_id);
     const tgtPos = positions.get(e.target_id);
 
-    let sourceHandle = undefined;
-    let targetHandle = undefined;
-    let edgeType     = "smoothstep";
+    let sourceHandle;
+    let targetHandle;
+    let edgeType = "smoothstep";
 
-    if (eType === "spouse" && srcPos && tgtPos) {
+    if (eType === "parent_child") {
+      sourceHandle = "bot";
+      targetHandle = "top";
+    } else if (eType === "spouse" && srcPos && tgtPos) {
       if (srcPos.x < tgtPos.x) {
         sourceHandle = "right";
         targetHandle = "left";
@@ -101,10 +110,7 @@ function buildRFEdges(edges, positions, getEdgeHighlight) {
         targetHandle = "right";
       }
       edgeType = "straight";
-    }
-
-    if (eType === "sibling") {
-      edgeType = "smoothstep";
+    } else if (eType === "sibling") {
       sourceHandle = "sib-top";
       targetHandle = "sib-top-t";
     }
@@ -128,14 +134,14 @@ function buildRFEdges(edges, positions, getEdgeHighlight) {
   return result;
 }
 
-// ── Хук для фокусировки на конкретной персоне ─────────────────────────────────
-// Вызывается когда positions обновились и React уже записал ноды в state.
-// Использует двойной rAF: первый — React flush, второй — ReactFlow internal layout.
+// ── Focus hook ────────────────────────────────────────────────────────────────
+// Watches focusPersonId + positions. When both are ready, centres the view.
+// Uses a ref to avoid re-running on unrelated re-renders.
+
 function useFocusPerson({ focusPersonId, positions, setCenter, fitView }) {
-  // Храним предыдущий focusPersonId чтобы не реагировать на лишние рендеры
-  const prevFocusId  = useRef(null);
-  // Флаг первоначального fitView
   const initialDone  = useRef(false);
+  const prevFocusId  = useRef(null);
+  const rafRef       = useRef(null);
 
   useEffect(() => {
     if (!positions.size) return;
@@ -145,32 +151,34 @@ function useFocusPerson({ focusPersonId, positions, setCenter, fitView }) {
 
     if (!isInitial && !idChanged) return;
 
-    // Двойной rAF: гарантирует что ReactFlow отрисовал новые позиции
-    let raf1, raf2;
-    raf1 = requestAnimationFrame(() => {
-      raf2 = requestAnimationFrame(() => {
-        const pos = positions.get(focusPersonId);
+    // Cancel any pending animation frame
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
 
-        if (pos) {
-          setCenter(
-            pos.x + NODE_W / 2,
-            pos.y + NODE_H / 2,
-            { zoom: 1.2, duration: 500 }
-          );
-          prevFocusId.current = focusPersonId;
+    // Double rAF: first flush React, second flush ReactFlow internal layout
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = requestAnimationFrame(() => {
+        if (isInitial) {
+          fitView({ padding: 0.15, duration: 0 });
         } else {
-          fitView({ padding: 0.15, duration: 500 });
+          const pos = positions.get(focusPersonId);
+          if (pos) {
+            setCenter(
+              pos.x + NODE_W / 2,
+              pos.y + NODE_H / 2,
+              { zoom: 1.2, duration: 500 }
+            );
+            prevFocusId.current = focusPersonId;
+          } else {
+            fitView({ padding: 0.15, duration: 500 });
+          }
         }
-
         initialDone.current = true;
       });
     });
 
     return () => {
-      cancelAnimationFrame(raf1);
-      cancelAnimationFrame(raf2);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  // Реагируем на смену focusPersonId или появление positions
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPersonId, positions]);
 }
@@ -243,7 +251,6 @@ function TreeCanvasInner({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPerson?.id, getNodeRole, canEdit]);
 
-  // ── Фокусировка ───────────────────────────────────────────────────────────
   useFocusPerson({ focusPersonId, positions, setCenter, fitView });
 
   const onNodeClick = useCallback(
@@ -260,7 +267,8 @@ function TreeCanvasInner({
   );
 
   return (
-    <div className="w-full h-full relative">
+    // ── FIX 1: explicit 100% width+height so ReactFlow fills the flex cell ──
+    <div style={{ width: "100%", height: "100%", position: "relative" }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -325,8 +333,11 @@ function TreeCanvasInner({
 
 export default function TreeCanvas(props) {
   return (
+    // ── FIX 1: ReactFlowProvider must also be 100% height ──────────────────
     <ReactFlowProvider>
-      <TreeCanvasInner {...props} />
+      <div style={{ width: "100%", height: "100%" }}>
+        <TreeCanvasInner {...props} />
+      </div>
     </ReactFlowProvider>
   );
 }
